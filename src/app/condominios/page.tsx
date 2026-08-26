@@ -93,12 +93,11 @@ function CondominiosContent() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-6">
+    <div className="w-full max-w-4xl mx-auto px-8 py-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-amx-ink">Condomínios</h1>
+        <h1 className="text-white">Condomínios</h1>
         {canEditCadastro(user.role) && (
           <Button
-            variant="primary"
             onClick={() => {
               setShowForm(true);
               setSubmitError(null);
@@ -110,7 +109,7 @@ function CondominiosContent() {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-amx-red-50 border border-amx-red-100 rounded-lg text-amx-red-700 text-sm">
+        <div className="mb-4 p-3 bg-amx-red/12 border border-amx-red/30 rounded-lg text-amx-red-hover text-xs font-semibold">
           {error}
         </div>
       )}
@@ -145,10 +144,10 @@ function CondominiosContent() {
               href={`/condominios/${condominio.id}`}
               className="block"
             >
-              <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <Card className="cursor-pointer hover:border-amx-muted transition-colors">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-amx-ink mb-1">
+                    <h3 className="font-semibold text-white mb-1">
                       {condominio.nome}
                     </h3>
                     {condominio.endereco && (
@@ -195,7 +194,7 @@ function CondominiosContent() {
         />
         <div className="p-5">
           {submitError && (
-            <div className="mb-4 p-3 bg-amx-red-50 border border-amx-red-100 rounded text-amx-red-700 text-sm">
+            <div className="mb-4 p-3 bg-amx-red/12 border border-amx-red/30 rounded text-amx-red-hover text-xs font-semibold">
               {submitError}
             </div>
           )}

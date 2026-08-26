@@ -114,10 +114,10 @@ export function SignaturePad({ label, value, onSave, disabled, busy }: Signature
     return (
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <p className="text-sm font-semibold text-amx-ink">{label}</p>
+          <p className="text-sm font-semibold text-white">{label}</p>
           <Badge tone="success">Assinado</Badge>
         </div>
-        <div className="border border-amx-border rounded-lg bg-white p-2 overflow-hidden" style={{ height: 120 }}>
+        <div className="border border-amx-line rounded-lg bg-white p-2 overflow-hidden" style={{ height: 120 }}>
           <img src={value} alt="Assinatura" className="w-full h-full object-contain" />
         </div>
       </div>
@@ -128,7 +128,7 @@ export function SignaturePad({ label, value, onSave, disabled, busy }: Signature
   if (disabled) {
     return (
       <div>
-        <p className="text-sm font-semibold text-amx-ink mb-3">{label}</p>
+        <p className="text-sm font-semibold text-white mb-3">{label}</p>
         <EmptyState
           title="Assinatura indisponível"
           description="Você não tem permissão para coletar esta assinatura."
@@ -140,10 +140,10 @@ export function SignaturePad({ label, value, onSave, disabled, busy }: Signature
   // Active drawing mode
   return (
     <div>
-      <p className="text-sm font-semibold text-amx-ink mb-3">{label}</p>
+      <p className="text-sm font-semibold text-white mb-3">{label}</p>
       <canvas
         ref={canvasRef}
-        className="w-full border border-amx-border rounded-lg bg-white touch-none"
+        className="w-full border border-amx-line rounded-lg bg-white touch-none"
         style={{ height: 150 }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

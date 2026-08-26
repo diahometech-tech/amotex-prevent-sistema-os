@@ -24,44 +24,33 @@
 
 /* =====================================================================
    Design tokens — Amotex Prevent (identidade própria, NÃO é o tema do
-   NexusFlow). Paleta PROVISÓRIA (azul-marinho + vermelho) enquanto o
-   arquivo oficial de marca do cliente não chega — trocar só os valores
-   hexadecimais abaixo quando a paleta definitiva for entregue, nenhuma
-   tela nova referencia cor "crua", todas usam estes tokens (utilities
+   NexusFlow). Tema escuro navy + vermelho, extraído do protótipo visual
+   aprovado (ver PR — 4 telas de referência: lista de OS, detalhe de OS,
+   cadastro de condomínio, painel do síndico). Nomes espelham as CSS vars
+   do próprio protótipo de propósito, pra bater 1:1 na hora de comparar.
+   Nenhuma tela referencia cor "crua" — todas usam estes tokens (utilities
    Tailwind bg-amx-NOME, text-amx-NOME e border-amx-NOME, geradas
    automaticamente a partir do prefixo --color-amx- dentro de @theme).
+   Tons translúcidos (fundo de badge, ex.) usam o modificador de opacidade
+   do Tailwind direto na cor base (bg-amx-red/15) em vez de um token à
+   parte — mais fiel ao rgba(...) do protótipo do que uma cor plana extra.
    ===================================================================== */
 @theme {
-  /* Azul-marinho — cor de marca primária (topo, navegação, ações) */
-  --color-amx-navy-900: #06122b;
-  --color-amx-navy-800: #0a1f44;
-  --color-amx-navy-700: #123163;
-  --color-amx-navy-600: #1c407d;
-  --color-amx-navy-500: #2a55a0;
-  --color-amx-navy-100: #e7ecf7;
-  --color-amx-navy-50: #f2f5fb;
+  --color-amx-bg: #0b1e3a; /* fundo da aplicação */
+  --color-amx-panel: #132a4d; /* superfície de card/linha/seção */
+  --color-amx-panel-2: #0f2444; /* superfície aninhada: sidebar, inputs, rodapé fixo */
+  --color-amx-red: #d6161f; /* marca/ação primária */
+  --color-amx-red-hover: #ff3b44; /* hover/realce sobre vermelho */
+  --color-amx-blue: #2e5c94; /* secundária/info, ícone de preventiva */
+  --color-amx-blue-light: #7fa8db; /* links, texto sobre azul, traço de assinatura */
+  --color-amx-amber: #e8a33d; /* atenção, prioridade média */
+  --color-amx-green: #2f9e58; /* sucesso, concluído */
+  --color-amx-white: #ffffff;
+  --color-amx-muted: #9baac4; /* texto secundário */
+  --color-amx-line: #22406b; /* bordas */
 
-  /* Vermelho — cor de marca secundária (alertas, corretivas, urgência) */
-  --color-amx-red-700: #8f1420;
-  --color-amx-red-600: #b81f2f;
-  --color-amx-red-500: #d6293b;
-  --color-amx-red-100: #fbdcdf;
-  --color-amx-red-50: #fdeceb;
-
-  /* Neutros e superfícies */
-  --color-amx-ink: #10182b;
-  --color-amx-muted: #64748b;
-  --color-amx-canvas: #f5f6fa;
-  --color-amx-surface: #ffffff;
-  --color-amx-border: #e1e4ec;
-
-  /* Semânticos (status/prioridade — reaproveitados nos badges de OS) */
-  --color-amx-success-600: #157347;
-  --color-amx-success-50: #e8f6ee;
-  --color-amx-warning-600: #a15c00;
-  --color-amx-warning-50: #fdf1de;
-  --color-amx-info-600: #1c407d;
-  --color-amx-info-50: #e7ecf7;
+  --font-heading: var(--font-oswald), ui-sans-serif, sans-serif;
+  --font-body: var(--font-ibm-plex-sans), ui-sans-serif, sans-serif;
 
   --radius-amx: 10px;
 }
@@ -72,9 +61,18 @@ body {
 }
 
 body {
-  background: var(--color-amx-canvas);
-  color: var(--color-amx-ink);
-  font-family: var(--font-sans);
+  background: var(--color-amx-bg);
+  color: var(--color-amx-white);
+  font-family: var(--font-body);
+}
+
+h1,
+h2,
+h3,
+.label-font {
+  font-family: var(--font-heading);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 /* Respeitar prefers-reduced-motion (requisito de acessibilidade do PRD) */

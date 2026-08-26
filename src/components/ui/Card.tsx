@@ -7,7 +7,7 @@ export function Card({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`bg-amx-surface border border-amx-border rounded-[var(--radius-amx)] shadow-sm ${className}`}
+      className={`bg-amx-panel border border-amx-line rounded-[var(--radius-amx)] ${className}`}
       {...props}
     >
       {children}

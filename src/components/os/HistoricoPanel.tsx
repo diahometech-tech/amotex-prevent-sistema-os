@@ -56,15 +56,15 @@ export function HistoricoPanel({ logs, loading }: HistoricoPanelProps) {
           <li key={log.id} className="flex gap-3">
             {/* Left column: dot + line */}
             <div className="flex flex-col items-center pt-1">
-              <div className="w-1 h-1 rounded-full bg-amx-navy-600" style={{ width: 4, height: 4 }} />
+              <div className="w-1 h-1 rounded-full bg-amx-blue" style={{ width: 4, height: 4 }} />
               {!isLast && (
-                <div className="w-px bg-amx-border flex-1" style={{ minHeight: 24, marginTop: 4 }} />
+                <div className="w-px bg-amx-line flex-1" style={{ minHeight: 24, marginTop: 4 }} />
               )}
             </div>
 
             {/* Right column: content */}
             <div className="pb-4 flex-1">
-              <p className="text-xs font-bold text-amx-ink">{formatarAcao(log.acao)}</p>
+              <p className="text-xs font-bold text-white">{formatarAcao(log.acao)}</p>
               <p className="text-[11px] text-amx-muted mt-1">
                 por {log.ator} · {formatarData(log.criado_em)}
               </p>

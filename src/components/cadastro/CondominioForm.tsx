@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Field, Input } from '@/components/ui/Form';
+import { Field, Input, Toggle } from '@/components/ui/Form';
 import type { Condominio } from '@/lib/db';
 
 interface CondominioFormProps {
@@ -60,22 +60,13 @@ export function CondominioForm({
         />
       </Field>
 
-      <Field hint="Quando ativo, alertas de sensor deste condomínio geram OS automaticamente">
-        <label className="flex items-center gap-2.5">
-          <input
-            type="checkbox"
-            checked={form.monitoramento_ativo ?? false}
-            onChange={(e) =>
-              setForm({ ...form, monitoramento_ativo: e.target.checked })
-            }
-            className="w-4 h-4 accent-amx-navy-600 cursor-pointer"
-            disabled={busy}
-          />
-          <span className="text-sm font-medium text-amx-ink">
-            Monitoramento ativo (Agente Hermes)
-          </span>
-        </label>
-      </Field>
+      <Toggle
+        checked={form.monitoramento_ativo ?? false}
+        onChange={(checked) => setForm({ ...form, monitoramento_ativo: checked })}
+        label="Monitoramento ativo (Agente Hermes)"
+        hint="Quando ativo, alertas de sensor geram OS automaticamente"
+        disabled={busy}
+      />
 
       <div className="flex gap-3 pt-2">
         <Button
@@ -88,7 +79,6 @@ export function CondominioForm({
         </Button>
         <Button
           type="submit"
-          variant="primary"
           disabled={busy}
         >
           {busy ? 'Salvando...' : 'Salvar'}

@@ -387,22 +387,22 @@ function CondominioDetailContent() {
   const isLoadingCurrentTab = loadingTab;
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-6">
+    <div className="w-full max-w-4xl mx-auto px-8 py-6">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-amx-ink mb-2">
+          <h1 className="text-white mb-2">
             {condominio.nome}
           </h1>
           {(condominio.endereco || condominio.administradora) && (
-            <p className="text-sm text-amx-muted">
+            <p className="text-xs text-amx-muted">
               {condominio.endereco}
               {condominio.endereco && condominio.administradora && ' · '}
               {condominio.administradora}
             </p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Badge
             tone={condominio.monitoramento_ativo ? 'success' : 'neutral'}
           >
@@ -413,6 +413,7 @@ function CondominioDetailContent() {
           {canEditCadastro(user.role) && (
             <Button
               variant="secondary"
+              size="sm"
               onClick={() => {
                 setEditingType('condominio');
                 setEditingItem(null);
@@ -422,20 +423,25 @@ function CondominioDetailContent() {
               Editar
             </Button>
           )}
+          <Link href={`/painel/${condominio.id}`}>
+            <Button variant="secondary" size="sm">
+              Ver painel
+            </Button>
+          </Link>
         </div>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-2 mb-6 border-b border-amx-border pb-4">
+      <div className="flex gap-2 mb-6 border-b border-amx-line pb-4">
         {(['reservatorios', 'contatos', 'equipamentos'] as TabType[]).map(
           (tab) => (
             <button
               key={tab}
               onClick={() => handleTabClick(tab)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`font-heading text-[11px] font-semibold tracking-wider uppercase px-3 py-1.5 rounded-full transition-colors ${
                 activeTab === tab
-                  ? 'bg-amx-navy-800 text-white'
-                  : 'bg-white border border-amx-border text-amx-ink hover:bg-amx-navy-50'
+                  ? 'bg-amx-red text-white'
+                  : 'border border-amx-line text-amx-muted hover:text-white'
               }`}
             >
               {tab === 'reservatorios'
@@ -519,7 +525,7 @@ function CondominioDetailContent() {
         />
         <div className="p-5">
           {submitError && (
-            <div className="mb-4 p-3 bg-amx-red-50 border border-amx-red-100 rounded text-amx-red-700 text-sm">
+            <div className="mb-4 p-3 bg-amx-red/12 border border-amx-red/30 rounded text-amx-red-hover text-xs font-semibold">
               {submitError}
             </div>
           )}
@@ -552,7 +558,7 @@ function CondominioDetailContent() {
         />
         <div className="p-5">
           {submitError && (
-            <div className="mb-4 p-3 bg-amx-red-50 border border-amx-red-100 rounded text-amx-red-700 text-sm">
+            <div className="mb-4 p-3 bg-amx-red/12 border border-amx-red/30 rounded text-amx-red-hover text-xs font-semibold">
               {submitError}
             </div>
           )}
@@ -591,7 +597,7 @@ function CondominioDetailContent() {
         />
         <div className="p-5">
           {submitError && (
-            <div className="mb-4 p-3 bg-amx-red-50 border border-amx-red-100 rounded text-amx-red-700 text-sm">
+            <div className="mb-4 p-3 bg-amx-red/12 border border-amx-red/30 rounded text-amx-red-hover text-xs font-semibold">
               {submitError}
             </div>
           )}
@@ -626,7 +632,7 @@ function CondominioDetailContent() {
         />
         <div className="p-5">
           {submitError && (
-            <div className="mb-4 p-3 bg-amx-red-50 border border-amx-red-100 rounded text-amx-red-700 text-sm">
+            <div className="mb-4 p-3 bg-amx-red/12 border border-amx-red/30 rounded text-amx-red-hover text-xs font-semibold">
               {submitError}
             </div>
           )}
@@ -691,7 +697,7 @@ function ReservatoriosTab({
     <div className="space-y-3">
       {canEdit && (
         <div className="mb-4">
-          <Button variant="primary" onClick={onCreateClick}>
+          <Button onClick={onCreateClick}>
             + Novo Reservatório
           </Button>
         </div>
@@ -700,7 +706,7 @@ function ReservatoriosTab({
         <Card key={reservatorio.id}>
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h3 className="font-semibold text-amx-ink mb-1">
+              <h3 className="font-semibold text-white mb-1">
                 {reservatorio.nome_interno}
               </h3>
               <div className="flex flex-wrap gap-2 mb-2">
@@ -711,11 +717,12 @@ function ReservatoriosTab({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-amx-muted mb-1">
-                SensorLog: {reservatorio.nome_sensorlog}
-              </p>
+              <div className="mt-2.5 px-2.5 py-2 bg-amx-panel-2 rounded-md border border-dashed border-amx-line">
+                <p className="font-heading text-[9px] text-amx-muted uppercase tracking-wider">Nome na SensorLog (de-para)</p>
+                <p className="text-xs mt-0.5 font-mono text-amx-blue-light">&quot;{reservatorio.nome_sensorlog}&quot;</p>
+              </div>
               {reservatorio.ultima_mensagem_recebida_em && (
-                <p className="text-xs text-amx-muted">
+                <p className="text-xs text-amx-muted mt-2">
                   Última atualização:{' '}
                   {new Date(
                     reservatorio.ultima_mensagem_recebida_em
@@ -775,7 +782,7 @@ function ContatosTab({
     <div className="space-y-3">
       {canEdit && (
         <div className="mb-4">
-          <Button variant="primary" onClick={onCreateClick}>
+          <Button onClick={onCreateClick}>
             + Novo Contato
           </Button>
         </div>
@@ -784,7 +791,7 @@ function ContatosTab({
         <Card key={contato.id}>
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h3 className="font-semibold text-amx-ink mb-1">
+              <h3 className="font-semibold text-white mb-1">
                 {contato.nome}
               </h3>
               <div className="flex flex-wrap gap-2 mb-2">
@@ -839,7 +846,7 @@ function EquipamentosTab({
         title="Nenhum equipamento cadastrado"
         action={
           canEdit ? (
-            <Button variant="primary" onClick={onCreateClick}>
+            <Button onClick={onCreateClick}>
               + Novo Equipamento
             </Button>
           ) : undefined
@@ -852,7 +859,7 @@ function EquipamentosTab({
     <div className="space-y-3">
       {canEdit && (
         <div className="mb-4">
-          <Button variant="primary" onClick={onCreateClick}>
+          <Button onClick={onCreateClick}>
             + Novo Equipamento
           </Button>
         </div>
@@ -860,7 +867,7 @@ function EquipamentosTab({
       {data.map((equipamento: Equipamento) => (
         <Card key={equipamento.id}>
           <div>
-            <h3 className="font-semibold text-amx-ink mb-1">
+            <h3 className="font-semibold text-white mb-1">
               {equipamento.tipo}
             </h3>
             {equipamento.modelo && (

@@ -29,11 +29,11 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 bg-amx-ink/60 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50"
       onClick={onClose}
     >
       <div
-        className={`bg-amx-surface rounded-[var(--radius-amx)] w-full ${maxWidth} max-h-[90vh] overflow-y-auto shadow-xl`}
+        className={`bg-amx-bg border border-amx-line rounded-[var(--radius-amx)] w-full ${maxWidth} max-h-[90vh] overflow-y-auto shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -52,16 +52,16 @@ export function ModalHeader({
   onClose: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-amx-border sticky top-0 bg-amx-surface z-10">
+    <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-amx-line sticky top-0 bg-amx-panel-2 z-10">
       <div>
-        <h2 className="text-sm font-bold text-amx-ink">{title}</h2>
+        <h2 className="text-sm font-bold text-white">{title}</h2>
         {subtitle && <p className="text-xs text-amx-muted mt-0.5">{subtitle}</p>}
       </div>
       <button
         type="button"
         onClick={onClose}
         aria-label="Fechar"
-        className="text-amx-muted hover:text-amx-ink text-lg leading-none px-1"
+        className="text-amx-muted hover:text-white text-lg leading-none px-1"
       >
         ×
       </button>

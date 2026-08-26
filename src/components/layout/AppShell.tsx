@@ -22,10 +22,33 @@ export function useAmxUser(): AmxUser | null {
   return useContext(UserContext);
 }
 
-const NAV_ITEMS: { href: string; label: string; icon: string }[] = [
-  { href: '/', label: 'Ordens de Serviço', icon: '🧾' },
-  { href: '/condominios', label: 'Condomínios', icon: '🏢' },
+// Ícones extraídos literalmente do protótipo visual (mesmo stroke-width,
+// mesmo viewBox) — ver PR de referência.
+const ICON_OS = (
+  <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18M3 9v10a2 2 0 0 0 2 2h4M21 9v10a2 2 0 0 1-2 2H9" />
+);
+const ICON_CONDOMINIO = <path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1m4 0h1m-6 4h1m4 0h1m-6 4h1m4 0h1" />;
+const ICON_PAINEL = <path d="M3 3v18h18M7 15l4-4 3 3 5-6" />;
+const ICON_GEAR = (
+  <>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </>
+);
+const ICON_LOGOUT = <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />;
+
+const NAV_ITEMS: { href: string; label: string; icon: React.ReactNode }[] = [
+  { href: '/', label: 'Ordens de Serviço', icon: ICON_OS },
+  { href: '/condominios', label: 'Condomínios', icon: ICON_CONDOMINIO },
+  { href: '/painel', label: 'Painel do Síndico', icon: ICON_PAINEL },
 ];
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+  return (first + last).toUpperCase();
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   // Mesmo timeout de inatividade herdado do NexusFlow em todas as telas
@@ -64,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen shrink-0 flex items-center justify-center bg-amx-canvas">
+      <div className="min-h-screen shrink-0 flex items-center justify-center bg-amx-bg">
         <Spinner className="h-6 w-6" />
       </div>
     );
@@ -79,65 +102,92 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* shrink-0: evita o mesmo bug de fundo cortado do admin/usuarios
           original (ver comentário lá) — este componente é montado direto
           como filho de <body className="flex flex-col"> em layout.tsx. */}
-      <div className="min-h-screen shrink-0 flex flex-col bg-amx-canvas">
-        <header className="bg-amx-navy-800 text-white">
-          <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 px-4 md:px-6 py-3">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-9 h-9 rounded-lg bg-amx-red-600 flex items-center justify-center text-lg shrink-0"
-                aria-hidden
-              >
-                🤖
-              </div>
-              <div className="leading-tight">
-                <p className="text-sm font-bold">Amotex Prevent</p>
-                <p className="text-[10px] text-amx-navy-100 uppercase tracking-wider font-semibold">
-                  Sistema de OS
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right hidden sm:block leading-tight">
-                <p className="text-xs font-semibold">{user.name}</p>
-                <p className="text-[10px] text-amx-navy-100">{ROLE_LABELS[user.role]}</p>
-              </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="text-xs font-semibold bg-amx-navy-700 hover:bg-amx-navy-600 px-3 py-2 rounded-lg transition-colors"
-              >
-                Sair
-              </button>
-            </div>
+      <div className="min-h-screen shrink-0 flex bg-amx-bg">
+        <aside className="w-[76px] shrink-0 bg-amx-panel-2 border-r border-amx-line flex flex-col items-center py-5 gap-7">
+          <div
+            className="w-10 h-10 rounded-lg bg-amx-red flex items-center justify-center font-heading font-bold text-[15px]"
+            aria-hidden
+          >
+            AP
           </div>
-          <nav className="max-w-6xl mx-auto px-4 md:px-6 flex items-center gap-1 overflow-x-auto thin-scroll pb-2.5">
+
+          <nav className="flex flex-col gap-[22px] items-center flex-1">
             {NAV_ITEMS.map((item) => {
-              const activeItem = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+              const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
               return (
                 <a
                   key={item.href}
                   href={item.href}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
-                    activeItem ? 'bg-white text-amx-navy-800' : 'text-amx-navy-100 hover:bg-amx-navy-700'
+                  title={item.label}
+                  className={`w-11 h-11 rounded-[10px] flex items-center justify-center border transition-colors ${
+                    active
+                      ? 'bg-amx-red/14 border-amx-red/40'
+                      : 'border-transparent hover:bg-amx-panel hover:border-amx-line'
                   }`}
                 >
-                  <span className="mr-1">{item.icon}</span>
-                  {item.label}
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke={active ? 'var(--color-amx-red)' : 'var(--color-amx-muted)'}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    {item.icon}
+                  </svg>
                 </a>
               );
             })}
             {canManageUsersNav(user.role) && (
               <a
                 href="/admin/usuarios"
-                className="text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap text-amx-navy-100 hover:bg-amx-navy-700 transition-colors"
+                title="Usuários"
+                className={`w-11 h-11 rounded-[10px] flex items-center justify-center border transition-colors ${
+                  pathname.startsWith('/admin')
+                    ? 'bg-amx-red/14 border-amx-red/40'
+                    : 'border-transparent hover:bg-amx-panel hover:border-amx-line'
+                }`}
               >
-                <span className="mr-1">👤</span>
-                Usuários
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={pathname.startsWith('/admin') ? 'var(--color-amx-red)' : 'var(--color-amx-muted)'}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  {ICON_GEAR}
+                </svg>
               </a>
             )}
           </nav>
-        </header>
-        <main className="flex-1 max-w-6xl w-full mx-auto px-4 md:px-6 py-6">{children}</main>
+
+          <div className="flex flex-col items-center gap-3">
+            <div
+              className="w-8 h-8 rounded-full bg-amx-blue flex items-center justify-center text-[11px] font-semibold text-white"
+              title={`${user.name} · ${ROLE_LABELS[user.role]}`}
+            >
+              {initials(user.name)}
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Sair"
+              aria-label="Sair"
+              className="w-9 h-9 rounded-[10px] flex items-center justify-center text-amx-muted hover:text-white hover:bg-amx-panel transition-colors"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {ICON_LOGOUT}
+              </svg>
+            </button>
+          </div>
+        </aside>
+
+        <main className="flex-1 min-w-0 flex flex-col">{children}</main>
       </div>
     </UserContext.Provider>
   );

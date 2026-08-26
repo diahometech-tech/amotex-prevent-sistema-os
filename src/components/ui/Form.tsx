@@ -1,7 +1,7 @@
 import React from 'react';
 
 const FIELD_CLASSES =
-  'text-sm bg-white border border-amx-border rounded-lg p-2.5 outline-none focus:border-amx-navy-600 focus:ring-1 focus:ring-amx-navy-600 disabled:bg-amx-canvas disabled:text-amx-muted';
+  'text-sm bg-amx-panel-2 border border-amx-line rounded-lg p-2.5 text-white placeholder:text-amx-muted outline-none focus:border-amx-red disabled:opacity-50';
 
 export function Field({
   label,
@@ -22,14 +22,14 @@ export function Field({
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <span className="text-xs font-semibold text-amx-ink">
+        <span className="font-heading text-[11px] font-semibold text-amx-muted uppercase tracking-wider">
           {label}
-          {required && <span className="text-amx-red-600"> *</span>}
+          {required && <span className="text-amx-red"> *</span>}
         </span>
       )}
       {children}
       {hint && !error && <span className="text-[11px] text-amx-muted">{hint}</span>}
-      {error && <span className="text-[11px] font-semibold text-amx-red-600">{error}</span>}
+      {error && <span className="text-[11px] font-semibold text-amx-red-hover">{error}</span>}
     </div>
   );
 }
@@ -56,3 +56,47 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTML
   )
 );
 Textarea.displayName = 'Textarea';
+
+// Toggle switch (interruptor) — usado em "Monitoramento ativo" no cadastro
+// de condomínio, mesmo visual do protótipo (trilho + bolinha, vermelho
+// quando ligado).
+export function Toggle({
+  checked,
+  onChange,
+  disabled,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <label
+      className={`flex items-center gap-3 p-3 bg-amx-panel-2 border border-amx-line rounded-lg ${
+        disabled ? 'opacity-50' : 'cursor-pointer'
+      }`}
+    >
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative w-9 h-5 rounded-full shrink-0 transition-colors ${checked ? 'bg-amx-red' : 'bg-amx-line'}`}
+      >
+        <span
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+            checked ? 'translate-x-[18px]' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+      <div className="flex flex-col">
+        <span className="text-xs text-white">{label}</span>
+        {hint && <span className="text-[11px] text-amx-muted">{hint}</span>}
+      </div>
+    </label>
+  );
+}

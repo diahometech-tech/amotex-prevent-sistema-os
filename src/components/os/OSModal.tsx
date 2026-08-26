@@ -277,14 +277,14 @@ export function OSModal({
         <>
           <ModalHeader
             title={condominioNome || 'Ordem de Serviço'}
-            subtitle={`Aberta em ${new Date(os.criado_em).toLocaleString('pt-BR')}`}
+            subtitle={`OS #${os.id.slice(0, 6).toUpperCase()} · ${OS_TIPO_LABELS[os.tipo].toUpperCase()} · aberta em ${new Date(os.criado_em).toLocaleString('pt-BR')}`}
             onClose={onClose}
           />
           <div className="p-5 flex flex-col gap-4">
             <OsSummary os={os} />
 
             {actionError && (
-              <p className="text-xs font-semibold text-amx-red-600 bg-amx-red-50 rounded-lg px-3 py-2">{actionError}</p>
+              <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2">{actionError}</p>
             )}
 
             {canManage && !isClosed && (
@@ -300,7 +300,7 @@ export function OSModal({
                       {busyAction ? 'Finalizando...' : 'Finalizar OS'}
                     </Button>
                     {itensObrigatoriosPendentes.length > 0 && (
-                      <p className="text-[11px] font-semibold text-amx-red-600">
+                      <p className="text-[11px] font-semibold text-amx-amber">
                         {itensObrigatoriosPendentes.length} item(ns) obrigatório(s) do checklist ainda pendente(s).
                       </p>
                     )}
@@ -309,7 +309,7 @@ export function OSModal({
               </div>
             )}
 
-            <div className="flex items-center gap-1 bg-amx-canvas border border-amx-border rounded-full p-1 w-fit">
+            <div className="flex items-center gap-1 bg-amx-panel-2 border border-amx-line rounded-full p-1 w-fit">
               {(
                 [
                   ['checklist', `Checklist${checklist.length ? ` (${checklist.length})` : ''}`],
@@ -323,7 +323,7 @@ export function OSModal({
                   type="button"
                   onClick={() => setTab(value)}
                   className={`text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap transition-colors ${
-                    tab === value ? 'bg-amx-navy-800 text-white' : 'text-amx-muted hover:bg-white'
+                    tab === value ? 'bg-amx-red text-white' : 'text-amx-muted hover:text-white'
                   }`}
                 >
                   {label}
@@ -347,7 +347,7 @@ export function OSModal({
                   <Spinner className="h-5 w-5" />
                 </div>
               ) : (
-                <div className="flex flex-col gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <FotoUpload
                     momento="antes"
                     fotos={fotos.filter((f) => f.momento === 'antes')}
@@ -444,32 +444,53 @@ function ChecklistTab({
       {items.length === 0 ? (
         <EmptyState title="Checklist vazio" description="Nenhum item cadastrado para esta OS ainda." />
       ) : (
-        <ul className="flex flex-col gap-1.5">
-          {items.map((item) => (
-            <li
-              key={item.id}
-              className="flex items-start gap-2.5 bg-white border border-amx-border rounded-lg px-3 py-2.5"
-            >
-              <input
-                type="checkbox"
-                checked={item.concluido}
-                disabled={readOnly}
-                onChange={() => onToggle(item)}
-                className="mt-0.5 accent-amx-navy-700 disabled:opacity-50"
-              />
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm ${item.concluido ? 'text-amx-muted line-through' : 'text-amx-ink font-medium'}`}>
+        <ul className="flex flex-col gap-2">
+          {items.map((item) => {
+            // Item obrigatório e pendente ganha borda vermelha — é ele que
+            // está travando o botão "Finalizar OS" (ver podeFinalizar acima).
+            const bloqueando = item.obrigatorio && !item.concluido;
+            return (
+              <li
+                key={item.id}
+                className={`flex items-center gap-2.5 rounded-[9px] px-3.5 py-3 bg-amx-panel border ${
+                  bloqueando ? 'border-amx-red' : 'border-amx-line'
+                }`}
+              >
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  onClick={() => onToggle(item)}
+                  aria-label={item.concluido ? 'Marcar como pendente' : 'Marcar como concluído'}
+                  className={`w-[22px] h-[22px] rounded-[6px] shrink-0 flex items-center justify-center transition-colors disabled:cursor-not-allowed ${
+                    item.concluido
+                      ? 'bg-amx-green'
+                      : `border-2 ${bloqueando ? 'border-amx-red' : 'border-amx-muted'} ${readOnly ? '' : 'hover:border-white'}`
+                  }`}
+                >
+                  {item.concluido && (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  )}
+                </button>
+                <span
+                  className={`text-[13px] flex-1 ${
+                    item.concluido ? 'text-amx-muted line-through' : item.obrigatorio ? 'text-white' : 'text-amx-muted'
+                  }`}
+                >
                   {item.descricao}
-                </p>
-              </div>
-              {item.obrigatorio && !item.concluido && <Badge tone="red">Obrigatório</Badge>}
-            </li>
-          ))}
+                </span>
+                {item.obrigatorio && (
+                  <span className="font-heading text-[9px] font-semibold text-amx-red tracking-wider shrink-0">OBRIG.</span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
       {!readOnly && (
-        <form onSubmit={handleAdd} className="flex items-end gap-2 flex-wrap bg-amx-canvas rounded-lg p-3">
+        <form onSubmit={handleAdd} className="flex items-end gap-2 flex-wrap bg-amx-panel-2 border border-amx-line rounded-lg p-3">
           <Field label="Novo item do checklist" hint="Ex.: Verificar nível da caixa d'água">
             <Input
               value={novaDescricao}
@@ -478,12 +499,12 @@ function ChecklistTab({
               className="w-64"
             />
           </Field>
-          <label className="flex items-center gap-1.5 text-xs font-semibold text-amx-ink pb-2.5">
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-white pb-2.5">
             <input
               type="checkbox"
               checked={novoObrigatorio}
               onChange={(e) => setNovoObrigatorio(e.target.checked)}
-              className="accent-amx-navy-700"
+              className="accent-amx-red"
             />
             Obrigatório
           </label>
