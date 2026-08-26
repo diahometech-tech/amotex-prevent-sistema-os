@@ -161,10 +161,10 @@ export function ContatoForm({
             type="checkbox"
             checked={form.ativo ?? true}
             onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
-            className="w-4 h-4 accent-amx-navy-600 cursor-pointer"
+            className="w-4 h-4 accent-amx-red cursor-pointer"
             disabled={busy}
           />
-          <span className="text-sm font-medium text-amx-ink">Ativo</span>
+          <span className="text-sm font-medium text-white">Ativo</span>
         </label>
       </Field>
 
