@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NexusFlow — Gestão de Tratativas",
-  description: "Sistema de controle do fluxo de abertura contábil.",
+  title: "Amotex Prevent — Sistema de OS",
+  description: "Gestão de ordens de serviço, checklists e manutenção preventiva/corretiva de condomínios.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon-192.png",
