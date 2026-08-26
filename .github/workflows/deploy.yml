@@ -1,0 +1,87 @@
+name: Deploy NexusFlow
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  # Etapa 1: verifica TypeScript no runner do GitHub (sem tocar a VPS)
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+  # Etapa 2: só faz deploy se o typecheck passou
+  deploy:
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH com rollback automático
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASS }}
+          script: |
+            set -e
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            export PATH="$NVM_DIR/versions/node/v20.20.2/bin:$PATH"
+
+            cd /var/nexusflow/app
+            BEFORE=$(git rev-parse HEAD)
+            git remote set-url origin https://${{ secrets.GH_TOKEN }}@github.com/Dmc9494/nexusflow.git
+            git checkout -- .
+            git pull origin master
+            AFTER=$(git rev-parse HEAD)
+            EXPECTED=$(git rev-parse origin/master)
+            if [ "$AFTER" != "$EXPECTED" ]; then
+              echo "❌ git pull não atualizou o repo. Abortando."
+              exit 1
+            fi
+            echo "✅ Repo atualizado: $BEFORE -> $AFTER"
+
+            # Build — se falhar, repositório não é alterado (pm2 continua na versão anterior)
+            npm install
+            npm run build
+
+            # Reinicia o app
+            pm2 restart nexusflow
+            pm2 save
+
+            # Health check: tenta por até 30s (a cada 3s) antes de desistir — um
+            # único curl 10s depois do restart já gerou falso-positivo aqui (app
+            # ainda subindo), disparando rollback desnecessário 2x na mesma noite.
+            HTTP="000"
+            for i in $(seq 1 10); do
+              sleep 3
+              HTTP=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health 2>/dev/null || echo "000")
+              if [ "$HTTP" = "200" ]; then
+                break
+              fi
+            done
+            if [ "$HTTP" != "200" ]; then
+              echo "⚠️  Health check falhou (HTTP $HTTP) após 30s — iniciando rollback para $BEFORE"
+              git checkout -- .
+              git checkout "$BEFORE"
+              # Limpa o cache de build ANTES de reconstruir: o build anterior
+              # (o que acabou de rodar, com sucesso) deixa o cache/lock do
+              # Turbopack em estado que faz o rebuild do rollback falhar com
+              # "Another next build process is already running" — foi
+              # exatamente isso que aconteceu 2x hoje, deixando o rollback pela
+              # metade (git na versão antiga, PM2 ainda servindo a build nova).
+              rm -rf .next
+              npm run build
+              pm2 restart nexusflow
+              pm2 save
+              echo "🔁 Rollback concluído. App restaurado para commit $BEFORE."
+              exit 1
+            fi
+            echo "✅ Deploy concluído e app saudável (HTTP $HTTP)."
