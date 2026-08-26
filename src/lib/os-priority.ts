@@ -1,14 +1,23 @@
 // Prioridade visual da lista de OS — função pura, sem I/O (mesmo espírito de
 // src/lib/sla.ts no NexusFlow original, adaptado ao domínio de OS de
-// condomínio). Não existe SLA/prazo por OS no modelo de dados atual
-// (ver Modelo-de-Dados.md no repo de infra) — a prioridade é derivada de:
-//   - tipo: corretiva é sempre mais urgente que preventiva (equipamento já
-//     com problema real vs. rotina programada);
-//   - origem: 'hermes_automatica' significa que o Agente Hermes detectou o
-//     problema sozinho a partir de um alerta de sensor — tratamos como sinal
-//     de urgência adicional em relação a uma OS aberta manualmente;
-//   - tempo em aberto: uma OS "esquecida" na fila sobe de prioridade mesmo
-//     sem ninguém tocar nela.
+// condomínio).
+//
+// TODO(merge): a OS ganhou um campo `prioridade` manual (alta/media/baixa,
+// definido na criação e editável depois por admin/técnico — combinado
+// 26/08 com o dono do backend). Esse campo ainda não existe no `OS` deste
+// branch, então computeOsPrioridade abaixo ainda deriva tudo de
+// tipo+origem+tempo, como antes. Na hora de mesclar, trocar a base do
+// cálculo:
+//   - Base = os.prioridade (o valor manual) — NUNCA ignorar.
+//   - tipo/origem/tempo em aberto viram AGRAVANTE por cima da base, só pra
+//     ESCALAR visualmente (nunca rebaixar abaixo do que foi registrado).
+//     Ex.: prioridade manual "baixa" só sobe na tela se corretiva/automática
+//     ou se estourar o tempo em aberto — nunca desce de "baixa".
+//   - Falta decidir o mapeamento: o campo novo tem 3 níveis
+//     (alta/media/baixa) e OsPrioridade aqui tem 4 (urgente/alta/normal/
+//     baixa) — "urgente" provavelmente vira um nível só alcançável por
+//     agravante (nunca base manual direta), a confirmar com quem definiu o
+//     campo antes de implementar.
 import type { OS } from './db';
 
 export type OsPrioridade = 'urgente' | 'alta' | 'normal' | 'baixa';
