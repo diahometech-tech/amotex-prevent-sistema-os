@@ -36,31 +36,3 @@ export function resolveUploadFile(url: string | undefined | null): string | null
   return null;
 }
 
-// Remove arquivos de um campo dentro da pasta da OS (troca de extensão).
-export function removeFieldFiles(dossierId: string, field: string) {
-  const osDir = path.join(UPLOADS_DIR, dossierId);
-  if (!fs.existsSync(osDir)) return;
-  for (const f of fs.readdirSync(osDir)) {
-    if (f.startsWith(`${field}.`)) {
-      try { fs.unlinkSync(path.join(osDir, f)); } catch {}
-    }
-  }
-}
-
-// Campos de arquivo do dossiê → nome amigável (usado no ZIP e na exportação).
-export const FILE_FIELDS: { field: string; label: string }[] = [
-  { field: 'photo_doc_frente_url', label: 'Documento-Frente' },
-  { field: 'photo_doc_verso_url', label: 'Documento-Verso' },
-  { field: 'photo_doc_completo_url', label: 'Documento-Completo' },
-  { field: 'photo_cnh_url', label: 'CNH' },
-  { field: 'photo_selfie_url', label: 'Selfie' },
-  { field: 'photo_selfie_rg_url', label: 'Selfie-com-RG' },
-  { field: 'video_prova_url', label: 'Video-Prova-de-Vida' },
-  { field: 'certificado_a1_url', label: 'Certificado-A1' },
-  { field: 'documento_b_url', label: 'Documento-B' },
-  { field: 'cnpj_comprovante_url', label: 'Cartao-CNPJ' },
-  { field: 'inscricao_municipal_url', label: 'Inscricao-Municipal' },
-  { field: 'inscricao_estadual_url', label: 'Inscricao-Estadual' },
-  { field: 'opcao_simples_url', label: 'Opcao-Simples' },
-  { field: 'certidao_inteiro_teor_url', label: 'Certidao-Inteiro-Teor' },
-];

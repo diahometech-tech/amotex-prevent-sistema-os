@@ -86,9 +86,11 @@ async function runSchemaMigration(): Promise<void> {
     CREATE TABLE IF NOT EXISTS usuario (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       nome TEXT NOT NULL,
+      login TEXT NOT NULL UNIQUE,
       papel TEXT NOT NULL CHECK (papel IN ('admin', 'tecnico', 'sindico')),
       condominio_id UUID REFERENCES condominio(id) ON DELETE SET NULL,
       senha_hash TEXT NOT NULL,
+      ativo BOOLEAN NOT NULL DEFAULT TRUE,
       criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
@@ -191,8 +193,8 @@ async function runSchemaMigration(): Promise<void> {
   if (rows[0].n === 0) {
     for (const u of defaultUsers()) {
       await p.query(
-        'INSERT INTO usuario (id, nome, papel, condominio_id, senha_hash, criado_em) VALUES ($1,$2,$3,$4,$5,$6)',
-        [u.id, u.nome, u.papel, u.condominio_id ?? null, u.senha_hash, u.criado_em]
+        'INSERT INTO usuario (id, nome, login, papel, condominio_id, senha_hash, ativo, criado_em) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+        [u.id, u.nome, u.login, u.papel, u.condominio_id ?? null, u.senha_hash, u.ativo, u.criado_em]
       );
     }
     console.log('[db-postgres] Usuários padrão criados (trocar senhas em produção).');
@@ -301,14 +303,18 @@ export const pgBackend: DbBackend = {
     const { rows } = await q('SELECT * FROM usuario WHERE id = $1', [id]);
     return (rows[0] as User) || null;
   },
+  async getUserByLogin(login) {
+    const { rows } = await q('SELECT * FROM usuario WHERE LOWER(login) = LOWER($1)', [login]);
+    return (rows[0] as User) || null;
+  },
   async insertUser(u) {
     await q(
-      'INSERT INTO usuario (id, nome, papel, condominio_id, senha_hash, criado_em) VALUES ($1,$2,$3,$4,$5,$6)',
-      [u.id, u.nome, u.papel, u.condominio_id ?? null, u.senha_hash, u.criado_em]
+      'INSERT INTO usuario (id, nome, login, papel, condominio_id, senha_hash, ativo, criado_em) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [u.id, u.nome, u.login, u.papel, u.condominio_id ?? null, u.senha_hash, u.ativo, u.criado_em]
     );
   },
   async updateUser(id, updates) {
-    const allowed = ['nome', 'papel', 'condominio_id', 'senha_hash'];
+    const allowed = ['nome', 'login', 'papel', 'condominio_id', 'senha_hash', 'ativo'];
     const { sets, vals } = buildSet(allowed, updates);
     if (sets.length === 0) return this.getUserById(id);
     vals.push(id);

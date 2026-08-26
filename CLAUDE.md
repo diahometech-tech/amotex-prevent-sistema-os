@@ -8,7 +8,16 @@ Contexto de negócio completo, requisitos e arquitetura geral do projeto (inclui
 
 Este repositório nasceu de um fork do [NexusFlow](https://github.com/Dmc9494/nexusflow) (sistema de onboarding contábil, domínio completamente diferente). O reuso é **só de backend, padrões e componentes funcionais** — nunca de interface visual. Reaproveitado: camada de dados Postgres (`src/lib/db-postgres.ts`), auth com bcrypt + sessão assinada (`src/lib/auth.ts`), upload com câmera mobile (`src/lib/storage.ts`), geração de DOCX (`docx@9`), cálculo de SLA (`src/lib/sla.ts`), padrão de notificação via webhook n8n (`src/lib/notify.ts`), scripts de deploy.
 
-**A interface visual é própria da Amotex** (paleta azul-marinho + vermelho + branco, logo com mascote robô, marca "Amotex Prevent") — nunca reaproveitar tema/layout do NexusFlow. Cores exatas da marca ainda a incorporar como design tokens (aguardando arquivo de paleta oficial do cliente).
+**A interface visual é própria da Amotex** (logo com mascote robô, marca "Amotex Prevent") — nunca reaproveitar tema/layout do NexusFlow. Design tokens extraídos visualmente do material de marca do cliente (aproximados, ajustar se um manual de marca com hex exatos aparecer depois):
+
+```css
+--bg-primary: #0B1E3A;    /* fundo principal, header */
+--bg-panel: #132A4D;      /* cards, painéis, modal */
+--brand-red: #D6161F;     /* logo, CTAs, destaques, prioridade alta */
+--accent-blue: #2E5C94;   /* ícones secundários, badges informativos */
+--text-on-dark: #FFFFFF;
+--text-muted: #9BAAC4;
+```
 
 ## Status do fork (26/08/2026) — em andamento, não use como referência de completude
 

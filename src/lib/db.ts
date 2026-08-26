@@ -59,9 +59,11 @@ export type UserRole = 'admin' | 'tecnico' | 'sindico';
 export interface User {
   id: string;
   nome: string;
+  login: string; // identificador único de acesso, distinto do nome de exibição
   papel: UserRole;
   condominio_id?: string; // só preenchido para papel = sindico
   senha_hash: string;
+  ativo: boolean;
   criado_em: string;
 }
 
@@ -190,6 +192,7 @@ export interface DbBackend {
   // Usuário (RBAC)
   getUsers(): Promise<User[]>;
   getUserById(id: string): Promise<User | null>;
+  getUserByLogin(login: string): Promise<User | null>;
   insertUser(u: User): Promise<void>;
   updateUser(id: string, updates: Partial<User>): Promise<User | null>;
   deleteUser(id: string): Promise<boolean>;
@@ -241,17 +244,19 @@ export function shortId(len = 7): string {
 // Usuários padrão — trocar as senhas após o primeiro login em produção.
 export function defaultUsers(): User[] {
   const now = new Date().toISOString();
-  const mk = (nome: string, senha: string, papel: UserRole, condominioId?: string): User => ({
+  const mk = (nome: string, login: string, senha: string, papel: UserRole, condominioId?: string): User => ({
     id: randomUUID(),
     nome,
+    login,
     papel,
     condominio_id: condominioId,
     senha_hash: hashPassword(senha),
+    ativo: true,
     criado_em: now,
   });
   return [
-    mk('Administrador', 'admin123', 'admin'),
-    mk('Técnico', 'tecnico123', 'tecnico'),
+    mk('Administrador', 'admin', 'admin123', 'admin'),
+    mk('Técnico', 'tecnico', 'tecnico123', 'tecnico'),
   ];
 }
 
@@ -385,6 +390,9 @@ const jsonBackend: DbBackend = {
   async getUsers() { return readLocalDB().users; },
   async getUserById(id) {
     return readLocalDB().users.find((u) => u.id === id) || null;
+  },
+  async getUserByLogin(login) {
+    return readLocalDB().users.find((u) => u.login.toLowerCase() === login.toLowerCase()) || null;
   },
   async insertUser(u) {
     const db = readLocalDB();
@@ -618,19 +626,17 @@ export class Database {
   // ----- Usuário (RBAC) -----
   static getUsers() { return backend().getUsers(); }
   static getUserById(id: string) { return backend().getUserById(id); }
-
-  static async getUserByUsername(nome: string): Promise<User | null> {
-    const users = await backend().getUsers();
-    return users.find((u) => u.nome.toLowerCase() === nome.toLowerCase()) || null;
-  }
+  static getUserByLogin(login: string) { return backend().getUserByLogin(login); }
 
   static async createUser(data: Partial<User> & { senha?: string }): Promise<User> {
     const user: User = {
       id: randomUUID(),
       nome: data.nome || '',
+      login: (data.login || '').toLowerCase(),
       papel: data.papel || 'tecnico',
       condominio_id: data.condominio_id,
       senha_hash: data.senha ? hashPassword(data.senha) : (data.senha_hash || ''),
+      ativo: data.ativo ?? true,
       criado_em: new Date().toISOString(),
     };
     await backend().insertUser(user);
