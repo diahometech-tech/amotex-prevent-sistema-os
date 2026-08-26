@@ -28,14 +28,19 @@ Feito até agora:
 - **`src/lib/db.ts` e `src/lib/db-postgres.ts` reescritos por completo** para o novo domínio (interface `DbBackend` com as 12 entidades acima, backend JSON local + backend Postgres, ambos com o mesmo shape). `Database.finalizarOS()` já implementa a trava de qualidade (não finaliza com item obrigatório de checklist pendente).
 - `src/lib/auth.ts` ajustado: `UserRole` agora é `admin | tecnico | sindico`; `canManageUsers` só admin; `isFieldRole` (captador/terceiro/certificador) virou `isScopedToOwnCondominio` (síndico só vê o próprio condomínio); cookie de sessão renomeado de `nexus_session` para `amotex_session`
 
-**Ainda não feito — próximos passos, nesta ordem:**
-1. **Rotas de API** (~20 arquivos em `src/app/api/dossiers/*`, `activity-logs`, `my-dossiers`, `my-stats`, `projects`, `push/*`, `users/*`) ainda importam os tipos antigos (`Dossier`, `ActivityLog`, `OsTask`, `PushSubscription`) que não existem mais em `db.ts` — quebram até serem reescritas para `Condominio`/`OS`/`AuditLog`/etc. Renomear caminho de rota `dossiers` → `os` junto.
-2. **`src/app/page.tsx`** (kanban principal) — hoje ainda modela a esteira de dossiê contábil, é a maior peça de UI a reescrever, e é onde entra a nova identidade visual (não copiar layout/tema do NexusFlow, ver seção acima).
-3. **Libs auxiliares que ainda referenciam o domínio antigo:** `src/lib/sla.ts`, `src/lib/notify.ts`, `src/lib/seed.ts`, `src/lib/gestor-scope.ts`, `src/lib/push.ts`, `src/lib/dossie-export.ts` — `sla.ts` e `notify.ts` são os mais valiosos de adaptar (cálculo de prioridade de OS e o padrão de webhook n8n); `gestor-scope.ts` (isolamento por `terceiro_projeto`) provavelmente não se aplica mais e pode ser removido.
-4. Seed de dados de teste com condomínios/reservatórios de exemplo (troca de `src/lib/seed.ts`)
-5. Design tokens da marca Amotex Prevent (aguardando paleta oficial do cliente)
+**Backend 100% reescrito e compilando limpo (`npx tsc --noEmit` só acusa erro em `page.tsx`):**
+- Todas as rotas de API reescritas pro domínio novo: `condominios/*` (+ `[id]/reservatorios`, `/contatos`, `/equipamentos`, com de-para SensorLog), `os/*` (+ `[id]/checklist`, `/checklist/[itemId]`, `/fotos`), `users/*`, `auth/*`, `session-logs`, `activity-logs`. RBAC: `admin` gerencia cadastros, `admin`+`tecnico` operam OS, `sindico` só lê o próprio condomínio (`canAccessCondominio` em `auth.ts`).
+- Removidas rotas/features que não existem no nosso domínio: `push/*` (web push), `tasks/*` e `dossiers/[id]/tasks/*` (atribuição de tarefa entre colegas), `projects/*` (conceito de "projeto" era da Contex), `users/directory`, `dossiers/deleted`/`restore` (sem soft-delete de OS no schema).
+- `src/lib/notify.ts` adaptado — eventos `os_created`/`os_status_changed`/`os_finalizada` (mesmo padrão de webhook n8n já validado no protótipo do Hermes).
+- `src/lib/sla.ts` reescrito como `computeUrgencia`/`computeResumoRotas` — nosso domínio não tem funil multi-etapa (isso era específico da Contex), é prioridade + tempo em aberto.
+- `src/lib/uploads.ts` adaptado: fotos da OS usam nome único (UUID) por arquivo, já que uma OS tem várias fotos antes/depois (diferente do modelo antigo de 1 arquivo por campo).
+- **Campo `prioridade` (alta/media/baixa) adicionado à entidade `OS`** — não estava no `Modelo-de-Dados.md` original, foi identificado como lacuna real ao montar o mockup visual (a lista de OS do PRD pede indicador de prioridade). Refletido em `db.ts`, `db-postgres.ts` e `postgres/schema.sql`.
+- Removidos por serem código morto/fora de escopo: `src/lib/gestor-scope.ts`, `src/lib/dossie-export.ts`, `src/lib/push.ts`, `src/lib/notifications.ts`, `src/lib/seed.ts`.
 
-**`npm install` roda normal, mas `npm run dev`/`npm run build` ainda vão quebrar** — as rotas de API do item 1 têm imports que não existem mais em `db.ts`.
+**Ainda não feito:**
+1. **`src/app/page.tsx`** (UI principal) — sendo construído em paralelo por outra sessão (frontend, design tokens da marca, lista de OS não-kanban + modal de detalhe). Não mexer nesse arquivo por aqui enquanto isso.
+2. Seed de dados de teste com condomínios/reservatórios de exemplo (o antigo `seed.ts` foi removido por estar 100% no domínio de dossiê contábil — não foi substituído ainda).
+3. Protótipo visual publicado no Claude Design com os design tokens abaixo — ver link combinado na conversa que gerou este checkpoint (não versionado aqui, é um Artifact separado).
 
 ## Armadilhas herdadas do NexusFlow (continuam valendo aqui)
 

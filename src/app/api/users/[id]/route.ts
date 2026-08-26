@@ -3,11 +3,11 @@ import { Database } from '@/lib/db';
 import { getSessionFromRequest, canManageUsers, hashPassword } from '@/lib/auth';
 
 function safe(u: any) {
-  const { password, ...rest } = u;
+  const { senha_hash, ...rest } = u;
   return rest;
 }
 
-// PATCH /api/users/[id] — reseta senha e/ou ativa/desativa. Só gestor/admin.
+// PATCH /api/users/[id] — reseta senha e/ou ativa/desativa. Só admin.
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = getSessionFromRequest(request);
   if (!session || !canManageUsers(session.role)) {
@@ -15,19 +15,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
   const { id } = await params;
   try {
-    const { password, active, terceiro_projeto, gestor_projetos } = await request.json();
+    const { senha, ativo, condominio_id } = await request.json();
     const updates: Record<string, unknown> = {};
-    // Hash antes de gravar — mesma função usada em POST /api/users (Database.createUser).
-    if (typeof password === 'string' && password.length > 0) updates.password = hashPassword(password);
-    if (typeof active === 'boolean') updates.active = active;
-    // Isolamento por projeto (só faz sentido pro papel 'terceiro'; não checamos
-    // o papel aqui pois é inofensivo gravar num usuário de outro papel — o
-    // campo só é lido nas rotas do terceiro). String vazia limpa a restrição.
-    if (typeof terceiro_projeto === 'string') updates.terceiro_projeto = terceiro_projeto.trim();
-    // Isolamento por projeto(s) pro papel 'gestor' — mesma lógica, lista
-    // separada por vírgula (ver src/lib/gestor-scope.ts). String vazia limpa
-    // a restrição (conta volta a ver tudo).
-    if (typeof gestor_projetos === 'string') updates.gestor_projetos = gestor_projetos.trim();
+    if (typeof senha === 'string' && senha.length > 0) updates.senha_hash = hashPassword(senha);
+    if (typeof ativo === 'boolean') updates.ativo = ativo;
+    if (typeof condominio_id === 'string') updates.condominio_id = condominio_id;
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Nada para atualizar.' }, { status: 400 });
     }
@@ -40,7 +32,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 }
 
-// DELETE /api/users/[id] — exclui o acesso permanentemente. Só gestor/admin.
+// DELETE /api/users/[id] — exclui o acesso permanentemente. Só admin.
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = getSessionFromRequest(request);
   if (!session || !canManageUsers(session.role)) {

@@ -106,6 +106,7 @@ export interface Escalonamento {
 export type OsTipo = 'preventiva' | 'corretiva';
 export type OsOrigem = 'manual' | 'hermes_automatica';
 export type OsStatus = 'aberta' | 'em_andamento' | 'finalizada' | 'cancelada';
+export type OsPrioridade = 'alta' | 'media' | 'baixa';
 
 export interface OS {
   id: string;
@@ -114,6 +115,7 @@ export interface OS {
   origem: OsOrigem;
   alerta_id?: string; // só quando origem = hermes_automatica
   status: OsStatus;
+  prioridade: OsPrioridade;
   tecnico_id?: string;
   entrada_em?: string;
   saida_em?: string;
@@ -723,6 +725,9 @@ export class Database {
       origem: data.origem || 'manual',
       alerta_id: data.alerta_id,
       status: 'aberta',
+      // Corretiva nasce alta por padrão (indica problema já ocorrendo);
+      // preventiva nasce média — quem cria pode sempre ajustar.
+      prioridade: data.prioridade || (data.tipo === 'corretiva' ? 'alta' : 'media'),
       tecnico_id: data.tecnico_id,
       observacao: data.observacao,
       criado_em: new Date().toISOString(),

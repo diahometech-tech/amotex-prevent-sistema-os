@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS os (
   origem TEXT NOT NULL CHECK (origem IN ('manual', 'hermes_automatica')),
   alerta_id UUID REFERENCES alerta(id), -- só se origem = hermes_automatica
   status TEXT NOT NULL DEFAULT 'aberta' CHECK (status IN ('aberta', 'em_andamento', 'finalizada', 'cancelada')),
+  prioridade TEXT NOT NULL DEFAULT 'media' CHECK (prioridade IN ('alta', 'media', 'baixa')),
   tecnico_id UUID REFERENCES usuario(id),
   entrada_em TIMESTAMPTZ,
   saida_em TIMESTAMPTZ,

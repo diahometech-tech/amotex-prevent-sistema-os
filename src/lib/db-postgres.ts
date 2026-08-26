@@ -132,6 +132,7 @@ async function runSchemaMigration(): Promise<void> {
       origem TEXT NOT NULL CHECK (origem IN ('manual', 'hermes_automatica')),
       alerta_id UUID REFERENCES alerta(id),
       status TEXT NOT NULL DEFAULT 'aberta' CHECK (status IN ('aberta', 'em_andamento', 'finalizada', 'cancelada')),
+      prioridade TEXT NOT NULL DEFAULT 'media' CHECK (prioridade IN ('alta', 'media', 'baixa')),
       tecnico_id UUID REFERENCES usuario(id),
       entrada_em TIMESTAMPTZ,
       saida_em TIMESTAMPTZ,
@@ -395,16 +396,16 @@ export const pgBackend: DbBackend = {
   },
   async insertOS(os) {
     await q(
-      `INSERT INTO os (id, condominio_id, tipo, origem, alerta_id, status, tecnico_id, entrada_em, saida_em, observacao, assinatura_zelador_url, assinatura_tecnico_url, pdf_url, criado_em)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [os.id, os.condominio_id, os.tipo, os.origem, os.alerta_id ?? null, os.status, os.tecnico_id ?? null,
+      `INSERT INTO os (id, condominio_id, tipo, origem, alerta_id, status, prioridade, tecnico_id, entrada_em, saida_em, observacao, assinatura_zelador_url, assinatura_tecnico_url, pdf_url, criado_em)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      [os.id, os.condominio_id, os.tipo, os.origem, os.alerta_id ?? null, os.status, os.prioridade, os.tecnico_id ?? null,
        os.entrada_em ?? null, os.saida_em ?? null, os.observacao ?? null,
        os.assinatura_zelador_url ?? null, os.assinatura_tecnico_url ?? null, os.pdf_url ?? null, os.criado_em]
     );
   },
   async updateOS(id, updates) {
     const allowed = [
-      'status', 'tecnico_id', 'entrada_em', 'saida_em', 'observacao',
+      'status', 'prioridade', 'tecnico_id', 'entrada_em', 'saida_em', 'observacao',
       'assinatura_zelador_url', 'assinatura_tecnico_url', 'pdf_url',
     ];
     const { sets, vals } = buildSet(allowed, updates);

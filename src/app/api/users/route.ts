@@ -2,17 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest, canManageUsers } from '@/lib/auth';
 
-const VALID_ROLES = [
-  'captador', 'operador_certificacao', 'operador_abertura', 'gestor', 'admin', 'terceiro', 'certificador',
-];
+const VALID_ROLES = ['admin', 'tecnico', 'sindico'];
 
-// Remove a senha antes de devolver ao cliente.
 function safe(u: any) {
-  const { password, ...rest } = u;
+  const { senha_hash, ...rest } = u;
   return rest;
 }
 
-// GET /api/users — lista usuários (sem senha). Só gestor/admin.
+// GET /api/users — lista usuários (sem senha). Só admin.
 export async function GET(request: NextRequest) {
   const session = getSessionFromRequest(request);
   if (!session || !canManageUsers(session.role)) {
@@ -22,34 +19,28 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ users: users.map(safe) });
 }
 
-// POST /api/users — cria usuário. Só gestor/admin.
+// POST /api/users — cria usuário. Só admin.
 export async function POST(request: NextRequest) {
   const session = getSessionFromRequest(request);
   if (!session || !canManageUsers(session.role)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
   try {
-    const { name, username, password, role, terceiro_projeto, gestor_projetos } = await request.json();
-    if (!name || !username || !password || !role) {
-      return NextResponse.json({ error: 'Preencha nome, usuário, senha e papel.' }, { status: 400 });
+    const { nome, login, senha, papel, condominio_id } = await request.json();
+    if (!nome || !login || !senha || !papel) {
+      return NextResponse.json({ error: 'Preencha nome, login, senha e papel.' }, { status: 400 });
     }
-    if (!VALID_ROLES.includes(role)) {
+    if (!VALID_ROLES.includes(papel)) {
       return NextResponse.json({ error: 'Papel inválido.' }, { status: 400 });
     }
-    const exists = await Database.getUserByUsername(username);
-    if (exists) {
-      return NextResponse.json({ error: 'Este nome de usuário já existe.' }, { status: 409 });
+    if (papel === 'sindico' && !condominio_id) {
+      return NextResponse.json({ error: 'Informe o condomínio do síndico.' }, { status: 400 });
     }
-    // Escopo de projeto só faz sentido pro papel 'terceiro' — isolamento entre
-    // parceiros de e-commerce de projetos diferentes (ver comentário no tipo User).
-    const projetoScope = role === 'terceiro' && typeof terceiro_projeto === 'string' ? terceiro_projeto.trim() : undefined;
-    // Escopo de projeto(s) pro papel 'gestor' (ver src/lib/gestor-scope.ts).
-    const gestorProjetosScope = role === 'gestor' && typeof gestor_projetos === 'string' ? gestor_projetos.trim() : undefined;
-    const user = await Database.createUser({
-      name, username, password, role,
-      ...(projetoScope ? { terceiro_projeto: projetoScope } : {}),
-      ...(gestorProjetosScope ? { gestor_projetos: gestorProjetosScope } : {}),
-    });
+    const exists = await Database.getUserByLogin(login);
+    if (exists) {
+      return NextResponse.json({ error: 'Este login já existe.' }, { status: 409 });
+    }
+    const user = await Database.createUser({ nome, login, senha, papel, condominio_id });
     return NextResponse.json({ success: true, user: safe(user) });
   } catch (e) {
     console.error('Erro ao criar usuário:', e);

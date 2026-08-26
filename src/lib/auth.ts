@@ -86,6 +86,17 @@ export function isScopedToOwnCondominio(role?: UserRole): boolean {
   return role === 'sindico';
 }
 
+// Confere se a sessão pode acessar dados do condomínio informado — admin e
+// técnico acessam qualquer um; síndico só o próprio (busca no banco, nunca
+// confia num condominio_id vindo do client). Usar em toda rota aninhada sob
+// /api/condominios/[id]/* e /api/os que filtre por condomínio.
+export async function canAccessCondominio(session: SessionUser, condominioId: string): Promise<boolean> {
+  if (session.role !== 'sindico') return true;
+  const { Database } = await import('./db');
+  const user = await Database.getUserById(session.id);
+  return user?.condominio_id === condominioId;
+}
+
 // ===== Senhas (bcrypt) =====
 
 export function hashPassword(plain: string): string {
