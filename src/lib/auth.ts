@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import type { NextRequest } from 'next/server';
 import type { UserRole } from './db';
 
-export const SESSION_COOKIE = 'nexus_session';
+export const SESSION_COOKIE = 'amotex_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h (igual ao maxAge do cookie)
 
 function secret(): string {
@@ -76,20 +76,14 @@ export function getClientIp(req: NextRequest): string {
 
 // Papéis com poder de administração de usuários.
 export function canManageUsers(role?: UserRole): boolean {
-  return role === 'admin' || role === 'gestor';
+  return role === 'admin';
 }
 
-// Papéis "de campo": sem acesso à esteira/kanban interno (page.tsx) nem aos
-// endpoints gerais da OS (dossiers/[id], upload, reveal, files-zip, tasks
-// etc.) — cada um só acessa a interface própria (captador.html, /terceiro,
-// /consulta) e os endpoints dedicados dela. `certificador` é o acesso restrito
-// de emissão do certificador (só /consulta) — mesma classe de isolamento que
-// captador/terceiro já tinham, não um papel "quase interno". Ao adicionar um
-// endpoint novo da esteira geral, bloquear com este helper (não replicar o
-// `role === 'captador' || role === 'terceiro'` inline) — é o que garante que
-// um papel de campo novo no futuro herde o bloqueio automaticamente aqui.
-export function isFieldRole(role?: UserRole): boolean {
-  return role === 'captador' || role === 'terceiro' || role === 'certificador';
+// Síndico só enxerga/edita dados do próprio condomínio (Painel Condominial) —
+// bloquear com este helper em qualquer endpoint que liste dados de todos os
+// condomínios, em vez de checar `role === 'sindico'` inline.
+export function isScopedToOwnCondominio(role?: UserRole): boolean {
+  return role === 'sindico';
 }
 
 // ===== Senhas (bcrypt) =====

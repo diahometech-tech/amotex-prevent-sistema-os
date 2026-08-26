@@ -1,239 +1,156 @@
 import fs from 'fs';
 import path from 'path';
-import { demoSeed } from './seed';
+import { randomUUID } from 'crypto';
 import { hashPassword } from './auth';
 
-// Tipos base para o Dossiê
-export interface Dossier {
+// =====================================================================
+// Tipos de domínio — Amotex Prevent (ver docs/Modelo-de-Dados.md no
+// repositório amotex-prevent-infra para o schema completo e o porquê de
+// cada entidade).
+// =====================================================================
+
+export interface Condominio {
   id: string;
-  client_name: string;
-  cpf: string;
-  phone: string;
-  email: string;
-  address?: string;
-  gov_level: 'ouro' | 'prata';
-  gov_login?: string;
-  gov_password_encrypted?: string;
-  status: 'captado' | 't1_pendente' | 't1_verde' | 't1_vermelho' | 't2_pendente' | 't3_bird_id' | 't3_abertura' | 't4_a1' | 'finalizado' | 'cancelado';
-  current_step: 'captacao' | 't1' | 't2' | 't3' | 't4' | 'finalizado';
-  photo_doc_frente_url?: string;
-  photo_doc_verso_url?: string;
-  photo_doc_completo_url?: string;
-  photo_cnh_url?: string;
-  comprovante_endereco_url?: string; // campo legado — não usado no fluxo atual
-  antecedentes_url?: string; // campo legado — não usado no fluxo atual
-  photo_selfie_url?: string;
-  photo_selfie_rg_url?: string;
-  video_prova_url?: string;
-  certificado_a1_url?: string;
-  // Nome original do arquivo como foi anexado (10/08/2026, pedido real: o
-  // download aparecia com o nome interno do campo, "certificado_a1_url",
-  // em vez de algo reconhecível). Capturado automaticamente no upload
-  // (api/dossiers/[id]/upload/route.ts, body.original_name) — não é
-  // digitado manualmente como os `doc_extra_N_nome`. Usado como fallback
-  // de nome de download quando `empresa_nome` ainda não existe (ver
-  // certificadoA1FileName em src/lib/text.ts).
-  certificado_a1_nome?: string;
-  documento_b_url?: string;
-  cnpj_comprovante_url?: string;
-  inscricao_municipal_url?: string;
-  inscricao_estadual_url?: string;
-  opcao_simples_url?: string;
-  certidao_inteiro_teor_url?: string;
-  // Anexos avulsos — 3 slots livres pra documentos que não se encaixam nos
-  // campos fixos acima (cada um tem um nome digitado por quem anexa, pra
-  // ficar identificável depois no dossiê; sem isso um anexo genérico não diz
-  // o que é).
-  doc_extra_1_url?: string;
-  doc_extra_1_nome?: string;
-  doc_extra_2_url?: string;
-  doc_extra_2_nome?: string;
-  doc_extra_3_url?: string;
-  doc_extra_3_nome?: string;
-  cnpj_number?: string;
-  protocolo?: string; // identificador oficial gerado na finalização (vínculo ecommerce)
-  empresa_aberta: boolean;
-  empresa_aberta_em?: string; // timestamp de quando empresa_aberta virou true (portal do terceiro mostra essa data)
-  // Marcado pelo terceiro quando ele já baixou/conferiu os documentos finais
-  // da empresa aberta — não afeta o fluxo interno, é só um "check" pro
-  // próprio controle dele (pra saber o que já processou vs o que é novo).
-  terceiro_docs_baixados?: boolean;
-  terceiro_docs_baixados_em?: string;
-  t2_new_email?: string;
-  // Senha do e-mail da empresa (t2_new_email) — cadastrada pelo terceiro
-  // (dono do vínculo) ou por gestor/admin; revelação auditada, acessível a
-  // gestor/admin, operador_certificacao e terceiro.
-  t2_new_email_senha_encrypted?: string;
-  t2_new_phone?: string;
-  t1_justification?: string;
-  assigned_to?: string;
-  captured_by?: string;
-  // Atestação obrigatória do captador: confirma que desativou a verificação
-  // em duas etapas do gov.br do cliente (necessário p/ a equipe de certificação acessar).
-  gov_2fa_disabled?: boolean;
-  // Responsáveis pela etapa T3/T4 (certificação ≠ abertura)
-  resp_certificacao?: string;
-  resp_abertura?: string;
-  // Parceiro de e-commerce ("terceiro") que assumiu o vínculo desta OS —
-  // primeiro terceiro que grava dados fica dono; isola visibilidade entre
-  // múltiplas contas terceiro (não quebra o caso de conta única atual).
-  terceiro_responsavel?: string;
-  // Contador responsável pela abertura da empresa (João/Kely/Arnaldo — definido pelo gestor)
-  contador_abertura?: string;
-  // Sub-etapas de certificação/abertura
-  bird_id_done?: boolean;
-  abertura_done?: boolean;
-  a1_done?: boolean;
-  // Certificações são DISTINTAS e cobradas individualmente — registra quando e
-  // quem concluiu cada uma (base de conferência p/ gestor e certificador).
-  bird_id_done_em?: string;
-  bird_id_done_por?: string;
-  a1_done_em?: string;
-  a1_done_por?: string;
-  // Abertura da empresa também precisa registrar quem concluiu — sem isso não
-  // havia indicador de qual operador de abertura fez o processo (só sumia
-  // atrás do badge "✓ concluído", sem nome).
-  abertura_done_em?: string;
-  abertura_done_por?: string;
-  // Pagamento — 3 marcadores independentes (pedido do gestor: BIRD e A1 são
-  // certificados distintos com custo próprio; o colaborador que executou é
-  // pago à parte). Só gestor/admin gravam. Funciona retroativamente (inclusive
-  // em OS já finalizada) — é só controle, não bloqueia nada do fluxo.
-  bird_pago?: boolean;
-  bird_pago_em?: string;
-  bird_pago_por?: string;
-  a1_pago?: boolean;
-  a1_pago_em?: string;
-  a1_pago_por?: string;
-  colaborador_pago?: boolean;
-  colaborador_pago_em?: string;
-  colaborador_pago_por?: string;
-  // Pagamento do captador por esta OS (pedido do gestor: tela "Captadores"
-  // pra gerenciar pagamento por captação). Só gestor/admin gravam. Marcação
-  // manual — não depende da OS estar finalizada, é o gestor quem decide.
-  // captador_pago = "1º Pagamento" (referência: liberado na certificação do
-  // BIRD, mas a marcação em si continua manual/livre pro gestor).
-  captador_pago?: boolean;
-  captador_pago_em?: string;
-  captador_pago_por?: string;
-  // Mensalidade recorrente do captador (pago do 2º mês em diante, enquanto o
-  // cliente está ativo) — array JSON de competências pagas, formato "YYYY-MM"
-  // (ex.: '["2026-07","2026-08"]'). Cada competência é um pagamento
-  // independente; alternar usa POST com { toggle_mes_captador: 'YYYY-MM' } em
-  // vez de reescrever o array inteiro do cliente (servidor calcula o diff).
-  captador_pagamentos_mensais?: string;
-  // Docs recusados pelo certificador — OS sai da fila dele até o captador
-  // reenviar (timestamp ISO; vazio = sem recusa pendente).
-  cert_docs_recusados?: string;
-  bird_id_cert_url?: string;
-  agendamento_cert?: string;
-  // Aprovação do agendamento feito pelo captador. O slot fica RESERVADO em
-  // `agendamento_cert` já na criação (senão dois captadores marcam o mesmo
-  // horário), mas só vale como compromisso firme quando o certificador
-  // aprova. Recusar limpa `agendamento_cert` (libera o slot) e devolve a
-  // tarefa de agendar pro captador com o motivo.
-  // COMPATIBILIDADE: OS antiga com `agendamento_cert` e `agendamento_status`
-  // vazio conta como APROVADA — não jogar agendamento já existente pra
-  // "pendente" retroativamente (ver `agendamentoAprovado` em page.tsx).
-  agendamento_status?: 'pendente' | 'aprovado' | 'recusado';
-  agendamento_recusa_motivo?: string;
-  agendamento_decidido_por?: string;
-  agendamento_decidido_em?: string;
-  // Reagendamento solicitado pelo certificador — fica PENDENTE até o gestor
-  // aprovar/recusar. `reagendamento_pendente` guarda o novo horário ISO proposto
-  // (ou 'CANCELAR' para pedido de cancelamento); `agendamento_cert` só muda
-  // quando o gestor aprova.
-  reagendamento_pendente?: string;
-  reagendamento_de?: string;
-  reagendamento_justificativa?: string;
-  reagendamento_por?: string;
-  reagendamento_em?: string;
-  sla_deadline?: string;
-  // Dados da abertura da empresa (Ordem de Serviço - Abertura / modelo Contex)
-  empresa_nome?: string;
-  nome_fantasia?: string;
-  // Endereço ONDE A EMPRESA SERÁ ABERTA — distinto do `address` do cliente
-  // (que é o endereço pessoal, usado no BIRD ID). Preenchido no E2, editável
-  // pelo gestor.
-  empresa_endereco?: string;
-  cnae?: string;
-  capital_social?: string;
-  quadro_societario?: string;
-  regime_tributario?: string;
-  // Classificação de porte da empresa (ME/EPP) — preenchido manualmente na
-  // E3 (Abertura), mesmo bloco "Dados da Abertura" dos demais campos de
-  // empresa (EmpresaAberturaFields, src/app/page.tsx). Sem auto-fill do
-  // CNPJ (o retorno de publica.cnpj.ws pra esse campo não foi validado).
-  porte_empresa?: string;
-  // Forma de Atuação — mesmo bloco "Dados da Abertura", múltipla escolha
-  // (uma empresa pode atuar de mais de uma forma ao mesmo tempo). Lista
-  // separada por vírgula, mesmo formato de string usado em
-  // gestor_projetos/terceiro_projeto (src/lib/gestor-scope.ts).
-  forma_atuacao?: string;
-  gov_socios?: string;
-  forma_pagamento?: string;
-  codigo_acesso?: string;
-  // Checklist operacional da abertura
-  cad_junta?: boolean;
-  cad_receita?: boolean;
-  cad_estado?: boolean;
-  cad_prefeitura?: boolean;
-  planilha_mensalidade?: boolean;
-  planilha_simples?: boolean;
-  envio_tfe?: boolean;
-  opcao_simples?: boolean;
-  criar_pasta_rede?: boolean;
-  // Dados de acesso à certificação (BIRD ID / A1) — centralizados pra não
-  // depender de planilha paralela do certificador.
-  cert_certificadora?: string;
-  cert_sistema_usado?: string;
-  cert_aparelho?: string;
-  cert_email?: string;
-  cert_email_senha_encrypted?: string;
-  cert_senha_acesso_encrypted?: string;
-  // Classificação do projeto ao qual a empresa foi alocada — controle da
-  // CONTEX (gestor/admin definem, obrigatório antes de aprovar a E1). É o
-  // campo usado pra capacidade/contador de lote e pro isolamento de
-  // visibilidade do terceiro (User.terceiro_projeto). NÃO confundir com
-  // projeto_parceiro abaixo.
-  projeto?: string;
-  // Projeto/lote que o PRÓPRIO parceiro terceiro atribui à empresa — controle
-  // interno DELE, sem nenhum efeito em capacidade, contador_abertura ou
-  // isolamento de visibilidade (03/08/2026, esclarecimento do gestor: o
-  // campo `projeto` acima e este são conceitos diferentes — antes o
-  // terceiro escrevia direto em `projeto`, o que colidia com a classificação
-  // da Contex).
-  projeto_parceiro?: string;
-  // Anotação de colaboração deixada pelo gestor/admin — visível para toda a equipe.
-  gestor_note?: string;
-  // Flags computadas pela rota GET (não persistidas) — indicam se há senha
-  // cadastrada sem expor o valor criptografado ao client.
-  has_gov_password?: boolean;
-  has_cert_email_senha?: boolean;
-  has_cert_senha_acesso?: boolean;
-  has_t2_new_email_senha?: boolean;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string;
+  nome: string;
+  endereco?: string;
+  administradora?: string;
+  monitoramento_ativo: boolean;
+  criado_em: string;
 }
 
-export interface ActivityLog {
+// Ponto monitorado dentro de um condomínio. nome_sensorlog é a chave de
+// resolução do alerta: a mensagem que chega da SensorLog referencia o
+// reservatório ("Caixa torre 03"), não o condomínio diretamente.
+export interface Reservatorio {
   id: string;
-  dossier_id: string;
-  user_id?: string;
-  user_name: string;
-  action_type: string;
-  details: string;
-  // IP de origem da requisição que gerou o evento (x-forwarded-for, atrás do
-  // Cloudflare Tunnel). Só existe em eventos gravados a partir da introdução
-  // desse campo — não é retroativo em logs antigos.
-  ip_address?: string;
-  created_at: string;
+  condominio_id: string;
+  nome_interno: string;
+  nome_sensorlog: string;
+  tipo: 'cisterna' | 'superior' | 'torre';
+  capacidade_litros?: number;
+  ultima_mensagem_recebida_em?: string;
 }
 
-// Log de sessão (login/logout) — independente do ActivityLog por dossiê.
-// Existe pra responder "quem acessou o sistema, quando e de que IP",
-// sem precisar abrir OS por OS.
+// Quem é notificado, em qual canal, por condomínio. nivel_escalonamento
+// fica no registro (não fixo em código) — cada condomínio pode ter sua
+// própria cadeia sem alterar a aplicação.
+export interface Contato {
+  id: string;
+  condominio_id: string;
+  papel: 'zelador' | 'sindico' | 'administradora' | 'conservadora' | 'plantao';
+  nome: string;
+  canal_preferencial: 'telegram' | 'whatsapp' | 'email';
+  identificador_canal: string;
+  nivel_escalonamento: 1 | 2 | 3;
+  ativo: boolean;
+}
+
+export interface Equipamento {
+  id: string;
+  condominio_id: string;
+  tipo: string;
+  modelo?: string;
+  potencia_hp?: number;
+  cadastrado_em: string;
+}
+
+export type UserRole = 'admin' | 'tecnico' | 'sindico';
+
+export interface User {
+  id: string;
+  nome: string;
+  papel: UserRole;
+  condominio_id?: string; // só preenchido para papel = sindico
+  senha_hash: string;
+  criado_em: string;
+}
+
+export type EventoAlerta =
+  | 'NIVEL_BAIXO'
+  | 'NIVEL_CRITICO'
+  | 'NIVEL_MUITO_BAIXO'
+  | 'TENDENCIA_QUEDA_MADRUGADA'
+  | 'RECUPEROU'
+  | 'SEM_REPORTE';
+
+export interface Alerta {
+  id: string;
+  reservatorio_id: string;
+  texto_original?: string;
+  evento: EventoAlerta;
+  classificado_por: 'regra' | 'llm' | 'humano';
+  recebido_em: string;
+}
+
+export interface Playbook {
+  id: string;
+  evento: EventoAlerta;
+  versao: number;
+  conteudo: unknown; // diagnóstico + passos + opções — ver docs/PRD-v2.md
+  ativo: boolean;
+  criado_em: string;
+}
+
+export interface Escalonamento {
+  id: string;
+  alerta_id: string;
+  contato_id: string;
+  nivel: number;
+  canal_usado?: string;
+  enviado_em: string;
+  ack_em?: string;
+}
+
+export type OsTipo = 'preventiva' | 'corretiva';
+export type OsOrigem = 'manual' | 'hermes_automatica';
+export type OsStatus = 'aberta' | 'em_andamento' | 'finalizada' | 'cancelada';
+
+export interface OS {
+  id: string;
+  condominio_id: string;
+  tipo: OsTipo;
+  origem: OsOrigem;
+  alerta_id?: string; // só quando origem = hermes_automatica
+  status: OsStatus;
+  tecnico_id?: string;
+  entrada_em?: string;
+  saida_em?: string;
+  observacao?: string;
+  assinatura_zelador_url?: string;
+  assinatura_tecnico_url?: string;
+  pdf_url?: string;
+  criado_em: string;
+}
+
+export interface ChecklistItem {
+  id: string;
+  os_id: string;
+  equipamento_id?: string;
+  descricao: string;
+  obrigatorio: boolean;
+  concluido: boolean;
+  concluido_em?: string;
+}
+
+export interface Foto {
+  id: string;
+  os_id: string;
+  momento: 'antes' | 'depois';
+  url: string;
+  enviado_em: string;
+}
+
+export interface AuditLog {
+  id: string;
+  entidade: string;
+  entidade_id?: string;
+  acao: string;
+  ator: string; // nome de usuário, "hermes" ou "n8n"
+  detalhe?: unknown;
+  criado_em: string;
+}
+
+// Log de sessão (login/logout) — independente do AuditLog por entidade.
 export interface SessionLog {
   id: string;
   user_name: string;
@@ -243,126 +160,98 @@ export interface SessionLog {
   created_at: string;
 }
 
-export interface OsTask {
-  id: string;
-  dossier_id: string;
-  from_user: string;
-  to_user: string;
-  text: string;
-  done: boolean;
-  done_by?: string;
-  created_at: string;
-  done_at?: string;
-}
+// =====================================================================
+// Interface comum dos backends de persistência (JSON local / PostgreSQL)
+// =====================================================================
 
-// Inscrição de push (Web Push API) — um usuário pode ter mais de uma (vários
-// dispositivos/navegadores). endpoint é a chave natural de cada inscrição.
-export interface PushSubscription {
-  id: string;
-  user_name: string;
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-  created_at: string;
-}
-
-export type UserRole =
-  | 'captador'
-  | 'operador_certificacao'
-  | 'operador_abertura'
-  | 'gestor'
-  | 'admin'
-  | 'terceiro'
-  // Acesso restrito e dedicado do certificador só ao Modo Consulta
-  // (/consulta) — nunca vê a esteira/kanban interno, é isolado como um
-  // papel "de campo" (ver `isFieldRole` em src/lib/auth.ts), igual
-  // captador/terceiro. Diferente de `operador_certificacao`, que continua
-  // com acesso ao dashboard completo (agenda, tarefas, Certificação etc.).
-  | 'certificador';
-
-export interface User {
-  id: string;
-  name: string;
-  username: string;
-  password: string; // hash bcrypt (legado local pode conter texto puro; é migrado no login)
-  role: UserRole;
-  active: boolean;
-  created_at: string;
-  // Escopo de projeto(s) — só usado no papel 'terceiro'. Isolamento entre
-  // parceiros de e-commerce de projetos diferentes: se preenchido, a conta
-  // SÓ enxerga/edita OS's com d.projeto num desses nomes (mesmo as ainda
-  // sem terceiro_responsavel definido); OS's sem projeto atribuído também
-  // ficam de fora (decisão de negócio: não é fila livre compartilhada entre
-  // projetos diferentes). Lista de nomes separados por vírgula (10/08/2026,
-  // ampliado de "um projeto só" pra vários — mesmo pedido real de negócio
-  // já atendido pra 'gestor' logo abaixo; ambos compartilham o parsing e a
-  // comparação em src/lib/gestor-scope.ts). Vazio/undefined = comportamento
-  // antigo, sem restrição por projeto (mantém compatibilidade com a conta
-  // 'terceiro' padrão, que continua vendo tudo).
-  terceiro_projeto?: string;
-  // Escopo de projeto(s) — só usado no papel 'gestor' (10/08/2026, caso real:
-  // conta "Gestor empresas" via OS de outro gestor/projeto que não eram
-  // dela). Lista de nomes de projeto separados por vírgula (um gestor pode
-  // responder por mais de um projeto/cliente ao mesmo tempo — mesmo formato
-  // de terceiro_projeto, que passou a aceitar vários também). Se preenchido,
-  // a conta SÓ enxerga/edita OS's com d.projeto num desses nomes — mesma
-  // regra de terceiro_projeto (inclusive exclui OS's sem projeto atribuído).
-  // Vazio/undefined = sem restrição (mantém compatibilidade — nenhuma conta
-  // 'gestor' existente perde acesso por não ter esse campo definido).
-  gestor_projetos?: string;
-}
-
-// Interface comum dos backends de persistência (JSON local / PostgreSQL).
 export interface DbBackend {
-  getDossiers(): Promise<Dossier[]>;
-  getDossierById(id: string): Promise<Dossier | null>;
-  insertDossier(d: Dossier): Promise<void>;
-  updateDossier(id: string, updates: Partial<Dossier>): Promise<Dossier | null>;
-  deleteDossier(id: string): Promise<boolean>;
-  getDeletedDossiers(): Promise<Dossier[]>;
-  restoreDossier(id: string): Promise<boolean>;
-  getLogs(): Promise<ActivityLog[]>;
-  getLogsByDossier(dossierId: string): Promise<ActivityLog[]>;
-  insertLog(log: ActivityLog): Promise<void>;
-  getSessionLogs(): Promise<SessionLog[]>;
-  insertSessionLog(log: SessionLog): Promise<void>;
+  // Condomínio
+  getCondominios(): Promise<Condominio[]>;
+  getCondominioById(id: string): Promise<Condominio | null>;
+  insertCondominio(c: Condominio): Promise<void>;
+  updateCondominio(id: string, updates: Partial<Condominio>): Promise<Condominio | null>;
+
+  // Reservatório
+  getReservatoriosByCondominio(condominioId: string): Promise<Reservatorio[]>;
+  getReservatorioByNomeSensorlog(nomeSensorlog: string): Promise<Reservatorio | null>;
+  insertReservatorio(r: Reservatorio): Promise<void>;
+  updateReservatorio(id: string, updates: Partial<Reservatorio>): Promise<Reservatorio | null>;
+
+  // Contato
+  getContatosByCondominio(condominioId: string): Promise<Contato[]>;
+  getContatoNivel(condominioId: string, nivel: number): Promise<Contato | null>;
+  insertContato(c: Contato): Promise<void>;
+  updateContato(id: string, updates: Partial<Contato>): Promise<Contato | null>;
+
+  // Equipamento
+  getEquipamentosByCondominio(condominioId: string): Promise<Equipamento[]>;
+  insertEquipamento(e: Equipamento): Promise<void>;
+
+  // Usuário (RBAC)
   getUsers(): Promise<User[]>;
-  getUserByUsername(username: string): Promise<User | null>;
   getUserById(id: string): Promise<User | null>;
   insertUser(u: User): Promise<void>;
   updateUser(id: string, updates: Partial<User>): Promise<User | null>;
   deleteUser(id: string): Promise<boolean>;
-  // Tarefas internas por OS
-  getTasksByDossier(dossierId: string): Promise<OsTask[]>;
-  getTasksForUser(userName: string): Promise<(OsTask & { client_name?: string })[]>;
-  insertTask(task: OsTask): Promise<void>;
-  completeTask(id: string, doneBy: string, doneAt: string): Promise<void>;
-  deleteTask(id: string): Promise<void>;
-  // Inscrições de push (Web Push)
-  getPushSubscriptionsByUser(userName: string): Promise<PushSubscription[]>;
-  insertPushSubscription(sub: PushSubscription): Promise<void>;
-  deletePushSubscriptionByEndpoint(endpoint: string): Promise<void>;
+
+  // Alerta
+  getAlertas(): Promise<Alerta[]>;
+  getAlertaById(id: string): Promise<Alerta | null>;
+  getAlertasByReservatorio(reservatorioId: string): Promise<Alerta[]>;
+  insertAlerta(a: Alerta): Promise<void>;
+
+  // Playbook
+  getPlaybookAtivo(evento: EventoAlerta): Promise<Playbook | null>;
+  getPlaybooks(): Promise<Playbook[]>;
+  insertPlaybook(p: Playbook): Promise<void>;
+
+  // Escalonamento
+  getEscalonamentosByAlerta(alertaId: string): Promise<Escalonamento[]>;
+  insertEscalonamento(e: Escalonamento): Promise<void>;
+  registrarAck(id: string, ackEm: string): Promise<void>;
+
+  // OS
+  getOSs(): Promise<OS[]>;
+  getOSById(id: string): Promise<OS | null>;
+  getOSsByCondominio(condominioId: string): Promise<OS[]>;
+  insertOS(os: OS): Promise<void>;
+  updateOS(id: string, updates: Partial<OS>): Promise<OS | null>;
+
+  // Checklist
+  getChecklistByOS(osId: string): Promise<ChecklistItem[]>;
+  insertChecklistItem(item: ChecklistItem): Promise<void>;
+  updateChecklistItem(id: string, updates: Partial<ChecklistItem>): Promise<ChecklistItem | null>;
+
+  // Foto
+  getFotosByOS(osId: string): Promise<Foto[]>;
+  insertFoto(f: Foto): Promise<void>;
+
+  // Auditoria
+  getAuditLogs(): Promise<AuditLog[]>;
+  getAuditLogsByEntidade(entidade: string, entidadeId: string): Promise<AuditLog[]>;
+  insertAuditLog(log: AuditLog): Promise<void>;
+  getSessionLogs(): Promise<SessionLog[]>;
+  insertSessionLog(log: SessionLog): Promise<void>;
 }
 
 export function shortId(len = 7): string {
   return Math.random().toString(36).substring(2, 2 + len).toUpperCase();
 }
 
-// Usuários padrão (um por hierarquia) — facilita demonstrar o RBAC de imediato.
-// Em produção: trocar as senhas após o primeiro login (ou criar novos e desativar).
+// Usuários padrão — trocar as senhas após o primeiro login em produção.
 export function defaultUsers(): User[] {
   const now = new Date().toISOString();
-  const mk = (name: string, username: string, password: string, role: UserRole): User => ({
-    id: shortId(),
-    name, username, password: hashPassword(password), role, active: true, created_at: now,
+  const mk = (nome: string, senha: string, papel: UserRole, condominioId?: string): User => ({
+    id: randomUUID(),
+    nome,
+    papel,
+    condominio_id: condominioId,
+    senha_hash: hashPassword(senha),
+    criado_em: now,
   });
   return [
-    mk('Administrador', 'admin', 'admin123', 'admin'),
-    mk('Carlos Gestor', 'gestor', 'gestor123', 'gestor'),
-    mk('Mateus (Captador)', 'captador', 'cap123', 'captador'),
-    mk('Resp. Certificação', 'certificacao', 'cert123', 'operador_certificacao'),
-    mk('Resp. Abertura', 'abertura', 'abe123', 'operador_abertura'),
-    mk('Parceiro E-commerce', 'terceiro', 'terc123', 'terceiro'),
+    mk('Administrador', 'admin123', 'admin'),
+    mk('Técnico', 'tecnico123', 'tecnico'),
   ];
 }
 
@@ -372,35 +261,37 @@ export function defaultUsers(): User[] {
 
 const LOCAL_DB_PATH = path.join(process.cwd(), 'src', 'lib', 'local_db.json');
 
-// Em desenvolvimento, popula automaticamente o banco com dados de demonstração
-// quando ele está vazio. Em produção isto nunca acontece.
-const AUTOSEED = process.env.NODE_ENV !== 'production' && process.env.NEXUSFLOW_NO_SEED !== '1';
-let seededThisProcess = false;
+function emptyDB() {
+  return {
+    condominios: [] as Condominio[],
+    reservatorios: [] as Reservatorio[],
+    contatos: [] as Contato[],
+    equipamentos: [] as Equipamento[],
+    users: [] as User[],
+    alertas: [] as Alerta[],
+    playbooks: [] as Playbook[],
+    escalonamentos: [] as Escalonamento[],
+    oss: [] as OS[],
+    checklist_items: [] as ChecklistItem[],
+    fotos: [] as Foto[],
+    audit_logs: [] as AuditLog[],
+    session_logs: [] as SessionLog[],
+  };
+}
 
 function initLocalDB() {
   if (!fs.existsSync(LOCAL_DB_PATH)) {
-    const initialData = AUTOSEED ? demoSeed() : { dossiers: [], logs: [] };
+    const initial = { ...emptyDB(), users: defaultUsers() };
     fs.mkdirSync(path.dirname(LOCAL_DB_PATH), { recursive: true });
-    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(initialData, null, 2), 'utf-8');
+    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(initial, null, 2), 'utf-8');
   }
 }
 
-function readLocalDB() {
+function readLocalDB(): ReturnType<typeof emptyDB> {
   initLocalDB();
   try {
     const raw = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
-    const data = JSON.parse(raw);
-
-    // Seed de fallback: se o arquivo existe mas está vazio (ex.: criado por outra
-    // instância antes do seed), popula uma única vez por processo em dev.
-    if (AUTOSEED && !seededThisProcess && (!data.dossiers || data.dossiers.length === 0)) {
-      seededThisProcess = true;
-      const seeded = { ...demoSeed(), users: defaultUsers() };
-      writeLocalDB(seeded);
-      return seeded;
-    }
-
-    // Garante a existência dos usuários padrão em bancos criados antes do RBAC.
+    const data = { ...emptyDB(), ...JSON.parse(raw) };
     if (!data.users || data.users.length === 0) {
       data.users = defaultUsers();
       writeLocalDB(data);
@@ -408,11 +299,11 @@ function readLocalDB() {
     return data;
   } catch (e) {
     console.error('Erro ao ler DB local:', e);
-    return { dossiers: [], logs: [] };
+    return emptyDB();
   }
 }
 
-function writeLocalDB(data: any) {
+function writeLocalDB(data: ReturnType<typeof emptyDB>) {
   initLocalDB();
   try {
     fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
@@ -422,80 +313,87 @@ function writeLocalDB(data: any) {
 }
 
 const jsonBackend: DbBackend = {
-  async getDossiers() { return readLocalDB().dossiers.filter((d: Dossier) => !d.deleted_at); },
-  async getDossierById(id) {
-    const d = readLocalDB().dossiers.find((d: Dossier) => d.id === id);
-    return (d && !d.deleted_at) ? d : null;
+  async getCondominios() { return readLocalDB().condominios; },
+  async getCondominioById(id) {
+    return readLocalDB().condominios.find((c) => c.id === id) || null;
   },
-  async insertDossier(d) {
+  async insertCondominio(c) {
     const db = readLocalDB();
-    db.dossiers.push(d);
+    db.condominios.push(c);
     writeLocalDB(db);
   },
-  async updateDossier(id, updates) {
+  async updateCondominio(id, updates) {
     const db = readLocalDB();
-    const index = db.dossiers.findIndex((d: Dossier) => d.id === id);
-    if (index === -1) return null;
-    const updated = { ...db.dossiers[index], ...updates, updated_at: new Date().toISOString() };
-    db.dossiers[index] = updated;
+    const i = db.condominios.findIndex((c) => c.id === id);
+    if (i === -1) return null;
+    db.condominios[i] = { ...db.condominios[i], ...updates };
     writeLocalDB(db);
-    return updated;
+    return db.condominios[i];
   },
-  async deleteDossier(id) {
+
+  async getReservatoriosByCondominio(condominioId) {
+    return readLocalDB().reservatorios.filter((r) => r.condominio_id === condominioId);
+  },
+  async getReservatorioByNomeSensorlog(nomeSensorlog) {
+    return readLocalDB().reservatorios.find((r) => r.nome_sensorlog === nomeSensorlog) || null;
+  },
+  async insertReservatorio(r) {
     const db = readLocalDB();
-    const idx = db.dossiers.findIndex((d: Dossier) => d.id === id && !d.deleted_at);
-    if (idx === -1) return false;
-    db.dossiers[idx] = { ...db.dossiers[idx], deleted_at: new Date().toISOString() };
-    writeLocalDB(db);
-    return true;
-  },
-  async getDeletedDossiers() {
-    return readLocalDB().dossiers.filter((d: Dossier) => !!d.deleted_at);
-  },
-  async restoreDossier(id) {
-    const db = readLocalDB();
-    const idx = db.dossiers.findIndex((d: Dossier) => d.id === id && !!d.deleted_at);
-    if (idx === -1) return false;
-    db.dossiers[idx] = { ...db.dossiers[idx], deleted_at: undefined };
-    writeLocalDB(db);
-    return true;
-  },
-  async getLogs() { return readLocalDB().logs; },
-  async getLogsByDossier(dossierId) {
-    return readLocalDB().logs.filter((l: ActivityLog) => l.dossier_id === dossierId);
-  },
-  async insertLog(log) {
-    const db = readLocalDB();
-    db.logs.unshift(log); // Logs mais novos primeiro
+    db.reservatorios.push(r);
     writeLocalDB(db);
   },
-  async getSessionLogs() { return readLocalDB().session_logs || []; },
-  async insertSessionLog(log) {
+  async updateReservatorio(id, updates) {
     const db = readLocalDB();
-    db.session_logs = db.session_logs || [];
-    db.session_logs.unshift(log); // Mais recentes primeiro
+    const i = db.reservatorios.findIndex((r) => r.id === id);
+    if (i === -1) return null;
+    db.reservatorios[i] = { ...db.reservatorios[i], ...updates };
+    writeLocalDB(db);
+    return db.reservatorios[i];
+  },
+
+  async getContatosByCondominio(condominioId) {
+    return readLocalDB().contatos.filter((c) => c.condominio_id === condominioId);
+  },
+  async getContatoNivel(condominioId, nivel) {
+    return readLocalDB().contatos.find(
+      (c) => c.condominio_id === condominioId && c.nivel_escalonamento === nivel && c.ativo
+    ) || null;
+  },
+  async insertContato(c) {
+    const db = readLocalDB();
+    db.contatos.push(c);
     writeLocalDB(db);
   },
-  async getUsers() { return readLocalDB().users || []; },
-  async getUserByUsername(username) {
-    const u = (readLocalDB().users || []).find(
-      (x: User) => x.username.toLowerCase() === String(username).toLowerCase()
-    );
-    return u || null;
+  async updateContato(id, updates) {
+    const db = readLocalDB();
+    const i = db.contatos.findIndex((c) => c.id === id);
+    if (i === -1) return null;
+    db.contatos[i] = { ...db.contatos[i], ...updates };
+    writeLocalDB(db);
+    return db.contatos[i];
   },
+
+  async getEquipamentosByCondominio(condominioId) {
+    return readLocalDB().equipamentos.filter((e) => e.condominio_id === condominioId);
+  },
+  async insertEquipamento(e) {
+    const db = readLocalDB();
+    db.equipamentos.push(e);
+    writeLocalDB(db);
+  },
+
+  async getUsers() { return readLocalDB().users; },
   async getUserById(id) {
-    return (readLocalDB().users || []).find((x: User) => x.id === id) || null;
+    return readLocalDB().users.find((u) => u.id === id) || null;
   },
   async insertUser(u) {
     const db = readLocalDB();
-    if (!db.users) db.users = [];
     db.users.push(u);
     writeLocalDB(db);
   },
   async updateUser(id, updates) {
     const db = readLocalDB();
-    if (!db.users) db.users = [];
-    const i = db.users.findIndex((x: User) => x.id === id);
+    const i = db.users.findIndex((u) => u.id === id);
     if (i === -1) return null;
     db.users[i] = { ...db.users[i], ...updates };
     writeLocalDB(db);
@@ -503,58 +401,111 @@ const jsonBackend: DbBackend = {
   },
   async deleteUser(id) {
     const db = readLocalDB();
-    if (!db.users) db.users = [];
     const before = db.users.length;
-    db.users = db.users.filter((x: User) => x.id !== id);
+    db.users = db.users.filter((u) => u.id !== id);
     const removed = db.users.length < before;
     if (removed) writeLocalDB(db);
     return removed;
   },
-  async getTasksByDossier(dossierId) {
-    const db = readLocalDB();
-    return (db.tasks || []).filter((t: OsTask) => t.dossier_id === dossierId);
+
+  async getAlertas() { return readLocalDB().alertas; },
+  async getAlertaById(id) {
+    return readLocalDB().alertas.find((a) => a.id === id) || null;
   },
-  async getTasksForUser(userName) {
-    const db = readLocalDB();
-    const tasks = (db.tasks || []).filter((t: OsTask) => t.to_user === userName);
-    return tasks.map((t: OsTask) => {
-      const dos = (db.dossiers || []).find((d: Dossier) => d.id === t.dossier_id);
-      return { ...t, client_name: dos?.client_name };
-    });
+  async getAlertasByReservatorio(reservatorioId) {
+    return readLocalDB().alertas.filter((a) => a.reservatorio_id === reservatorioId);
   },
-  async insertTask(task) {
+  async insertAlerta(a) {
     const db = readLocalDB();
-    if (!db.tasks) db.tasks = [];
-    db.tasks.unshift(task);
+    db.alertas.unshift(a);
     writeLocalDB(db);
   },
-  async completeTask(id, doneBy, doneAt) {
-    const db = readLocalDB();
-    if (!db.tasks) db.tasks = [];
-    const i = db.tasks.findIndex((t: OsTask) => t.id === id);
-    if (i !== -1) { db.tasks[i] = { ...db.tasks[i], done: true, done_by: doneBy, done_at: doneAt }; writeLocalDB(db); }
+
+  async getPlaybookAtivo(evento) {
+    const playbooks = readLocalDB().playbooks.filter((p) => p.evento === evento && p.ativo);
+    return playbooks.sort((a, b) => b.versao - a.versao)[0] || null;
   },
-  async deleteTask(id) {
+  async getPlaybooks() { return readLocalDB().playbooks; },
+  async insertPlaybook(p) {
     const db = readLocalDB();
-    if (!db.tasks) return;
-    db.tasks = db.tasks.filter((t: OsTask) => t.id !== id);
+    db.playbooks.push(p);
     writeLocalDB(db);
   },
-  async getPushSubscriptionsByUser(userName) {
-    const db = readLocalDB();
-    return (db.push_subscriptions || []).filter((s: PushSubscription) => s.user_name === userName);
+
+  async getEscalonamentosByAlerta(alertaId) {
+    return readLocalDB().escalonamentos.filter((e) => e.alerta_id === alertaId);
   },
-  async insertPushSubscription(sub) {
+  async insertEscalonamento(e) {
     const db = readLocalDB();
-    db.push_subscriptions = db.push_subscriptions || [];
-    // Mesmo endpoint reinscrevendo (ex.: token renovado) substitui a entrada antiga.
-    db.push_subscriptions = db.push_subscriptions.filter((s: PushSubscription) => s.endpoint !== sub.endpoint);
-    db.push_subscriptions.push(sub);
+    db.escalonamentos.push(e);
     writeLocalDB(db);
   },
-  async deletePushSubscriptionByEndpoint(endpoint) {
+  async registrarAck(id, ackEm) {
     const db = readLocalDB();
-    db.push_subscriptions = (db.push_subscriptions || []).filter((s: PushSubscription) => s.endpoint !== endpoint);
+    const i = db.escalonamentos.findIndex((e) => e.id === id);
+    if (i !== -1) { db.escalonamentos[i].ack_em = ackEm; writeLocalDB(db); }
+  },
+
+  async getOSs() { return readLocalDB().oss; },
+  async getOSById(id) {
+    return readLocalDB().oss.find((o) => o.id === id) || null;
+  },
+  async getOSsByCondominio(condominioId) {
+    return readLocalDB().oss.filter((o) => o.condominio_id === condominioId);
+  },
+  async insertOS(os) {
+    const db = readLocalDB();
+    db.oss.push(os);
+    writeLocalDB(db);
+  },
+  async updateOS(id, updates) {
+    const db = readLocalDB();
+    const i = db.oss.findIndex((o) => o.id === id);
+    if (i === -1) return null;
+    db.oss[i] = { ...db.oss[i], ...updates };
+    writeLocalDB(db);
+    return db.oss[i];
+  },
+
+  async getChecklistByOS(osId) {
+    return readLocalDB().checklist_items.filter((c) => c.os_id === osId);
+  },
+  async insertChecklistItem(item) {
+    const db = readLocalDB();
+    db.checklist_items.push(item);
+    writeLocalDB(db);
+  },
+  async updateChecklistItem(id, updates) {
+    const db = readLocalDB();
+    const i = db.checklist_items.findIndex((c) => c.id === id);
+    if (i === -1) return null;
+    db.checklist_items[i] = { ...db.checklist_items[i], ...updates };
+    writeLocalDB(db);
+    return db.checklist_items[i];
+  },
+
+  async getFotosByOS(osId) {
+    return readLocalDB().fotos.filter((f) => f.os_id === osId);
+  },
+  async insertFoto(f) {
+    const db = readLocalDB();
+    db.fotos.push(f);
+    writeLocalDB(db);
+  },
+
+  async getAuditLogs() { return readLocalDB().audit_logs; },
+  async getAuditLogsByEntidade(entidade, entidadeId) {
+    return readLocalDB().audit_logs.filter((l) => l.entidade === entidade && l.entidade_id === entidadeId);
+  },
+  async insertAuditLog(log) {
+    const db = readLocalDB();
+    db.audit_logs.unshift(log);
+    writeLocalDB(db);
+  },
+  async getSessionLogs() { return readLocalDB().session_logs; },
+  async insertSessionLog(log) {
+    const db = readLocalDB();
+    db.session_logs.unshift(log);
     writeLocalDB(db);
   },
 };
@@ -568,7 +519,6 @@ let backendInstance: DbBackend | null = null;
 function backend(): DbBackend {
   if (backendInstance) return backendInstance;
   if (process.env.DATABASE_URL) {
-    // Import dinâmico via require p/ não carregar o driver quando não usado.
     const { pgBackend } = require('./db-postgres') as typeof import('./db-postgres');
     backendInstance = pgBackend;
   } else {
@@ -577,225 +527,290 @@ function backend(): DbBackend {
   return backendInstance;
 }
 
-// Adaptador Geral de Banco de Dados (regras de negócio independem do backend)
+// =====================================================================
+// Adaptador geral — regras de negócio independem do backend
+// =====================================================================
+
 export class Database {
-  // Retorna todos os dossiês
-  static async getDossiers(): Promise<Dossier[]> {
-    return backend().getDossiers();
-  }
+  // ----- Condomínio -----
+  static getCondominios() { return backend().getCondominios(); }
+  static getCondominioById(id: string) { return backend().getCondominioById(id); }
 
-  // Busca dossiê específico
-  static async getDossierById(id: string): Promise<Dossier | null> {
-    return backend().getDossierById(id);
-  }
-
-  // Cria um novo dossiê
-  static async createDossier(data: Partial<Dossier>): Promise<Dossier> {
-    // TODA captação entra na esteira em "Captados" (caixa de entrada).
-    // A verificação de risco (T1) acontece para TODOS antes de prosseguir —
-    // independentemente do nível Gov (Ouro/Prata). A bifurcação Ouro/Prata
-    // ocorre só depois (na decisão T1 / no T2).
-    const dossier: Dossier = {
-      id: shortId(), // Id de OS curto e amigável para MVP
-      client_name: data.client_name || '',
-      cpf: data.cpf || '',
-      phone: data.phone || '',
-      email: data.email || '',
-      address: data.address || '',
-      gov_level: data.gov_level || 'prata',
-      gov_login: data.gov_login || data.cpf || '',
-      gov_password_encrypted: data.gov_password_encrypted || '',
-      captured_by: data.captured_by || 'Captador não identificado',
-      empresa_aberta: false,
-      photo_doc_frente_url: data.photo_doc_frente_url || '',
-      photo_doc_verso_url: data.photo_doc_verso_url || '',
-      sla_deadline: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), // 48 horas de SLA padrão
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      ...data,
-      // Estágio inicial fixo (sobrepõe qualquer valor vindo em `data`).
-      status: 'captado',
-      current_step: 'captacao',
-    } as Dossier;
-
-    await backend().insertDossier(dossier);
-
-    // Grava log de criação
-    await this.createLog({
-      dossier_id: dossier.id,
-      user_name: dossier.captured_by || 'Sistema NexusFlow',
-      action_type: 'OS_CREATED',
-      details: `Captação registrada por ${dossier.captured_by}. Nível Gov: ${dossier.gov_level.toUpperCase()}. Aguardando triagem para análise de risco (T1).`,
-    });
-
-    return dossier;
-  }
-
-  // Atualiza um dossiê existente
-  static async updateDossier(id: string, updates: Partial<Dossier>): Promise<Dossier | null> {
-    return backend().updateDossier(id, updates);
-  }
-
-  // Próximo protocolo sequencial no padrão A560, A561, ... (mínimo A560).
-  // É o mesmo identificador usado no celular do e-commerce — por isso NUNCA
-  // pode se repetir. Inclui os dossiês excluídos (lixeira) no cálculo: um
-  // protocolo já atribuído a uma OS que depois foi excluída não pode ser
-  // "esquecido" e reutilizado (já causou colisão real em produção — várias
-  // OS finalizadas saíram todas com o mesmo protocolo porque as OS de teste
-  // que tinham usado os números anteriores foram para a lixeira).
-  static async getNextProtocolo(): Promise<string> {
-    const [ativos, excluidos] = await Promise.all([
-      backend().getDossiers(),
-      backend().getDeletedDossiers(),
-    ]);
-    let maxN = 559; // próximo será 560
-    for (const d of [...ativos, ...excluidos]) {
-      const m = (d.protocolo || '').match(/^A(\d+)$/i);
-      if (m) {
-        const n = parseInt(m[1], 10);
-        if (n > maxN) maxN = n;
-      }
-    }
-    return `A${maxN + 1}`;
-  }
-
-  // Remove um dossiê e seus logs associados.
-  static async deleteDossier(id: string): Promise<boolean> {
-    return backend().deleteDossier(id);
-  }
-
-  // Lista dossiês excluídos (soft-delete) — usado pela Lixeira do gestor/admin.
-  static async getDeletedDossiers(): Promise<Dossier[]> {
-    return backend().getDeletedDossiers();
-  }
-
-  // Restaura um dossiê excluído (limpa deleted_at).
-  static async restoreDossier(id: string): Promise<boolean> {
-    return backend().restoreDossier(id);
-  }
-
-  // Retorna todos os logs de auditoria
-  static async getLogs(): Promise<ActivityLog[]> {
-    return backend().getLogs();
-  }
-
-  // Retorna logs de uma OS específica
-  static async getLogsByDossier(dossierId: string): Promise<ActivityLog[]> {
-    return backend().getLogsByDossier(dossierId);
-  }
-
-  // Cria um log de auditoria
-  static async createLog(logData: Partial<ActivityLog>): Promise<ActivityLog> {
-    const log: ActivityLog = {
-      id: shortId(9),
-      dossier_id: logData.dossier_id || '',
-      user_id: logData.user_id,
-      user_name: logData.user_name || 'Operador',
-      action_type: logData.action_type || 'SYSTEM_ACTION',
-      details: logData.details || '',
-      ip_address: logData.ip_address,
-      created_at: new Date().toISOString()
+  static async createCondominio(data: Partial<Condominio>): Promise<Condominio> {
+    const condominio: Condominio = {
+      id: randomUUID(),
+      nome: data.nome || '',
+      endereco: data.endereco,
+      administradora: data.administradora,
+      monitoramento_ativo: data.monitoramento_ativo ?? false,
+      criado_em: new Date().toISOString(),
     };
-    await backend().insertLog(log);
+    await backend().insertCondominio(condominio);
+    await this.createAuditLog({ entidade: 'condominio', entidade_id: condominio.id, acao: 'CRIADO', ator: 'sistema' });
+    return condominio;
+  }
+
+  static updateCondominio(id: string, updates: Partial<Condominio>) { return backend().updateCondominio(id, updates); }
+
+  // ----- Reservatório -----
+  static getReservatoriosByCondominio(condominioId: string) { return backend().getReservatoriosByCondominio(condominioId); }
+
+  // Resolve um alerta bruto da SensorLog ao condomínio real. Retorna null
+  // quando o de-para ainda não foi cadastrado — quem chama decide o que
+  // fazer (nunca descartar silenciosamente, ver docs/PRD-v2.md).
+  static getReservatorioByNomeSensorlog(nomeSensorlog: string) {
+    return backend().getReservatorioByNomeSensorlog(nomeSensorlog);
+  }
+
+  static async createReservatorio(data: Partial<Reservatorio>): Promise<Reservatorio> {
+    const reservatorio: Reservatorio = {
+      id: randomUUID(),
+      condominio_id: data.condominio_id || '',
+      nome_interno: data.nome_interno || '',
+      nome_sensorlog: data.nome_sensorlog || '',
+      tipo: data.tipo || 'torre',
+      capacidade_litros: data.capacidade_litros,
+      ultima_mensagem_recebida_em: data.ultima_mensagem_recebida_em,
+    };
+    await backend().insertReservatorio(reservatorio);
+    return reservatorio;
+  }
+
+  static updateReservatorio(id: string, updates: Partial<Reservatorio>) { return backend().updateReservatorio(id, updates); }
+
+  // ----- Contato -----
+  static getContatosByCondominio(condominioId: string) { return backend().getContatosByCondominio(condominioId); }
+  static getContatoNivel(condominioId: string, nivel: number) { return backend().getContatoNivel(condominioId, nivel); }
+
+  static async createContato(data: Partial<Contato>): Promise<Contato> {
+    const contato: Contato = {
+      id: randomUUID(),
+      condominio_id: data.condominio_id || '',
+      papel: data.papel || 'zelador',
+      nome: data.nome || '',
+      canal_preferencial: data.canal_preferencial || 'whatsapp',
+      identificador_canal: data.identificador_canal || '',
+      nivel_escalonamento: data.nivel_escalonamento || 1,
+      ativo: data.ativo ?? true,
+    };
+    await backend().insertContato(contato);
+    return contato;
+  }
+
+  static updateContato(id: string, updates: Partial<Contato>) { return backend().updateContato(id, updates); }
+
+  // ----- Equipamento -----
+  static getEquipamentosByCondominio(condominioId: string) { return backend().getEquipamentosByCondominio(condominioId); }
+
+  static async createEquipamento(data: Partial<Equipamento>): Promise<Equipamento> {
+    const equipamento: Equipamento = {
+      id: randomUUID(),
+      condominio_id: data.condominio_id || '',
+      tipo: data.tipo || '',
+      modelo: data.modelo,
+      potencia_hp: data.potencia_hp,
+      cadastrado_em: new Date().toISOString(),
+    };
+    await backend().insertEquipamento(equipamento);
+    return equipamento;
+  }
+
+  // ----- Usuário (RBAC) -----
+  static getUsers() { return backend().getUsers(); }
+  static getUserById(id: string) { return backend().getUserById(id); }
+
+  static async getUserByUsername(nome: string): Promise<User | null> {
+    const users = await backend().getUsers();
+    return users.find((u) => u.nome.toLowerCase() === nome.toLowerCase()) || null;
+  }
+
+  static async createUser(data: Partial<User> & { senha?: string }): Promise<User> {
+    const user: User = {
+      id: randomUUID(),
+      nome: data.nome || '',
+      papel: data.papel || 'tecnico',
+      condominio_id: data.condominio_id,
+      senha_hash: data.senha ? hashPassword(data.senha) : (data.senha_hash || ''),
+      criado_em: new Date().toISOString(),
+    };
+    await backend().insertUser(user);
+    return user;
+  }
+
+  static updateUser(id: string, updates: Partial<User>) { return backend().updateUser(id, updates); }
+  static deleteUser(id: string) { return backend().deleteUser(id); }
+
+  static async getUsersByRole(papel: UserRole): Promise<User[]> {
+    const users = await backend().getUsers();
+    return users.filter((u) => u.papel === papel);
+  }
+
+  // ----- Alerta -----
+  static getAlertas() { return backend().getAlertas(); }
+  static getAlertaById(id: string) { return backend().getAlertaById(id); }
+  static getAlertasByReservatorio(reservatorioId: string) { return backend().getAlertasByReservatorio(reservatorioId); }
+
+  static async createAlerta(data: Partial<Alerta>): Promise<Alerta> {
+    const alerta: Alerta = {
+      id: randomUUID(),
+      reservatorio_id: data.reservatorio_id || '',
+      texto_original: data.texto_original,
+      evento: data.evento || 'NIVEL_BAIXO',
+      classificado_por: data.classificado_por || 'regra',
+      recebido_em: new Date().toISOString(),
+    };
+    await backend().insertAlerta(alerta);
+    await this.createAuditLog({
+      entidade: 'alerta', entidade_id: alerta.id, acao: 'RECEBIDO', ator: 'hermes',
+      detalhe: { evento: alerta.evento, classificado_por: alerta.classificado_por },
+    });
+    return alerta;
+  }
+
+  // ----- Playbook -----
+  static getPlaybookAtivo(evento: EventoAlerta) { return backend().getPlaybookAtivo(evento); }
+  static getPlaybooks() { return backend().getPlaybooks(); }
+
+  static async createPlaybook(data: Partial<Playbook>): Promise<Playbook> {
+    const playbook: Playbook = {
+      id: randomUUID(),
+      evento: data.evento || 'NIVEL_BAIXO',
+      versao: data.versao || 1,
+      conteudo: data.conteudo || {},
+      ativo: data.ativo ?? true,
+      criado_em: new Date().toISOString(),
+    };
+    await backend().insertPlaybook(playbook);
+    return playbook;
+  }
+
+  // ----- Escalonamento -----
+  static getEscalonamentosByAlerta(alertaId: string) { return backend().getEscalonamentosByAlerta(alertaId); }
+
+  static async createEscalonamento(data: Partial<Escalonamento>): Promise<Escalonamento> {
+    const escalonamento: Escalonamento = {
+      id: randomUUID(),
+      alerta_id: data.alerta_id || '',
+      contato_id: data.contato_id || '',
+      nivel: data.nivel || 1,
+      canal_usado: data.canal_usado,
+      enviado_em: new Date().toISOString(),
+    };
+    await backend().insertEscalonamento(escalonamento);
+    return escalonamento;
+  }
+
+  static async registrarAck(id: string): Promise<void> {
+    await backend().registrarAck(id, new Date().toISOString());
+  }
+
+  // ----- OS -----
+  static getOSs() { return backend().getOSs(); }
+  static getOSById(id: string) { return backend().getOSById(id); }
+  static getOSsByCondominio(condominioId: string) { return backend().getOSsByCondominio(condominioId); }
+
+  static async createOS(data: Partial<OS>): Promise<OS> {
+    const os: OS = {
+      id: randomUUID(),
+      condominio_id: data.condominio_id || '',
+      tipo: data.tipo || 'preventiva',
+      origem: data.origem || 'manual',
+      alerta_id: data.alerta_id,
+      status: 'aberta',
+      tecnico_id: data.tecnico_id,
+      observacao: data.observacao,
+      criado_em: new Date().toISOString(),
+    };
+    await backend().insertOS(os);
+    await this.createAuditLog({
+      entidade: 'os', entidade_id: os.id, acao: 'CRIADA', ator: data.origem === 'hermes_automatica' ? 'hermes' : 'usuario',
+      detalhe: { tipo: os.tipo, origem: os.origem },
+    });
+    return os;
+  }
+
+  static updateOS(id: string, updates: Partial<OS>) { return backend().updateOS(id, updates); }
+
+  // Finaliza a OS só se todos os itens obrigatórios do checklist estiverem
+  // concluídos — a trava de qualidade descrita no PRD.
+  static async finalizarOS(id: string, updates: Partial<OS>): Promise<OS | null> {
+    const itens = await backend().getChecklistByOS(id);
+    const pendente = itens.some((i) => i.obrigatorio && !i.concluido);
+    if (pendente) {
+      throw new Error('Existem itens obrigatórios do checklist não concluídos.');
+    }
+    const os = await backend().updateOS(id, { ...updates, status: 'finalizada', saida_em: new Date().toISOString() });
+    if (os) {
+      await this.createAuditLog({ entidade: 'os', entidade_id: id, acao: 'FINALIZADA', ator: 'usuario' });
+    }
+    return os;
+  }
+
+  // ----- Checklist -----
+  static getChecklistByOS(osId: string) { return backend().getChecklistByOS(osId); }
+
+  static async createChecklistItem(data: Partial<ChecklistItem>): Promise<ChecklistItem> {
+    const item: ChecklistItem = {
+      id: randomUUID(),
+      os_id: data.os_id || '',
+      equipamento_id: data.equipamento_id,
+      descricao: data.descricao || '',
+      obrigatorio: data.obrigatorio ?? true,
+      concluido: false,
+    };
+    await backend().insertChecklistItem(item);
+    return item;
+  }
+
+  static async concluirChecklistItem(id: string): Promise<ChecklistItem | null> {
+    return backend().updateChecklistItem(id, { concluido: true, concluido_em: new Date().toISOString() });
+  }
+
+  // ----- Foto -----
+  static getFotosByOS(osId: string) { return backend().getFotosByOS(osId); }
+
+  static async createFoto(data: Partial<Foto>): Promise<Foto> {
+    const foto: Foto = {
+      id: randomUUID(),
+      os_id: data.os_id || '',
+      momento: data.momento || 'antes',
+      url: data.url || '',
+      enviado_em: new Date().toISOString(),
+    };
+    await backend().insertFoto(foto);
+    return foto;
+  }
+
+  // ----- Auditoria -----
+  static getAuditLogs() { return backend().getAuditLogs(); }
+  static getAuditLogsByEntidade(entidade: string, entidadeId: string) { return backend().getAuditLogsByEntidade(entidade, entidadeId); }
+
+  static async createAuditLog(data: Partial<AuditLog>): Promise<AuditLog> {
+    const log: AuditLog = {
+      id: randomUUID(),
+      entidade: data.entidade || '',
+      entidade_id: data.entidade_id,
+      acao: data.acao || '',
+      ator: data.ator || 'sistema',
+      detalhe: data.detalhe,
+      criado_em: new Date().toISOString(),
+    };
+    await backend().insertAuditLog(log);
     return log;
   }
 
-  // Retorna o log de sessões (login/logout) — base do "Log de Acessos".
-  static async getSessionLogs(): Promise<SessionLog[]> {
-    return backend().getSessionLogs();
-  }
+  static getSessionLogs() { return backend().getSessionLogs(); }
 
-  // Registra um evento de sessão (login/logout) com IP de origem.
   static async createSessionLog(data: Partial<SessionLog>): Promise<SessionLog> {
     const log: SessionLog = {
-      id: shortId(9),
+      id: randomUUID(),
       user_name: data.user_name || 'Desconhecido',
-      role: data.role || 'captador',
+      role: data.role || 'tecnico',
       action: data.action || 'login',
       ip_address: data.ip_address,
       created_at: new Date().toISOString(),
     };
     await backend().insertSessionLog(log);
     return log;
-  }
-
-  // ===== Usuários (RBAC) =====
-
-  static async getUsers(): Promise<User[]> {
-    return backend().getUsers();
-  }
-
-  static async getUserByUsername(username: string): Promise<User | null> {
-    return backend().getUserByUsername(username);
-  }
-
-  static async getUserById(id: string): Promise<User | null> {
-    return backend().getUserById(id);
-  }
-
-  static async createUser(data: Partial<User>): Promise<User> {
-    const user: User = {
-      id: shortId(),
-      name: data.name || '',
-      username: (data.username || '').toLowerCase(),
-      // Senha SEMPRE armazenada com hash bcrypt.
-      password: data.password ? hashPassword(data.password) : '',
-      role: (data.role as UserRole) || 'captador',
-      active: data.active !== false,
-      created_at: new Date().toISOString(),
-      ...(data.terceiro_projeto ? { terceiro_projeto: data.terceiro_projeto } : {}),
-      ...(data.gestor_projetos ? { gestor_projetos: data.gestor_projetos } : {}),
-    };
-    await backend().insertUser(user);
-    return user;
-  }
-
-  static async updateUser(id: string, updates: Partial<User>): Promise<User | null> {
-    return backend().updateUser(id, updates);
-  }
-
-  static async deleteUser(id: string): Promise<boolean> {
-    return backend().deleteUser(id);
-  }
-
-  static async getUsersByRole(role: UserRole): Promise<User[]> {
-    const users = await backend().getUsers();
-    return users.filter(u => u.role === role && u.active);
-  }
-
-  // ===== Tarefas internas por OS =====
-
-  static async getTasksByDossier(dossierId: string): Promise<OsTask[]> {
-    return backend().getTasksByDossier(dossierId);
-  }
-
-  static async getTasksForUser(userName: string): Promise<(OsTask & { client_name?: string })[]> {
-    return backend().getTasksForUser(userName);
-  }
-
-  static async insertTask(task: OsTask): Promise<void> {
-    return backend().insertTask(task);
-  }
-
-  static async completeTask(id: string, doneBy: string, doneAt: string): Promise<void> {
-    return backend().completeTask(id, doneBy, doneAt);
-  }
-
-  static async deleteTask(id: string): Promise<void> {
-    return backend().deleteTask(id);
-  }
-
-  // ===== Inscrições de push (Web Push) =====
-
-  static async getPushSubscriptionsByUser(userName: string): Promise<PushSubscription[]> {
-    return backend().getPushSubscriptionsByUser(userName);
-  }
-
-  static async insertPushSubscription(sub: PushSubscription): Promise<void> {
-    return backend().insertPushSubscription(sub);
-  }
-
-  static async deletePushSubscriptionByEndpoint(endpoint: string): Promise<void> {
-    return backend().deletePushSubscriptionByEndpoint(endpoint);
   }
 }

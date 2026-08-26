@@ -128,6 +128,15 @@ CREATE TABLE IF NOT EXISTS foto (
   enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS session_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('login', 'logout')),
+  ip_address TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entidade TEXT NOT NULL,
