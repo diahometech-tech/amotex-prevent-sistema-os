@@ -30,7 +30,7 @@ async function main() {
     tipo: 'torre',
     capacidade_litros: 15000,
   });
-  const jardimCisterna = await Database.createReservatorio({
+  await Database.createReservatorio({
     condominio_id: jardim.id,
     nome_interno: 'Cisterna Térreo',
     nome_sensorlog: 'Cisterna Jardim Flores',

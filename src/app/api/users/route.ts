@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Database } from '@/lib/db';
+import { Database, type User } from '@/lib/db';
 import { getSessionFromRequest, canManageUsers } from '@/lib/auth';
 
 const VALID_ROLES = ['admin', 'tecnico', 'sindico'];
 
-function safe(u: any) {
-  const { senha_hash, ...rest } = u;
+function safe(u: User) {
+  const { senha_hash: _senha_hash, ...rest } = u;
   return rest;
 }
 

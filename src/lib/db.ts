@@ -529,6 +529,10 @@ let backendInstance: DbBackend | null = null;
 function backend(): DbBackend {
   if (backendInstance) return backendInstance;
   if (process.env.DATABASE_URL) {
+    // require() síncrono deliberado: backend() precisa retornar sem await (todo
+    // Database.* chama backend().metodo() direto), então import() dinâmico
+    // exigiria tornar backend() assíncrono e reescrever cada chamada da classe.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { pgBackend } = require('./db-postgres') as typeof import('./db-postgres');
     backendInstance = pgBackend;
   } else {

@@ -202,7 +202,7 @@ async function runSchemaMigration(): Promise<void> {
   }
 }
 
-async function q(text: string, params?: any[]) {
+async function q(text: string, params?: unknown[]) {
   await ensureSchema();
   return getPool().query(text, params);
 }
@@ -477,9 +477,9 @@ export const pgBackend: DbBackend = {
   },
 };
 
-function buildSet(allowed: string[], updates: Record<string, any>) {
+function buildSet(allowed: string[], updates: Record<string, unknown>) {
   const sets: string[] = [];
-  const vals: any[] = [];
+  const vals: unknown[] = [];
   for (const f of allowed) {
     const v = updates[f];
     if (v === undefined) continue;

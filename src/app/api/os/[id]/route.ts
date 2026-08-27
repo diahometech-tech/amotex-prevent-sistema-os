@@ -62,8 +62,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         const os = await Database.finalizarOS(id, updates);
         if (os) notifyN8n('os_finalizada', os);
         return NextResponse.json({ success: true, os });
-      } catch (e: any) {
-        return NextResponse.json({ error: e.message || 'Não foi possível finalizar a OS.' }, { status: 422 });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Não foi possível finalizar a OS.';
+        return NextResponse.json({ error: message }, { status: 422 });
       }
     }
 
