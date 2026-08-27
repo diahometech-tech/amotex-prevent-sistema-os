@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.github
+.claude
+scripts
+docs
+supabase
+deploy
+*.tsbuildinfo
+src/lib/local_db.json
+.env
+.env.*
