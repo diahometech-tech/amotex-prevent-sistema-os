@@ -39,8 +39,11 @@ Feito até agora:
 
 **Ainda não feito:**
 1. **`src/app/page.tsx`** (UI principal) — sendo construído em paralelo por outra sessão (frontend, design tokens da marca, lista de OS não-kanban + modal de detalhe). Não mexer nesse arquivo por aqui enquanto isso.
-2. Seed de dados de teste com condomínios/reservatórios de exemplo (o antigo `seed.ts` foi removido por estar 100% no domínio de dossiê contábil — não foi substituído ainda).
-3. Protótipo visual publicado no Claude Design com os design tokens abaixo — ver link combinado na conversa que gerou este checkpoint (não versionado aqui, é um Artifact separado).
+2. Protótipo visual publicado no Claude Design com os design tokens abaixo — ver link combinado na conversa que gerou este checkpoint (não versionado aqui, é um Artifact separado).
+
+**Feito em 27/08:**
+- `scripts/seed.ts` (`npm run seed`) — dados de exemplo pra dev/teste local: 2 condomínios, reservatórios com de-para SensorLog, cadeia de contatos por nível de escalonamento, 1 usuária síndica escopada (`marisa.sindica` / `sindica123`), 4 OS cobrindo tipo/status/prioridade/origem diferentes (inclusive uma com checklist obrigatório pendente, pra exercitar a trava de `finalizarOS`). Usa a classe `Database` — roda contra o backend JSON local por padrão, ou contra o Postgres se `DATABASE_URL` estiver definido no ambiente.
+- Banco de produção provisionado na VPS (`amotex_os`, schema aplicado) — ver `CLAUDE.md` do repo `amotex-prevent-infra`. Ainda sem dados de exemplo lá (seed rodou só localmente até agora).
 
 ## Armadilhas herdadas do NexusFlow (continuam valendo aqui)
 
