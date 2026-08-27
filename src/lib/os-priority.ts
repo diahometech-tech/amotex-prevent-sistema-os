@@ -68,10 +68,12 @@ export function computeOsPrioridade(
 
   let nivel = nivelBase(os.prioridade);
 
-  if (os.origem === 'hermes_automatica') {
-    nivel = maiorNivel(nivel, 'urgente');
-  } else if (os.tipo === 'corretiva') {
-    nivel = maiorNivel(nivel, elapsedHours >= URGENTE_CORRETIVA_HORAS ? 'urgente' : 'alta');
+  // Agravantes: cada regra só escala pra cima a partir da prioridade manual,
+  // nunca rebaixa. `origem` é agravante DENTRO de corretiva, não isolado — uma
+  // preventiva aberta pelo Hermes não é urgente só por ser automática.
+  if (os.tipo === 'corretiva') {
+    const urgente = os.origem === 'hermes_automatica' || elapsedHours >= URGENTE_CORRETIVA_HORAS;
+    nivel = maiorNivel(nivel, urgente ? 'urgente' : 'alta');
   } else if (elapsedHours >= ALTA_PREVENTIVA_HORAS) {
     nivel = maiorNivel(nivel, 'alta');
   }

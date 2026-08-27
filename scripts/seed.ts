@@ -13,6 +13,19 @@
 import { Database } from '../src/lib/db';
 
 async function main() {
+  // Trava contra rodar em produção sem querer: com DATABASE_URL definido o
+  // Database escreve no Postgres real (a VPS tem essa variável no ambiente do
+  // container), e este seed cria condomínios fictícios e uma usuária de teste
+  // com senha conhecida. Só passa com --force explícito.
+  if (process.env.DATABASE_URL && !process.argv.includes('--force')) {
+    console.error(
+      'RECUSADO: DATABASE_URL está definido — este seed gravaria dados fictícios ' +
+      'num banco Postgres real (inclui usuária de teste com senha conhecida).\n' +
+      'Se é mesmo o que você quer, rode: npm run seed -- --force'
+    );
+    process.exit(1);
+  }
+
   console.log('Seed iniciado (backend: ' + (process.env.DATABASE_URL ? 'Postgres' : 'JSON local') + ')');
 
   // ----- Condomínio 1: Residencial Jardim das Flores -----
