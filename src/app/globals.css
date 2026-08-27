@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* =====================================================================
+   Design tokens — legado do NexusFlow (@color-primary, @color-gold etc.)
+   Não usados por nenhuma tela nova; ficam só pra não quebrar nada do
+   fork antigo enquanto o restante é reescrito.
+   ===================================================================== */
 @theme {
   --color-primary: #0b4f6c;
   --color-primary-700: #083b51;
@@ -17,15 +22,57 @@
   --radius: 8px;
 }
 
+/* =====================================================================
+   Design tokens — Amotex Prevent (identidade própria, NÃO é o tema do
+   NexusFlow). Tema escuro navy + vermelho, extraído do protótipo visual
+   aprovado (ver PR — 4 telas de referência: lista de OS, detalhe de OS,
+   cadastro de condomínio, painel do síndico). Nomes espelham as CSS vars
+   do próprio protótipo de propósito, pra bater 1:1 na hora de comparar.
+   Nenhuma tela referencia cor "crua" — todas usam estes tokens (utilities
+   Tailwind bg-amx-NOME, text-amx-NOME e border-amx-NOME, geradas
+   automaticamente a partir do prefixo --color-amx- dentro de @theme).
+   Tons translúcidos (fundo de badge, ex.) usam o modificador de opacidade
+   do Tailwind direto na cor base (bg-amx-red/15) em vez de um token à
+   parte — mais fiel ao rgba(...) do protótipo do que uma cor plana extra.
+   ===================================================================== */
+@theme {
+  --color-amx-bg: #0b1e3a; /* fundo da aplicação */
+  --color-amx-panel: #132a4d; /* superfície de card/linha/seção */
+  --color-amx-panel-2: #0f2444; /* superfície aninhada: sidebar, inputs, rodapé fixo */
+  --color-amx-red: #d6161f; /* marca/ação primária */
+  --color-amx-red-hover: #ff3b44; /* hover/realce sobre vermelho */
+  --color-amx-blue: #2e5c94; /* secundária/info, ícone de preventiva */
+  --color-amx-blue-light: #7fa8db; /* links, texto sobre azul, traço de assinatura */
+  --color-amx-amber: #e8a33d; /* atenção, prioridade média */
+  --color-amx-green: #2f9e58; /* sucesso, concluído */
+  --color-amx-white: #ffffff;
+  --color-amx-muted: #9baac4; /* texto secundário */
+  --color-amx-line: #22406b; /* bordas */
+
+  --font-heading: var(--font-oswald), ui-sans-serif, sans-serif;
+  --font-body: var(--font-ibm-plex-sans), ui-sans-serif, sans-serif;
+
+  --radius-amx: 10px;
+}
+
 html,
 body {
   height: 100%;
 }
 
 body {
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
+  background: var(--color-amx-bg);
+  color: var(--color-amx-white);
+  font-family: var(--font-body);
+}
+
+h1,
+h2,
+h3,
+.label-font {
+  font-family: var(--font-heading);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 /* Respeitar prefers-reduced-motion (requisito de acessibilidade do PRD) */
