@@ -2,25 +2,36 @@
 // src/lib/sla.ts no NexusFlow original, adaptado ao domínio de OS de
 // condomínio).
 //
-// TODO(merge): a OS ganhou um campo `prioridade` manual (alta/media/baixa,
-// definido na criação e editável depois por admin/técnico — combinado
-// 26/08 com o dono do backend). Esse campo ainda não existe no `OS` deste
-// branch, então computeOsPrioridade abaixo ainda deriva tudo de
-// tipo+origem+tempo, como antes. Na hora de mesclar, trocar a base do
-// cálculo:
-//   - Base = os.prioridade (o valor manual) — NUNCA ignorar.
-//   - tipo/origem/tempo em aberto viram AGRAVANTE por cima da base, só pra
-//     ESCALAR visualmente (nunca rebaixar abaixo do que foi registrado).
-//     Ex.: prioridade manual "baixa" só sobe na tela se corretiva/automática
-//     ou se estourar o tempo em aberto — nunca desce de "baixa".
-//   - Falta decidir o mapeamento: o campo novo tem 3 níveis
-//     (alta/media/baixa) e OsPrioridade aqui tem 4 (urgente/alta/normal/
-//     baixa) — "urgente" provavelmente vira um nível só alcançável por
-//     agravante (nunca base manual direta), a confirmar com quem definiu o
-//     campo antes de implementar.
+// Base = os.prioridade (valor manual, definido na criação e editável depois
+// por admin/técnico — 3 níveis: alta/media/baixa). tipo/origem/tempo em
+// aberto entram só como AGRAVANTE por cima da base, pra escalar a exibição
+// (nunca rebaixar abaixo do que foi registrado manualmente): uma OS marcada
+// "baixa" só sobe na tela se for corretiva, automática do Hermes, ou estourar
+// o tempo em aberto — nunca desce de "baixa" por conta do tipo/tempo.
+// "urgente" é só alcançável por agravante (nunca base manual direta) — é o
+// 4º nível da escala visual, sem equivalente direto no campo manual de 3.
 import type { OS } from './db';
 
 export type OsPrioridade = 'urgente' | 'alta' | 'normal' | 'baixa';
+
+const NIVEL_ORDEM: OsPrioridade[] = ['baixa', 'normal', 'alta', 'urgente'];
+
+function maiorNivel(a: OsPrioridade, b: OsPrioridade): OsPrioridade {
+  return NIVEL_ORDEM.indexOf(a) >= NIVEL_ORDEM.indexOf(b) ? a : b;
+}
+
+function nivelBase(prioridade: OS['prioridade']): OsPrioridade {
+  if (prioridade === 'alta') return 'alta';
+  if (prioridade === 'baixa') return 'baixa';
+  return 'normal'; // media
+}
+
+const NIVEL_META: Record<OsPrioridade, { label: string; tone: OsPrioridadeInfo['tone'] }> = {
+  urgente: { label: 'Urgente', tone: 'red' },
+  alta: { label: 'Alta', tone: 'warning' },
+  normal: { label: 'Normal', tone: 'info' },
+  baixa: { label: 'Baixa', tone: 'neutral' },
+};
 
 const URGENTE_CORRETIVA_HORAS = 4;
 const ALTA_PREVENTIVA_HORAS = 48;
@@ -44,7 +55,7 @@ function fmtDuration(hours: number): string {
 }
 
 export function computeOsPrioridade(
-  os: Pick<OS, 'tipo' | 'origem' | 'status' | 'criado_em'>
+  os: Pick<OS, 'tipo' | 'origem' | 'status' | 'criado_em' | 'prioridade'>
 ): OsPrioridadeInfo {
   const now = Date.now();
   const criado = os.criado_em ? new Date(os.criado_em).getTime() : now;
@@ -55,20 +66,18 @@ export function computeOsPrioridade(
     return { nivel: 'baixa', label: 'Encerrada', tone: 'neutral', elapsedHours, elapsedLabel };
   }
 
-  const automatica = os.origem === 'hermes_automatica';
+  let nivel = nivelBase(os.prioridade);
 
-  if (os.tipo === 'corretiva') {
-    if (automatica || elapsedHours >= URGENTE_CORRETIVA_HORAS) {
-      return { nivel: 'urgente', label: 'Urgente', tone: 'red', elapsedHours, elapsedLabel };
-    }
-    return { nivel: 'alta', label: 'Alta', tone: 'warning', elapsedHours, elapsedLabel };
+  if (os.origem === 'hermes_automatica') {
+    nivel = maiorNivel(nivel, 'urgente');
+  } else if (os.tipo === 'corretiva') {
+    nivel = maiorNivel(nivel, elapsedHours >= URGENTE_CORRETIVA_HORAS ? 'urgente' : 'alta');
+  } else if (elapsedHours >= ALTA_PREVENTIVA_HORAS) {
+    nivel = maiorNivel(nivel, 'alta');
   }
 
-  // preventiva
-  if (elapsedHours >= ALTA_PREVENTIVA_HORAS) {
-    return { nivel: 'alta', label: 'Alta', tone: 'warning', elapsedHours, elapsedLabel };
-  }
-  return { nivel: 'normal', label: 'Normal', tone: 'info', elapsedHours, elapsedLabel };
+  const meta = NIVEL_META[nivel];
+  return { nivel, label: meta.label, tone: meta.tone, elapsedHours, elapsedLabel };
 }
 
 export const OS_TIPO_LABELS: Record<OS['tipo'], string> = {
