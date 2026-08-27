@@ -38,10 +38,13 @@ Feito até agora:
 - Removidos por serem código morto/fora de escopo: `src/lib/gestor-scope.ts`, `src/lib/dossie-export.ts`, `src/lib/push.ts`, `src/lib/notifications.ts`, `src/lib/seed.ts`.
 
 **Ainda não feito:**
-1. **`src/app/page.tsx`** (UI principal) — sendo construído em paralelo por outra sessão (frontend, design tokens da marca, lista de OS não-kanban + modal de detalhe). Não mexer nesse arquivo por aqui enquanto isso.
-2. Protótipo visual publicado no Claude Design com os design tokens abaixo — ver link combinado na conversa que gerou este checkpoint (não versionado aqui, é um Artifact separado).
+1. Protótipo visual publicado no Claude Design com os design tokens abaixo — ver link combinado na conversa que gerou este checkpoint (não versionado aqui, é um Artifact separado).
+2. Deploy do app nesta VPS (o app em si — o banco já está pronto, ver seção abaixo).
 
 **Feito em 27/08:**
+- **PR #1 do frontend mesclado no `main`** (commit `8d4cd6e`) — shell da aplicação, cadastro de condomínio/reservatório/contato/equipamento, lista de OS com modal de detalhe, assinatura digital, upload de foto, painel do síndico. Só tocou UI + `src/lib/{os-priority,permissions,condominio-stats}.ts` (lógica pura, fora do escopo do backend) — nada em `api/`, `db.ts`, `auth.ts`.
+- **`src/lib/os-priority.ts` reconciliado** com o campo manual `os.prioridade` (commit `6b41fd8`) — resolve o `TODO(merge)` deixado pela sessão de frontend: base = valor manual (alta/media/baixa), tipo/origem/tempo em aberto só escalam pra cima, nunca rebaixam. "Urgente" (4º nível da escala visual) só é alcançável por agravante.
+- **`npx tsc --noEmit` limpo no projeto inteiro** (backend + frontend mesclados) — build de produção deixou de estar bloqueado por erro de tipo.
 - `scripts/seed.ts` (`npm run seed`) — dados de exemplo pra dev/teste local: 2 condomínios, reservatórios com de-para SensorLog, cadeia de contatos por nível de escalonamento, 1 usuária síndica escopada (`marisa.sindica` / `sindica123`), 4 OS cobrindo tipo/status/prioridade/origem diferentes (inclusive uma com checklist obrigatório pendente, pra exercitar a trava de `finalizarOS`). Usa a classe `Database` — roda contra o backend JSON local por padrão, ou contra o Postgres se `DATABASE_URL` estiver definido no ambiente.
 - Banco de produção provisionado na VPS (`amotex_os`, schema aplicado) — ver `CLAUDE.md` do repo `amotex-prevent-infra`. Ainda sem dados de exemplo lá (seed rodou só localmente até agora).
 
