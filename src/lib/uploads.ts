@@ -37,3 +37,10 @@ export function saveAssinaturaDataUrl(dataUrl: string, osId: string, papel: 'zel
   const buffer = Buffer.from(b64, 'base64');
   return saveUpload(path.join('os', osId, `assinatura-${papel}.png`), buffer);
 }
+
+// Salva o PDF gerado da OS (buffer vindo do servidor, não upload do cliente —
+// ver src/lib/os-pdf.ts). Sobrescreve a cada finalização, é sempre a versão
+// mais recente do documento.
+export function saveOsPdfBuffer(buffer: Buffer, osId: string): string {
+  return saveUpload(path.join('os', osId, 'os.pdf'), buffer);
+}

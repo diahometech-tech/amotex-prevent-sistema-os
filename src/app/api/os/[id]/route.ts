@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest, getClientIp, canAccessCondominio } from '@/lib/auth';
-import { saveAssinaturaDataUrl } from '@/lib/uploads';
+import { saveAssinaturaDataUrl, saveOsPdfBuffer } from '@/lib/uploads';
+import { generateOsPdf } from '@/lib/os-pdf';
 import { notifyN8n } from '@/lib/notify';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -58,14 +59,38 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     if (finalizar) {
+      let os;
       try {
-        const os = await Database.finalizarOS(id, updates);
-        if (os) notifyN8n('os_finalizada', os);
-        return NextResponse.json({ success: true, os });
+        os = await Database.finalizarOS(id, updates);
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Não foi possível finalizar a OS.';
         return NextResponse.json({ error: message }, { status: 422 });
       }
+      if (!os) return NextResponse.json({ error: 'OS não encontrada.' }, { status: 404 });
+
+      // Geração automática do PDF ao finalizar (PRD — Must). A OS já está
+      // finalizada nesta altura: uma falha aqui (ex.: foto corrompida) não
+      // pode desfazer a finalização, só fica sem o PDF pra tentar de novo.
+      let pdfError: string | undefined;
+      try {
+        const [checklist, fotos, condominio, tecnico] = await Promise.all([
+          Database.getChecklistByOS(id),
+          Database.getFotosByOS(id),
+          Database.getCondominioById(os.condominio_id),
+          os.tecnico_id ? Database.getUserById(os.tecnico_id) : Promise.resolve(null),
+        ]);
+        if (condominio) {
+          const buffer = await generateOsPdf({ os, condominio, checklist, fotos, tecnico });
+          const pdf_url = saveOsPdfBuffer(buffer, id);
+          os = (await Database.updateOS(id, { pdf_url })) ?? os;
+        }
+      } catch (e) {
+        console.error('Erro ao gerar PDF da OS:', e);
+        pdfError = 'OS finalizada, mas houve erro ao gerar o PDF.';
+      }
+
+      notifyN8n('os_finalizada', os);
+      return NextResponse.json({ success: true, os, ...(pdfError ? { pdfError } : {}) });
     }
 
     const os = await Database.updateOS(id, updates);
