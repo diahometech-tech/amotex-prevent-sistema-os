@@ -679,6 +679,7 @@ function ReservatoriosTab({
   data,
   loading,
   onCreateClick,
+  onEditClick,
 }: TabPanelProps<Reservatorio>) {
   const canEdit = canEditReservatorio(user.role);
 
@@ -742,9 +743,15 @@ function ReservatoriosTab({
                 </p>
               )}
             </div>
-            {/* Sem botão "Editar": não existe rota PATCH /api/reservatorios/[id]
-                no backend ainda — só criação (POST na rota aninhada do
-                condomínio). Reativar quando essa rota existir. */}
+            {canEdit && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onEditClick?.(reservatorio)}
+              >
+                Editar
+              </Button>
+            )}
           </div>
         </Card>
       ))}
@@ -757,6 +764,7 @@ function ContatosTab({
   data,
   loading,
   onCreateClick,
+  onEditClick,
 }: TabPanelProps<Contato>) {
   const canEdit = canEditContato(user.role);
 
@@ -813,8 +821,15 @@ function ContatosTab({
                 {contato.identificador_canal}
               </p>
             </div>
-            {/* Sem botão "Editar": não existe rota PATCH /api/contatos/[id]
-                no backend ainda — só criação. Reativar quando existir. */}
+            {canEdit && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onEditClick?.(contato)}
+              >
+                Editar
+              </Button>
+            )}
           </div>
         </Card>
       ))}
