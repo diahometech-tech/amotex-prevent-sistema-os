@@ -18,6 +18,11 @@ import { OS_TIPO_LABELS, OS_STATUS_LABELS } from './os-priority';
 // problema, em vez de derrubar a geração do PDF inteiro.
 const EMBEDDABLE_EXT = new Set(['.jpg', '.jpeg', '.png']);
 
+// Wordmark recortado do material de marca do cliente (só o "AMOTEX", sem o
+// mascote robô — não cabe bem num cabeçalho de documento formal). Fica em
+// public/ (asset estático, não upload de usuário).
+const LOGO_PATH = path.join(process.cwd(), 'public', 'brand', 'logo-amotex-wordmark.png');
+
 export interface OsPdfData {
   os: OS;
   condominio: Condominio;
@@ -38,8 +43,14 @@ export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
   doc.on('data', (c: Buffer) => chunks.push(c));
   const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 
-  // Cabeçalho
-  doc.fontSize(18).fillColor('#0B1E3A').text('Amotex Prevent', { continued: false });
+  // Cabeçalho — logo se o arquivo existir, texto como fallback (nunca
+  // derruba a geração do PDF por falta/erro de imagem).
+  try {
+    doc.image(LOGO_PATH, 50, 45, { width: 130 });
+    doc.y = 100;
+  } catch {
+    doc.fontSize(18).fillColor('#0B1E3A').text('Amotex Prevent');
+  }
   doc.fontSize(12).fillColor('#666').text('Ordem de Serviço');
   doc.moveDown(0.5);
   doc.fontSize(9).fillColor('#999').text(`OS ${os.id}`);
