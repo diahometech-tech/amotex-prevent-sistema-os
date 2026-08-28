@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { CondominioForm } from '@/components/cadastro/CondominioForm';
-import { canEditCadastro } from '@/lib/permissions';
+import { canEditCondominio } from '@/lib/permissions';
 import type { Condominio } from '@/lib/db';
 
 interface CondominiosResponse {
@@ -96,7 +96,7 @@ function CondominiosContent() {
     <div className="w-full max-w-4xl mx-auto px-8 py-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-white">Condomínios</h1>
-        {canEditCadastro(user.role) && (
+        {canEditCondominio(user.role) && (
           <Button
             onClick={() => {
               setShowForm(true);
@@ -123,7 +123,7 @@ function CondominiosContent() {
           title="Nenhum condomínio cadastrado"
           description="Comece a criar um novo condomínio para gerenciar as OS"
           action={
-            canEditCadastro(user.role) ? (
+            canEditCondominio(user.role) ? (
               <Button
                 variant="primary"
                 onClick={() => {

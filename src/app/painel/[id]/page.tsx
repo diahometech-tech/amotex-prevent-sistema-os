@@ -11,17 +11,9 @@ import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { manutencoesDoMes, tempoMedioRespostaMinutos, formatarMinutos, ordenarHistoricoRecente } from '@/lib/condominio-stats';
 import type { Condominio, OS, Equipamento } from '@/lib/db';
 
-interface CondominiosResponse {
+interface CondominioDetalheResponse {
   condominio?: Condominio;
-  error?: string;
-}
-
-interface EquipamentosResponse {
   equipamentos?: Equipamento[];
-  error?: string;
-}
-
-interface OSResponse {
   oss?: OS[];
   error?: string;
 }
@@ -54,35 +46,23 @@ function PainelDetailContent() {
         setLoadingCondominio(true);
         setError(null);
 
-        const [condRes, equipRes, osRes] = await Promise.all([
-          fetch(`/api/condominios/${id}`, { cache: 'no-store' }),
-          fetch(`/api/condominios/${id}/equipamentos`, { cache: 'no-store' }).catch(() => null),
-          fetch('/api/os', { cache: 'no-store' }).catch(() => null),
-        ]);
+        // GET /api/condominios/:id já devolve condominio + reservatorios +
+        // contatos + equipamentos + oss (as OS já escopadas a este
+        // condomínio) num payload só — ver src/app/api/condominios/[id]/route.ts.
+        // Buscar equipamentos à parte, ou puxar /api/os inteiro pra filtrar no
+        // cliente, era trabalho duplicado (e trazia OS de outros condomínios
+        // pro navegador à toa).
+        const condRes = await fetch(`/api/condominios/${id}`, { cache: 'no-store' });
+        const data: CondominioDetalheResponse = await condRes.json().catch(() => ({}));
 
-        if (condRes.ok) {
-          const data: CondominiosResponse = await condRes.json();
-          if (data.condominio) {
-            setCondominio(data.condominio);
-          } else {
-            setError(data.error || 'Condomínio não encontrado');
-          }
-        } else {
-          const data: CondominiosResponse = await condRes.json().catch(() => ({}));
+        if (!condRes.ok || !data.condominio) {
           setError(data.error || 'Condomínio não encontrado');
+          return;
         }
 
-        if (equipRes?.ok) {
-          const data: EquipamentosResponse = await equipRes.json();
-          setEquipamentos(data.equipamentos ?? []);
-        }
-
-        if (osRes?.ok) {
-          const data: OSResponse = await osRes.json();
-          const todasAss = data.oss ?? [];
-          // Filtra client-side para este condomínio
-          setOss(todasAss.filter((o) => o.condominio_id === id));
-        }
+        setCondominio(data.condominio);
+        setEquipamentos(data.equipamentos ?? []);
+        setOss(data.oss ?? []);
       } catch {
         setError('Erro ao carregar o painel');
       } finally {

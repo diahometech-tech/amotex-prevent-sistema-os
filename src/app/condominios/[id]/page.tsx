@@ -13,7 +13,7 @@ import { CondominioForm } from '@/components/cadastro/CondominioForm';
 import { ReservatorioForm } from '@/components/cadastro/ReservatorioForm';
 import { ContatoForm } from '@/components/cadastro/ContatoForm';
 import { EquipamentoForm } from '@/components/cadastro/EquipamentoForm';
-import { canEditCadastro } from '@/lib/permissions';
+import { canEditCondominio, canEditReservatorio, canEditContato, canEditEquipamento } from '@/lib/permissions';
 import type { AmxUser } from '@/components/layout/AppShell';
 import type {
   Condominio,
@@ -66,8 +66,13 @@ function CondominioDetailContent() {
         setLoadingCondominio(true);
         setCondominioError(null);
         const response = await fetch(`/api/condominios/${id}`);
-        const result: { condominio?: Condominio; error?: string } =
-          await response.json();
+        const result: {
+          condominio?: Condominio;
+          reservatorios?: Reservatorio[];
+          contatos?: Contato[];
+          equipamentos?: Equipamento[];
+          error?: string;
+        } = await response.json();
 
         if (!response.ok || result.error) {
           setCondominioError(
@@ -78,6 +83,14 @@ function CondominioDetailContent() {
         }
 
         setCondominio(result.condominio ?? null);
+        // Este mesmo payload já traz as três listas das abas — preencher
+        // tudo aqui evita um GET por aba (ver a rota: ela retorna
+        // condominio + reservatorios + contatos + equipamentos + oss).
+        setTabData({
+          reservatorios: { data: result.reservatorios ?? [], loaded: true },
+          contatos: { data: result.contatos ?? [], loaded: true },
+          equipamentos: { data: result.equipamentos ?? [], loaded: true },
+        });
       } catch {
         setCondominioError('Erro ao carregar condomínio');
         setCondominio(null);
@@ -410,7 +423,7 @@ function CondominioDetailContent() {
               ? 'Monitorado'
               : 'Sem monitoramento'}
           </Badge>
-          {canEditCadastro(user.role) && (
+          {canEditCondominio(user.role) && (
             <Button
               variant="secondary"
               size="sm"
@@ -667,7 +680,7 @@ function ReservatoriosTab({
   loading,
   onCreateClick,
 }: TabPanelProps<Reservatorio>) {
-  const canEdit = canEditCadastro(user.role);
+  const canEdit = canEditReservatorio(user.role);
 
   if (loading) {
     return (
@@ -745,7 +758,7 @@ function ContatosTab({
   loading,
   onCreateClick,
 }: TabPanelProps<Contato>) {
-  const canEdit = canEditCadastro(user.role);
+  const canEdit = canEditContato(user.role);
 
   if (loading) {
     return (
@@ -815,7 +828,7 @@ function EquipamentosTab({
   loading,
   onCreateClick,
 }: TabPanelProps<Equipamento>) {
-  const canEdit = canEditCadastro(user.role);
+  const canEdit = canEditEquipamento(user.role);
 
   if (loading) {
     return (

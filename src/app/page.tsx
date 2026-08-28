@@ -12,6 +12,10 @@ import { canManageOS } from '@/lib/permissions';
 import { computeOsPrioridade, OS_STATUS_LABELS, type OsPrioridade } from '@/lib/os-priority';
 import type { Condominio, OS, OsStatus, OsTipo } from '@/lib/db';
 
+// Os 3 níveis do campo manual os.prioridade (distinto de OsPrioridade, a
+// escala visual de 4 níveis calculada em src/lib/os-priority.ts).
+type OsPrioridadeManual = NonNullable<OS['prioridade']>;
+
 type StatusFiltro = 'ativas' | OsStatus | 'todas';
 
 interface TecnicoLite {
@@ -271,6 +275,7 @@ function OsListContent() {
       <Modal open={showCreate} onClose={() => setShowCreate(false)} maxWidth="max-w-md">
         <NovaOsForm
           condominios={condominios}
+          tecnicos={tecnicos}
           onClose={() => setShowCreate(false)}
           onCreated={(os) => {
             setShowCreate(false);
@@ -395,15 +400,21 @@ function OsRow({
 
 function NovaOsForm({
   condominios,
+  tecnicos,
   onClose,
   onCreated,
 }: {
   condominios: Condominio[];
+  tecnicos: TecnicoLite[];
   onClose: () => void;
   onCreated: (os: OS) => void;
 }) {
   const [condominioId, setCondominioId] = useState(condominios[0]?.id || '');
   const [tipo, setTipo] = useState<OsTipo>('preventiva');
+  // Vazio = deixa o backend aplicar o padrão por tipo (corretiva nasce alta,
+  // preventiva média — ver Database.createOS em src/lib/db.ts).
+  const [prioridade, setPrioridade] = useState<'' | OsPrioridadeManual>('');
+  const [tecnicoId, setTecnicoId] = useState('');
   const [observacao, setObservacao] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -420,7 +431,13 @@ function NovaOsForm({
       const res = await fetch('/api/os', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ condominio_id: condominioId, tipo, origem: 'manual', observacao: observacao || undefined }),
+        body: JSON.stringify({
+          condominio_id: condominioId,
+          tipo,
+          prioridade: prioridade || undefined,
+          tecnico_id: tecnicoId || undefined,
+          observacao: observacao || undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.os) {
@@ -453,6 +470,27 @@ function NovaOsForm({
           <Select value={tipo} onChange={(e) => setTipo(e.target.value as OsTipo)}>
             <option value="preventiva">Preventiva</option>
             <option value="corretiva">Corretiva</option>
+          </Select>
+        </Field>
+        <Field
+          label="Prioridade"
+          hint="Padrão por tipo: corretiva nasce alta, preventiva média. Tipo/origem/tempo em aberto ainda podem escalar a exibição pra cima."
+        >
+          <Select value={prioridade} onChange={(e) => setPrioridade(e.target.value as '' | OsPrioridadeManual)}>
+            <option value="">Padrão do tipo</option>
+            <option value="alta">Alta</option>
+            <option value="media">Média</option>
+            <option value="baixa">Baixa</option>
+          </Select>
+        </Field>
+        <Field label="Técnico responsável" hint="Opcional — pode ser atribuído depois">
+          <Select value={tecnicoId} onChange={(e) => setTecnicoId(e.target.value)}>
+            <option value="">Não atribuído</option>
+            {tecnicos.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nome}
+              </option>
+            ))}
           </Select>
         </Field>
         <Field label="Observação" hint="Opcional — contexto inicial do serviço">

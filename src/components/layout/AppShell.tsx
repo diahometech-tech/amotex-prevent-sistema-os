@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useIdleLogout } from '@/lib/useIdleLogout';
 import type { UserRole } from '@/lib/db';
-import { ROLE_LABELS, canManageUsersNav } from '@/lib/permissions';
+import { ROLE_LABELS, canManageUsers } from '@/lib/permissions';
 import { Spinner } from '@/components/ui/EmptyState';
 
 export interface AmxUser {
@@ -140,7 +140,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </a>
               );
             })}
-            {canManageUsersNav(user.role) && (
+            {canManageUsers(user.role) && (
               <a
                 href="/admin/usuarios"
                 title="Usuários"
