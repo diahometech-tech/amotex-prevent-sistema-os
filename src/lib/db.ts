@@ -319,6 +319,20 @@ function writeLocalDB(data: ReturnType<typeof emptyDB>) {
   }
 }
 
+// Descarta chaves com valor undefined antes de mesclar um patch parcial —
+// sem isto, `{ ...atual, ...updates }` sobrescreve com undefined qualquer
+// campo que o chamador não enviou (o caso normal de um PATCH que só manda os
+// campos alterados, como as rotas de reservatório/contato/OS). O backend
+// Postgres não tem esse risco (buildSet só inclui campos presentes), mas o
+// JSON local precisa do mesmo cuidado pra não divergir de comportamento.
+function stripUndefined<T extends object>(obj: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const k of Object.keys(obj) as (keyof T)[]) {
+    if (obj[k] !== undefined) out[k] = obj[k];
+  }
+  return out;
+}
+
 const jsonBackend: DbBackend = {
   async getCondominios() { return readLocalDB().condominios; },
   async getCondominioById(id) {
@@ -333,7 +347,7 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     const i = db.condominios.findIndex((c) => c.id === id);
     if (i === -1) return null;
-    db.condominios[i] = { ...db.condominios[i], ...updates };
+    db.condominios[i] = { ...db.condominios[i], ...stripUndefined(updates) };
     writeLocalDB(db);
     return db.condominios[i];
   },
@@ -353,7 +367,7 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     const i = db.reservatorios.findIndex((r) => r.id === id);
     if (i === -1) return null;
-    db.reservatorios[i] = { ...db.reservatorios[i], ...updates };
+    db.reservatorios[i] = { ...db.reservatorios[i], ...stripUndefined(updates) };
     writeLocalDB(db);
     return db.reservatorios[i];
   },
@@ -375,7 +389,7 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     const i = db.contatos.findIndex((c) => c.id === id);
     if (i === -1) return null;
-    db.contatos[i] = { ...db.contatos[i], ...updates };
+    db.contatos[i] = { ...db.contatos[i], ...stripUndefined(updates) };
     writeLocalDB(db);
     return db.contatos[i];
   },
@@ -405,7 +419,7 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     const i = db.users.findIndex((u) => u.id === id);
     if (i === -1) return null;
-    db.users[i] = { ...db.users[i], ...updates };
+    db.users[i] = { ...db.users[i], ...stripUndefined(updates) };
     writeLocalDB(db);
     return db.users[i];
   },
@@ -472,7 +486,7 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     const i = db.oss.findIndex((o) => o.id === id);
     if (i === -1) return null;
-    db.oss[i] = { ...db.oss[i], ...updates };
+    db.oss[i] = { ...db.oss[i], ...stripUndefined(updates) };
     writeLocalDB(db);
     return db.oss[i];
   },
@@ -489,7 +503,7 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     const i = db.checklist_items.findIndex((c) => c.id === id);
     if (i === -1) return null;
-    db.checklist_items[i] = { ...db.checklist_items[i], ...updates };
+    db.checklist_items[i] = { ...db.checklist_items[i], ...stripUndefined(updates) };
     writeLocalDB(db);
     return db.checklist_items[i];
   },
