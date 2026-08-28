@@ -39,7 +39,12 @@ Feito até agora:
 
 **Ainda não feito:**
 1. Protótipo visual publicado no Claude Design com os design tokens abaixo — ver link combinado na conversa que gerou este checkpoint (não versionado aqui, é um Artifact separado).
-2. Deploy do app nesta VPS (o app em si — o banco já está pronto, ver seção abaixo).
+
+**Feito em 28/08 (auditoria pós-deploy):**
+- **PATCH /api/reservatorios/[id] e PATCH /api/contatos/[id]** — faltavam (issue #3, achada pela sessão de frontend auditando a UI contra as rotas reais). Admin apenas; reservatório com checagem de unicidade do `nome_sensorlog` excluindo o próprio registro.
+- **Bug real no backend JSON local**: `updateX` fazia spread ingênuo (`{...atual, ...updates}`), então um PATCH parcial sobrescrevia com `undefined` qualquer campo não enviado — Postgres não tinha esse problema (`buildSet` já ignora undefined), então dev e produção divergiam silenciosamente. Corrigido com `stripUndefined()` nos 6 métodos de update do `jsonBackend`.
+- **Gap de autorização em `/uploads/[...path]`**: exigia sessão mas não verificava condomínio — um síndico autenticado abria foto/assinatura de qualquer OS sabendo o UUID. Agora resolve a OS pelo path e aplica `canAccessCondominio` antes de servir o arquivo. Confirmado com teste ponta a ponta (não só leitura de código): cross-condomínio bloqueado (403), próprio condomínio liberado (200), admin liberado, sem sessão dá 401.
+- **Bug crítico em produção, já corrigido**: a tela de login enviava `username`, a API esperava `login` — ninguém conseguia entrar com senha nenhuma. Achado e corrigido de forma independente pela sessão de frontend (commit `ddbf4c1`) quase ao mesmo tempo que aqui; ficamos com a dela.
 
 **Feito em 27/08:**
 - **PR #1 do frontend mesclado no `main`** (commit `8d4cd6e`) — shell da aplicação, cadastro de condomínio/reservatório/contato/equipamento, lista de OS com modal de detalhe, assinatura digital, upload de foto, painel do síndico. Só tocou UI + `src/lib/{os-priority,permissions,condominio-stats}.ts` (lógica pura, fora do escopo do backend) — nada em `api/`, `db.ts`, `auth.ts`.
