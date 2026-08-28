@@ -40,6 +40,11 @@ Feito até agora:
 **Ainda não feito:**
 1. Protótipo visual publicado no Claude Design com os design tokens abaixo — ver link combinado na conversa que gerou este checkpoint (não versionado aqui, é um Artifact separado).
 
+**Feito em 28/08 (geração de PDF):**
+- **PDF automático da OS ao finalizar** (`src/lib/os-pdf.ts`, pdfkit) — condomínio, dados da OS, checklist, fotos antes/depois, assinaturas. Salvo em `uploads/os/<id>/os.pdf`, `pdf_url` gravado na OS. Falha na geração não desfaz a finalização (retorna `pdfError` na resposta). Dependência `docx@9` removida (não usada desde o fork). Testado ponta a ponta em produção.
+- Envio automático por e-mail/WhatsApp é "Should" no PRD, não "Must" — decidido rotear via workflow n8n (WhatsApp sai pelo canal nativo do Hermes, não pelo Next.js) em vez de construir SMTP no app. Entra junto com o trabalho do Hermes.
+- Backlog de frontend restante registrado na [issue #5](https://github.com/diahometech-tech/amotex-prevent-sistema-os/issues/5): dashboard admin (KPIs), gestão de rotas dedicada, reescrita de `/admin/usuarios`.
+
 **Feito em 28/08 (auditoria pós-deploy):**
 - **PATCH /api/reservatorios/[id] e PATCH /api/contatos/[id]** — faltavam (issue #3, achada pela sessão de frontend auditando a UI contra as rotas reais). Admin apenas; reservatório com checagem de unicidade do `nome_sensorlog` excluindo o próprio registro.
 - **Bug real no backend JSON local**: `updateX` fazia spread ingênuo (`{...atual, ...updates}`), então um PATCH parcial sobrescrevia com `undefined` qualquer campo não enviado — Postgres não tinha esse problema (`buildSet` já ignora undefined), então dev e produção divergiam silenciosamente. Corrigido com `stripUndefined()` nos 6 métodos de update do `jsonBackend`.
