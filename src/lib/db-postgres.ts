@@ -288,6 +288,10 @@ export const pgBackend: DbBackend = {
     const { rows } = await q('SELECT * FROM equipamento WHERE condominio_id = $1', [condominioId]);
     return rows as Equipamento[];
   },
+  async getEquipamentos() {
+    const { rows } = await q('SELECT * FROM equipamento ORDER BY tipo, modelo');
+    return rows as Equipamento[];
+  },
   async insertEquipamento(e) {
     await q(
       'INSERT INTO equipamento (id, condominio_id, tipo, modelo, potencia_hp, cadastrado_em) VALUES ($1,$2,$3,$4,$5,$6)',

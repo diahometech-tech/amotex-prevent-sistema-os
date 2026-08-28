@@ -189,6 +189,7 @@ export interface DbBackend {
 
   // Equipamento
   getEquipamentosByCondominio(condominioId: string): Promise<Equipamento[]>;
+  getEquipamentos(): Promise<Equipamento[]>;
   insertEquipamento(e: Equipamento): Promise<void>;
 
   // Usuário (RBAC)
@@ -396,6 +397,9 @@ const jsonBackend: DbBackend = {
 
   async getEquipamentosByCondominio(condominioId) {
     return readLocalDB().equipamentos.filter((e) => e.condominio_id === condominioId);
+  },
+  async getEquipamentos() {
+    return readLocalDB().equipamentos;
   },
   async insertEquipamento(e) {
     const db = readLocalDB();
@@ -629,6 +633,7 @@ export class Database {
 
   // ----- Equipamento -----
   static getEquipamentosByCondominio(condominioId: string) { return backend().getEquipamentosByCondominio(condominioId); }
+  static getEquipamentos() { return backend().getEquipamentos(); }
 
   static async createEquipamento(data: Partial<Equipamento>): Promise<Equipamento> {
     const equipamento: Equipamento = {
