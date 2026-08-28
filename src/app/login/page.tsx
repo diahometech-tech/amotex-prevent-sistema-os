@@ -27,7 +27,10 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        // API espera { login, password } (src/app/api/auth/login/route.ts) — o
+        // state local chama-se `username` só por herança do form, o corpo
+        // enviado precisa usar o nome de campo real.
+        body: JSON.stringify({ login: username, password }),
       });
       if (res.ok) {
         // admin, técnico e síndico caem no mesmo painel — o que cada um

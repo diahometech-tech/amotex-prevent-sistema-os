@@ -16,6 +16,15 @@ import type { AuditLog, ChecklistItem, Foto, OS } from '@/lib/db';
 
 type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico';
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function OSModal({
   osId,
   condominioNome,
@@ -38,45 +47,31 @@ export function OSModal({
   const [actionError, setActionError] = useState('');
 
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
-  const [checklistLoading, setChecklistLoading] = useState(true);
-
   const [fotos, setFotos] = useState<Foto[]>([]);
-  const [fotosLoaded, setFotosLoaded] = useState(false);
-  const [fotosLoading, setFotosLoading] = useState(false);
-  const [uploadingMomento, setUploadingMomento] = useState<'antes' | 'depois' | null>(null);
-
   const [historico, setHistorico] = useState<AuditLog[]>([]);
-  const [historicoLoaded, setHistoricoLoaded] = useState(false);
-  const [historicoLoading, setHistoricoLoading] = useState(false);
 
+  const [uploadingMomento, setUploadingMomento] = useState<'antes' | 'depois' | null>(null);
   const [savingSignature, setSavingSignature] = useState<'tecnico' | 'zelador' | null>(null);
   const [busyAction, setBusyAction] = useState(false);
 
-  // OS + checklist carregam de cara — o checklist decide se o botão de
-  // finalizar aparece habilitado mesmo antes de abrir a aba correspondente.
+  // GET /api/os/:id já retorna os, checklist, fotos e histórico (logs) num
+  // único payload (ver src/app/api/os/[id]/route.ts) — não existem rotas
+  // GET separadas por aba, então uma chamada só basta.
   useEffect(() => {
     let cancelled = false;
-    // Sem setLoading(true)/setLoadError('') aqui: o pai monta este modal com
-    // key={osId} (ver src/app/page.tsx), então cada troca de OS já remonta o
-    // componente do zero com os valores iniciais de useState (true/'').
-    Promise.all([
-      fetch(`/api/os/${osId}`, { cache: 'no-store' }),
-      fetch(`/api/os/${osId}/checklist`, { cache: 'no-store' }),
-    ])
-      .then(async ([osRes, checklistRes]) => {
+    fetch(`/api/os/${osId}`, { cache: 'no-store' })
+      .then(async (res) => {
         if (cancelled) return;
-        if (osRes.ok) {
-          const data = await osRes.json();
+        if (res.ok) {
+          const data = await res.json();
           setOs(data.os);
+          setChecklist(data.checklist || []);
+          setFotos(data.fotos || []);
+          setHistorico(data.logs || []);
         } else {
-          const data = await osRes.json().catch(() => ({}));
+          const data = await res.json().catch(() => ({}));
           setLoadError(data.error || 'Não foi possível carregar esta OS.');
         }
-        if (checklistRes.ok) {
-          const data = await checklistRes.json();
-          setChecklist(data.checklist || []);
-        }
-        setChecklistLoading(false);
       })
       .catch(() => {
         if (!cancelled) setLoadError('Erro de conexão ao carregar a OS.');
@@ -89,64 +84,28 @@ export function OSModal({
     };
   }, [osId]);
 
-  useEffect(() => {
-    if (tab === 'fotos' && !fotosLoaded) {
-      // Carregamento lazy disparado por troca de aba, não pelo mount do
-      // efeito — não dá pra resolver com valor inicial de useState (a aba
-      // pode ser aberta bem depois do mount).
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFotosLoading(true);
-      fetch(`/api/os/${osId}/fotos`, { cache: 'no-store' })
-        .then(async (r) => {
-          if (r.ok) {
-            const data = await r.json();
-            setFotos(data.fotos || []);
-          }
-        })
-        .finally(() => {
-          setFotosLoading(false);
-          setFotosLoaded(true);
-        });
-    }
-    if (tab === 'historico' && !historicoLoaded) {
-      setHistoricoLoading(true);
-      fetch(`/api/os/${osId}/historico`, { cache: 'no-store' })
-        .then(async (r) => {
-          if (r.ok) {
-            const data = await r.json();
-            setHistorico(data.logs || []);
-          }
-        })
-        .finally(() => {
-          setHistoricoLoading(false);
-          setHistoricoLoaded(true);
-        });
-    }
-  }, [tab, osId, fotosLoaded, historicoLoaded]);
-
   const isClosed = os?.status === 'finalizada' || os?.status === 'cancelada';
   const itensObrigatoriosPendentes = checklist.filter((i) => i.obrigatorio && !i.concluido);
   const podeFinalizar = canFinalize && !isClosed && itensObrigatoriosPendentes.length === 0;
 
-  const toggleChecklistItem = async (item: ChecklistItem) => {
+  // API só marca item como concluído (Database.concluirChecklistItem é uma
+  // via só de ida — ver src/lib/db.ts) — não existe "desmarcar" no backend.
+  const concluirChecklistItem = async (item: ChecklistItem) => {
+    if (item.concluido) return;
     setActionError('');
-    const novoValor = !item.concluido;
-    setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: novoValor } : i)));
+    setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: true } : i)));
     try {
-      const res = await fetch(`/api/checklist/${item.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concluido: novoValor }),
-      });
-      if (!res.ok) {
-        // Reverte otimismo se o servidor recusar (ex.: OS já finalizada).
-        setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: item.concluido } : i)));
-        const data = await res.json().catch(() => ({}));
-        setActionError(data.error || 'Falha ao atualizar item do checklist.');
+      const res = await fetch(`/api/os/${osId}/checklist/${item.id}`, { method: 'PATCH' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.item) {
+        setChecklist((prev) => prev.map((i) => (i.id === item.id ? data.item : i)));
+      } else {
+        setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: false } : i)));
+        setActionError(data.error || 'Falha ao concluir item do checklist.');
       }
     } catch {
-      setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: item.concluido } : i)));
-      setActionError('Erro de conexão ao atualizar checklist.');
+      setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: false } : i)));
+      setActionError('Erro de conexão ao concluir item.');
     }
   };
 
@@ -193,20 +152,24 @@ export function OSModal({
     }
   };
 
+  // Finalizar não é uma rota própria — é PATCH /api/os/:id com
+  // { finalizar: true } (a trava de qualidade roda dentro de
+  // Database.finalizarOS e volta 422 se algo obrigatório ficou pendente).
   const finalizar = async () => {
     if (!podeFinalizar) return;
     setBusyAction(true);
     setActionError('');
     try {
-      const res = await fetch(`/api/os/${osId}/finalizar`, { method: 'POST' });
+      const res = await fetch(`/api/os/${osId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ finalizar: true }),
+      });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.os) {
         setOs(data.os);
         onChanged(data.os);
       } else {
-        // Mesma mensagem da trava de qualidade do backend
-        // (Database.finalizarOS em src/lib/db.ts) quando a corrida entre
-        // duas abas deixar passar um item obrigatório pendente.
         setActionError(data.error || 'Falha ao finalizar OS.');
       }
     } catch {
@@ -216,19 +179,23 @@ export function OSModal({
     }
   };
 
+  // API espera um data URL base64 em JSON ({ momento, data }), não multipart
+  // — ver src/app/api/os/[id]/fotos/route.ts.
   const uploadFoto = async (momento: 'antes' | 'depois', file: File) => {
     setUploadingMomento(momento);
     setActionError('');
     try {
-      const form = new FormData();
-      form.append('file', file);
-      form.append('momento', momento);
-      const res = await fetch(`/api/os/${osId}/fotos`, { method: 'POST', body: form });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.foto) {
-        setFotos((prev) => [...prev, data.foto]);
+      const data = await fileToDataUrl(file);
+      const res = await fetch(`/api/os/${osId}/fotos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ momento, data }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.foto) {
+        setFotos((prev) => [...prev, json.foto]);
       } else {
-        setActionError(data.error || 'Falha ao enviar foto.');
+        setActionError(json.error || 'Falha ao enviar foto.');
       }
     } catch {
       setActionError('Erro de conexão ao enviar foto.');
@@ -237,14 +204,17 @@ export function OSModal({
     }
   };
 
+  // Assinatura não é uma rota própria — é PATCH /api/os/:id com
+  // assinatura_zelador ou assinatura_tecnico (data URL) no corpo — ver
+  // src/app/api/os/[id]/route.ts.
   const saveAssinatura = async (papel: 'tecnico' | 'zelador', dataUrl: string) => {
     setSavingSignature(papel);
     setActionError('');
     try {
-      const res = await fetch(`/api/os/${osId}/assinatura`, {
-        method: 'POST',
+      const res = await fetch(`/api/os/${osId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ papel, dataUrl }),
+        body: JSON.stringify(papel === 'tecnico' ? { assinatura_tecnico: dataUrl } : { assinatura_zelador: dataUrl }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.os) {
@@ -334,36 +304,30 @@ export function OSModal({
             {tab === 'checklist' && (
               <ChecklistTab
                 items={checklist}
-                loading={checklistLoading}
                 readOnly={!canManage || isClosed}
-                onToggle={toggleChecklistItem}
+                onConcluir={concluirChecklistItem}
                 onAdd={addChecklistItem}
               />
             )}
 
-            {tab === 'fotos' &&
-              (fotosLoading ? (
-                <div className="flex items-center justify-center py-10">
-                  <Spinner className="h-5 w-5" />
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <FotoUpload
-                    momento="antes"
-                    fotos={fotos.filter((f) => f.momento === 'antes')}
-                    onUpload={(file) => uploadFoto('antes', file)}
-                    disabled={!canManage || isClosed}
-                    busy={uploadingMomento === 'antes'}
-                  />
-                  <FotoUpload
-                    momento="depois"
-                    fotos={fotos.filter((f) => f.momento === 'depois')}
-                    onUpload={(file) => uploadFoto('depois', file)}
-                    disabled={!canManage || isClosed}
-                    busy={uploadingMomento === 'depois'}
-                  />
-                </div>
-              ))}
+            {tab === 'fotos' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <FotoUpload
+                  momento="antes"
+                  fotos={fotos.filter((f) => f.momento === 'antes')}
+                  onUpload={(file) => uploadFoto('antes', file)}
+                  disabled={!canManage || isClosed}
+                  busy={uploadingMomento === 'antes'}
+                />
+                <FotoUpload
+                  momento="depois"
+                  fotos={fotos.filter((f) => f.momento === 'depois')}
+                  onUpload={(file) => uploadFoto('depois', file)}
+                  disabled={!canManage || isClosed}
+                  busy={uploadingMomento === 'depois'}
+                />
+              </div>
+            )}
 
             {tab === 'assinaturas' && (
               <div className="flex flex-col gap-5">
@@ -384,7 +348,7 @@ export function OSModal({
               </div>
             )}
 
-            {tab === 'historico' && <HistoricoPanel logs={historico} loading={historicoLoading} />}
+            {tab === 'historico' && <HistoricoPanel logs={historico} />}
           </div>
         </>
       )}
@@ -406,28 +370,18 @@ function OsSummary({ os }: { os: OS }) {
 
 function ChecklistTab({
   items,
-  loading,
   readOnly,
-  onToggle,
+  onConcluir,
   onAdd,
 }: {
   items: ChecklistItem[];
-  loading: boolean;
   readOnly: boolean;
-  onToggle: (item: ChecklistItem) => void;
+  onConcluir: (item: ChecklistItem) => void;
   onAdd: (descricao: string, obrigatorio: boolean) => void;
 }) {
   const [novaDescricao, setNovaDescricao] = useState('');
   const [novoObrigatorio, setNovoObrigatorio] = useState(true);
   const [adding, setAdding] = useState(false);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-10">
-        <Spinner className="h-5 w-5" />
-      </div>
-    );
-  }
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -458,9 +412,10 @@ function ChecklistTab({
               >
                 <button
                   type="button"
-                  disabled={readOnly}
-                  onClick={() => onToggle(item)}
-                  aria-label={item.concluido ? 'Marcar como pendente' : 'Marcar como concluído'}
+                  disabled={readOnly || item.concluido}
+                  onClick={() => onConcluir(item)}
+                  aria-label="Marcar como concluído"
+                  title={item.concluido ? 'Concluído — não é possível desmarcar' : undefined}
                   className={`w-[22px] h-[22px] rounded-[6px] shrink-0 flex items-center justify-center transition-colors disabled:cursor-not-allowed ${
                     item.concluido
                       ? 'bg-amx-green'
@@ -480,7 +435,7 @@ function ChecklistTab({
                 >
                   {item.descricao}
                 </span>
-                {item.obrigatorio && (
+                {item.obrigatorio && !item.concluido && (
                   <span className="font-heading text-[9px] font-semibold text-amx-red tracking-wider shrink-0">OBRIG.</span>
                 )}
               </li>
