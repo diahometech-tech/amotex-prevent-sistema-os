@@ -84,9 +84,12 @@ export function ReservatorioForm({
           onChange={(e) =>
             setForm({
               ...form,
+              // null (e não undefined) ao esvaziar: JSON.stringify descarta
+              // chaves undefined, então o PATCH nem enviava o campo e a
+              // capacidade antiga continuava gravada em silêncio.
               capacidade_litros: e.target.value
                 ? parseInt(e.target.value)
-                : undefined,
+                : null,
             })
           }
           placeholder="ex.: 5000"

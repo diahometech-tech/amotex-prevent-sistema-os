@@ -27,7 +27,11 @@ export interface Reservatorio {
   nome_interno: string;
   nome_sensorlog: string;
   tipo: 'cisterna' | 'superior' | 'torre';
-  capacidade_litros?: number;
+  // `null` é distinto de ausente: num PATCH parcial, ausente = "não mexe" e
+  // null = "limpa o valor". Sem isso não existe como apagar uma capacidade já
+  // cadastrada (stripUndefined/buildSet descartam `undefined`, então mandar
+  // undefined mantinha o valor antigo em silêncio).
+  capacidade_litros?: number | null;
   ultima_mensagem_recebida_em?: string;
 }
 

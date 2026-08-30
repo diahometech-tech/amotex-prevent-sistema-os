@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, type User } from '@/lib/db';
 import { getSessionFromRequest, canManageUsers } from '@/lib/auth';
+import { isAdminOrTecnico } from '@/lib/roles';
 
 const VALID_ROLES = ['admin', 'tecnico', 'sindico'];
 
@@ -9,13 +10,28 @@ function safe(u: User) {
   return rest;
 }
 
-// GET /api/users — lista usuários (sem senha). Só admin.
+// GET /api/users — lista usuários (sem senha).
+//
+// Admin recebe a lista completa (é a tela de gestão de usuários).
+// Técnico recebe só id/nome dos OUTROS técnicos ativos: ele também abre OS
+// (POST /api/os aceita admin e técnico) e precisa preencher o seletor de
+// "técnico responsável" — sem isso o seletor ficava sempre vazio pra ele,
+// porque a rota respondia 403 e o erro era engolido no client.
+// Deliberadamente NÃO expõe síndicos, logins, papéis nem condominio_id: pra
+// preencher o seletor basta id e nome. Síndico continua bloqueado.
 export async function GET(request: NextRequest) {
   const session = getSessionFromRequest(request);
-  if (!session || !canManageUsers(session.role)) {
+  if (!session || !isAdminOrTecnico(session.role)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
+
   const users = await Database.getUsers();
+  if (!canManageUsers(session.role)) {
+    const tecnicos = users
+      .filter((u) => u.papel === 'tecnico' && u.ativo)
+      .map((u) => ({ id: u.id, nome: u.nome }));
+    return NextResponse.json({ users: tecnicos });
+  }
   return NextResponse.json({ users: users.map(safe) });
 }
 

@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import type { NextRequest } from 'next/server';
 import type { UserRole } from './db';
+import { isAdmin, isScopedToOwnCondominio as isSindico } from './roles';
 
 export const SESSION_COOKIE = 'amotex_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h (igual ao maxAge do cookie)
@@ -75,15 +76,17 @@ export function getClientIp(req: NextRequest): string {
 }
 
 // Papéis com poder de administração de usuários.
+// Regra vem de src/lib/roles.ts — a interface precisa da MESMA regra e não
+// pode importar este arquivo (bcrypt/crypto não vão pro bundle do cliente).
 export function canManageUsers(role?: UserRole): boolean {
-  return role === 'admin';
+  return isAdmin(role);
 }
 
 // Síndico só enxerga/edita dados do próprio condomínio (Painel Condominial) —
 // bloquear com este helper em qualquer endpoint que liste dados de todos os
 // condomínios, em vez de checar `role === 'sindico'` inline.
 export function isScopedToOwnCondominio(role?: UserRole): boolean {
-  return role === 'sindico';
+  return isSindico(role);
 }
 
 // Confere se a sessão pode acessar dados do condomínio informado — admin e
