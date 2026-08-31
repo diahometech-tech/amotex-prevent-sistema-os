@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useIdleLogout } from '@/lib/useIdleLogout';
 import type { UserRole } from '@/lib/db';
-import { ROLE_LABELS, canManageUsers } from '@/lib/permissions';
+import { ROLE_LABELS, canManageUsers, canManageOS } from '@/lib/permissions';
 import { Spinner } from '@/components/ui/EmptyState';
 
 export interface AmxUser {
@@ -29,6 +29,23 @@ const ICON_OS = (
 );
 const ICON_CONDOMINIO = <path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1m4 0h1m-6 4h1m4 0h1m-6 4h1m4 0h1" />;
 const ICON_PAINEL = <path d="M3 3v18h18M7 15l4-4 3 3 5-6" />;
+// Dashboard e Rotas não existiam no protótipo visual — ícones novos no mesmo
+// estilo (stroke-based, viewBox 24, mesmo stroke-width) dos demais.
+const ICON_DASHBOARD = (
+  <>
+    <rect x="3" y="3" width="7" height="9" rx="1" />
+    <rect x="14" y="3" width="7" height="5" rx="1" />
+    <rect x="14" y="12" width="7" height="9" rx="1" />
+    <rect x="3" y="16" width="7" height="5" rx="1" />
+  </>
+);
+const ICON_ROTAS = (
+  <>
+    <circle cx="6" cy="19" r="3" />
+    <circle cx="18" cy="5" r="3" />
+    <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+  </>
+);
 const ICON_GEAR = (
   <>
     <circle cx="12" cy="12" r="3" />
@@ -37,10 +54,16 @@ const ICON_GEAR = (
 );
 const ICON_LOGOUT = <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />;
 
-const NAV_ITEMS: { href: string; label: string; icon: React.ReactNode }[] = [
+// gate ausente = visível pra qualquer papel autenticado. Cada gate espelha a
+// regra real (ver src/lib/permissions.ts) — não é a barreira de segurança,
+// só decide o que aparece no menu.
+const NAV_ITEMS: { href: string; label: string; icon: React.ReactNode; gate?: (role: UserRole) => boolean }[] = [
   { href: '/', label: 'Ordens de Serviço', icon: ICON_OS },
+  { href: '/dashboard', label: 'Dashboard', icon: ICON_DASHBOARD, gate: canManageUsers },
+  { href: '/rotas', label: 'Rotas', icon: ICON_ROTAS, gate: canManageOS },
   { href: '/condominios', label: 'Condomínios', icon: ICON_CONDOMINIO },
   { href: '/painel', label: 'Painel do Síndico', icon: ICON_PAINEL },
+  { href: '/admin/usuarios', label: 'Usuários', icon: ICON_GEAR, gate: canManageUsers },
 ];
 
 function initials(name: string): string {
@@ -112,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="flex flex-col gap-[22px] items-center flex-1">
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.filter((item) => !item.gate || item.gate(user.role)).map((item) => {
               const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
               return (
                 <a
@@ -140,30 +163,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </a>
               );
             })}
-            {canManageUsers(user.role) && (
-              <a
-                href="/admin/usuarios"
-                title="Usuários"
-                className={`w-11 h-11 rounded-[10px] flex items-center justify-center border transition-colors ${
-                  pathname.startsWith('/admin')
-                    ? 'bg-amx-red/14 border-amx-red/40'
-                    : 'border-transparent hover:bg-amx-panel hover:border-amx-line'
-                }`}
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke={pathname.startsWith('/admin') ? 'var(--color-amx-red)' : 'var(--color-amx-muted)'}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  {ICON_GEAR}
-                </svg>
-              </a>
-            )}
           </nav>
 
           <div className="flex flex-col items-center gap-3">
