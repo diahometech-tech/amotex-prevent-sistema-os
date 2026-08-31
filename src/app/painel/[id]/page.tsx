@@ -182,6 +182,16 @@ function PainelDetailContent() {
                         </p>
                         <p className="text-[11px] text-amx-muted">{data}</p>
                       </div>
+                      {os.pdf_url && (
+                        <a
+                          href={os.pdf_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-semibold text-amx-muted hover:text-white transition-colors shrink-0 whitespace-nowrap"
+                        >
+                          📄 PDF
+                        </a>
+                      )}
                     </div>
                   );
                 })}

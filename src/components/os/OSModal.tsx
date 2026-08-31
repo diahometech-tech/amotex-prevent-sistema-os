@@ -253,6 +253,17 @@ export function OSModal({
           <div className="p-5 flex flex-col gap-4">
             <OsSummary os={os} />
 
+            {os.pdf_url && (
+              <a
+                href={os.pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-amx-muted hover:text-white transition-colors w-fit"
+              >
+                📄 Baixar PDF da OS
+              </a>
+            )}
+
             {actionError && (
               <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2">{actionError}</p>
             )}
