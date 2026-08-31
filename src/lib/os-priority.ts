@@ -107,14 +107,16 @@ export interface RotaCondominio {
 // Agrupa as OS ATIVAS por condomínio para a tela de Gestão de Rotas e o card
 // "Rota do Dia" do dashboard.
 //
-// Existe apesar de computeResumoRotas em src/lib/sla.ts porque aquele conta
-// urgentes por `os.prioridade === 'alta'` (o campo manual cru, de 3 níveis),
-// enquanto os badges da tela usam computeOsPrioridade (a escala visual de 4
-// níveis, que escala por tipo/origem/tempo em aberto). Uma corretiva
-// automática do Hermes com prioridade manual "media" aparecia com badge
-// "Urgente" e o card do condomínio dizia "0 urgentes" — e o sort chegava a
-// empurrar o condomínio mais crítico para baixo. Aqui a contagem e a ordem
-// saem da MESMA função que pinta o badge, então não há como divergirem.
+// src/lib/sla.ts (computeUrgencia/computeResumoRotas) foi removido por causa
+// desta função — os dois contavam urgência por `os.prioridade === 'alta'`
+// (o campo manual cru, de 3 níveis) enquanto os badges da tela usam
+// computeOsPrioridade (a escala visual de 4 níveis, que escala por
+// tipo/origem/tempo em aberto). Uma corretiva automática do Hermes com
+// prioridade manual "media" aparecia com badge "Urgente" e o card do
+// condomínio dizia "0 urgentes" — e o sort chegava a empurrar o condomínio
+// mais crítico para baixo (issue #9). Aqui a contagem e a ordem saem da
+// MESMA função que pinta o badge, então não há como divergirem — não recrie
+// uma versão paralela que leia `os.prioridade` direto.
 export function resumoRotasPorCondominio(oss: OS[]): RotaCondominio[] {
   const porCondominio = new Map<string, OS[]>();
   for (const os of oss) {
