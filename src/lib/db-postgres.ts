@@ -237,6 +237,10 @@ export const pgBackend: DbBackend = {
     const { rows } = await q('SELECT * FROM reservatorio WHERE condominio_id = $1', [condominioId]);
     return rows as Reservatorio[];
   },
+  async getReservatorios() {
+    const { rows } = await q('SELECT * FROM reservatorio');
+    return rows as Reservatorio[];
+  },
   async getReservatorioByNomeSensorlog(nomeSensorlog) {
     const { rows } = await q('SELECT * FROM reservatorio WHERE nome_sensorlog = $1', [nomeSensorlog]);
     return (rows[0] as Reservatorio) || null;

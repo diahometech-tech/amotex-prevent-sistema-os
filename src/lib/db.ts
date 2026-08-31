@@ -181,6 +181,7 @@ export interface DbBackend {
 
   // Reservatório
   getReservatoriosByCondominio(condominioId: string): Promise<Reservatorio[]>;
+  getReservatorios(): Promise<Reservatorio[]>;
   getReservatorioByNomeSensorlog(nomeSensorlog: string): Promise<Reservatorio | null>;
   insertReservatorio(r: Reservatorio): Promise<void>;
   updateReservatorio(id: string, updates: Partial<Reservatorio>): Promise<Reservatorio | null>;
@@ -359,6 +360,9 @@ const jsonBackend: DbBackend = {
 
   async getReservatoriosByCondominio(condominioId) {
     return readLocalDB().reservatorios.filter((r) => r.condominio_id === condominioId);
+  },
+  async getReservatorios() {
+    return readLocalDB().reservatorios;
   },
   async getReservatorioByNomeSensorlog(nomeSensorlog) {
     return readLocalDB().reservatorios.find((r) => r.nome_sensorlog === nomeSensorlog) || null;
@@ -590,6 +594,7 @@ export class Database {
 
   // ----- Reservatório -----
   static getReservatoriosByCondominio(condominioId: string) { return backend().getReservatoriosByCondominio(condominioId); }
+  static getReservatorios() { return backend().getReservatorios(); }
 
   // Resolve um alerta bruto da SensorLog ao condomínio real. Retorna null
   // quando o de-para ainda não foi cadastrado — quem chama decide o que
