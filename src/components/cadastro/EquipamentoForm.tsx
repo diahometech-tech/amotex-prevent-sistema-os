@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Form';
 import type { Equipamento } from '@/lib/db';
@@ -9,6 +9,19 @@ interface EquipamentoFormProps {
   onSubmit: (data: Partial<Equipamento>) => void | Promise<void>;
   onCancel: () => void;
   busy?: boolean;
+}
+
+interface CatalogoItem {
+  tipo: string;
+  modelo?: string;
+  potencia_hp?: number;
+}
+
+function catalogoLabel(item: CatalogoItem): string {
+  const partes = [item.tipo];
+  if (item.modelo) partes.push(item.modelo);
+  if (item.potencia_hp) partes.push(`${item.potencia_hp} HP`);
+  return partes.join(' — ');
 }
 
 export function EquipamentoForm({
@@ -22,6 +35,37 @@ export function EquipamentoForm({
     potencia_hp: undefined,
   });
 
+  // Combinações já cadastradas em QUALQUER condomínio (bombas/boias se
+  // repetem entre condomínios — ver issue #6). Selecionar uma preenche os 3
+  // campos abaixo; continuar digitando algo que não bate segue como cadastro
+  // novo, sem passo extra — o catálogo se atualiza sozinho na próxima busca.
+  const [catalogo, setCatalogo] = useState<CatalogoItem[]>([]);
+  const [busca, setBusca] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/equipamentos/catalogo', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.catalogo) setCatalogo(data.catalogo);
+      })
+      .catch(() => {
+        // Catálogo é um atalho, não uma dependência — falha aqui não impede
+        // o cadastro manual normal.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleBuscaChange = (valor: string) => {
+    setBusca(valor);
+    const item = catalogo.find((c) => catalogoLabel(c) === valor);
+    if (item) {
+      setForm({ ...form, tipo: item.tipo, modelo: item.modelo ?? '', potencia_hp: item.potencia_hp });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await onSubmit(form);
@@ -29,6 +73,23 @@ export function EquipamentoForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {catalogo.length > 0 && (
+        <Field label="Buscar no catálogo" hint="Selecione um equipamento já cadastrado em outro condomínio, ou preencha os campos abaixo manualmente">
+          <Input
+            list="equipamento-catalogo"
+            value={busca}
+            onChange={(e) => handleBuscaChange(e.target.value)}
+            placeholder="Digite para buscar..."
+            disabled={busy}
+          />
+          <datalist id="equipamento-catalogo">
+            {catalogo.map((item) => (
+              <option key={catalogoLabel(item)} value={catalogoLabel(item)} />
+            ))}
+          </datalist>
+        </Field>
+      )}
+
       <Field label="Tipo" required>
         <Input
           value={form.tipo ?? ''}
