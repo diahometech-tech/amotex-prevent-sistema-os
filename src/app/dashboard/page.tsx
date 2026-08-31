@@ -8,8 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { OSModal } from '@/components/os/OSModal';
-import { computeOsPrioridade } from '@/lib/os-priority';
-import { computeResumoRotas } from '@/lib/sla';
+import { computeOsPrioridade, compararPorPrioridade, resumoRotasPorCondominio } from '@/lib/os-priority';
 import type { Alerta, Condominio, EventoAlerta, OS } from '@/lib/db';
 
 // Shape devolvido por GET /api/alertas: reservatorio/condominio já
@@ -39,7 +38,9 @@ const EVENTO_TONE: Record<EventoAlerta, BadgeTone> = {
   SEM_REPORTE: 'neutral',
 };
 
-const PRIORIDADE_ORDER = { urgente: 0, alta: 1, normal: 2, baixa: 3 } as const;
+// A busca traz até 100 alertas (para o KPI de 24h ser um número real); o
+// painel lateral mostra só os mais recentes.
+const ALERTAS_VISIVEIS = 15;
 
 function formatRecebidoEm(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -54,6 +55,8 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
   const [error, setError] = useState('');
+  /** Instante em que os dados chegaram — âncora da janela de 24h dos alertas. */
+  const [carregadoEm, setCarregadoEm] = useState<number | null>(null);
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
 
   const condominioNome = useMemo(() => {
@@ -66,7 +69,11 @@ function DashboardContent() {
       const [osRes, condRes, alertaRes] = await Promise.all([
         fetch('/api/os', { cache: 'no-store' }),
         fetch('/api/condominios', { cache: 'no-store' }),
-        fetch('/api/alertas?limit=15', { cache: 'no-store' }),
+        // limit=100 (o padrão da rota; o teto é 500) em vez de 15: o KPI
+        // conta os alertas das últimas 24h, e com 15 ele saturava — "15"
+        // aparecia como número real ao lado de totais verdadeiros. A LISTA
+        // continua curta, cortada na renderização (ALERTAS_VISIVEIS).
+        fetch('/api/alertas?limit=100', { cache: 'no-store' }),
       ]);
       // /api/alertas é admin-only — o 403 real do servidor é quem decide
       // "negado", não uma checagem de papel no cliente (ver permissions.ts).
@@ -74,9 +81,21 @@ function DashboardContent() {
         setDenied(true);
         return;
       }
+      // Cada falha precisa aparecer: com os KPIs zerados e nenhum aviso, uma
+      // falha do /api/os se parece exatamente com "não há nada pendente" —
+      // que é a leitura mais perigosa possível neste dashboard.
+      const falhas: string[] = [];
       if (osRes.ok) setOss((await osRes.json()).oss ?? []);
+      else falhas.push('ordens de serviço');
       if (condRes.ok) setCondominios((await condRes.json()).condominios ?? []);
-      if (alertaRes.ok) setAlertas((await alertaRes.json()).alertas ?? []);
+      else falhas.push('condomínios');
+      if (alertaRes.ok) {
+        setAlertas((await alertaRes.json()).alertas ?? []);
+        setCarregadoEm(Date.now());
+      } else falhas.push('alertas');
+      if (falhas.length > 0) {
+        setError(`Não foi possível carregar: ${falhas.join(', ')}. Os números abaixo estão incompletos.`);
+      }
     } catch {
       setError('Erro ao carregar o dashboard.');
     } finally {
@@ -98,32 +117,36 @@ function DashboardContent() {
 
   const pendenciasCriticas = useMemo(
     () =>
-      [...ossAbertas]
+      ossAbertas
         .filter((o) => {
           const nivel = computeOsPrioridade(o).nivel;
           return nivel === 'urgente' || nivel === 'alta';
         })
-        .sort((a, b) => {
-          const pa = computeOsPrioridade(a);
-          const pb = computeOsPrioridade(b);
-          const diff = PRIORIDADE_ORDER[pa.nivel] - PRIORIDADE_ORDER[pb.nivel];
-          return diff !== 0 ? diff : pb.elapsedHours - pa.elapsedHours;
-        }),
+        .sort(compararPorPrioridade),
     [ossAbertas]
   );
 
+  // Janela fixa de 24h: um número com significado próprio, diferente de
+  // "quantos couberam no fetch". O "agora" é o instante da carga (gravado em
+  // `carregadoEm`), não Date.now() no corpo do hook — a regra
+  // react-hooks/purity proíbe função impura aqui, e ancorar no fetch também
+  // evita a contagem mudar sozinha entre re-renders.
+  const alertas24h = useMemo(() => {
+    if (carregadoEm === null) return 0;
+    const corte = carregadoEm - 24 * 60 * 60 * 1000;
+    return alertas.filter((a) => new Date(a.recebido_em).getTime() >= corte).length;
+  }, [alertas, carregadoEm]);
   const alertasSemDePara = useMemo(() => alertas.filter((a) => !a.reservatorio).length, [alertas]);
   const condominiosMonitorados = useMemo(
     () => condominios.filter((c) => c.monitoramento_ativo).length,
     [condominios]
   );
 
-  const resumoRotas = useMemo(() => {
-    const resumo = computeResumoRotas(oss);
-    return resumo
-      .map((r) => ({ ...r, nome: condominioNome(r.condominio_id) }))
-      .sort((a, b) => b.urgentes - a.urgentes || b.total - a.total);
-  }, [oss, condominioNome]);
+  const resumoRotas = useMemo(
+    () =>
+      resumoRotasPorCondominio(oss).map((r) => ({ ...r, nome: condominioNome(r.condominio_id) })),
+    [oss, condominioNome]
+  );
 
   if (!user) return null;
 
@@ -168,10 +191,10 @@ function DashboardContent() {
             <p className="text-xs text-amx-muted mt-1">prioridade alta ou urgente</p>
           </Card>
           <Card>
-            <p className="font-heading text-[10px] text-amx-muted uppercase tracking-wider mb-2">Alertas Recentes</p>
-            <p className="text-3xl font-bold text-white">{alertas.length}</p>
+            <p className="font-heading text-[10px] text-amx-muted uppercase tracking-wider mb-2">Alertas (24h)</p>
+            <p className="text-3xl font-bold text-white">{alertas24h}</p>
             <p className="text-xs text-amx-muted mt-1">
-              {alertasSemDePara > 0 ? `${alertasSemDePara} sem de-para resolvido` : 'últimos recebidos'}
+              {alertasSemDePara > 0 ? `${alertasSemDePara} sem de-para resolvido` : 'recebidos nas últimas 24h'}
             </p>
           </Card>
           <Card>
@@ -226,7 +249,7 @@ function DashboardContent() {
               <p className="text-xs text-amx-muted">Nenhum alerta recebido.</p>
             ) : (
               <div className="space-y-3">
-                {alertas.map((a) => (
+                {alertas.slice(0, ALERTAS_VISIVEIS).map((a) => (
                   <div key={a.id} className="flex items-start gap-2.5">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 bg-amx-muted" aria-hidden />
                     <div className="min-w-0 flex-1">
@@ -267,6 +290,7 @@ function DashboardContent() {
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge tone="neutral">{r.total} em aberto</Badge>
                     {r.urgentes > 0 && <Badge tone="red">{r.urgentes} urgente{r.urgentes > 1 ? 's' : ''}</Badge>}
+                    {r.altas > 0 && <Badge tone="warning">{r.altas} alta{r.altas > 1 ? 's' : ''}</Badge>}
                   </div>
                 </div>
               ))}

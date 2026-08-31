@@ -82,6 +82,62 @@ export function computeOsPrioridade(
   return { nivel, label: meta.label, tone: meta.tone, elapsedHours, elapsedLabel };
 }
 
+const NIVEL_PESO: Record<OsPrioridade, number> = { urgente: 0, alta: 1, normal: 2, baixa: 3 };
+
+// Comparador da lista de OS: mais urgente primeiro; dentro do mesmo nível, a
+// mais antiga primeiro (quem está esperando há mais tempo sobe).
+export function compararPorPrioridade(a: OS, b: OS): number {
+  const pa = computeOsPrioridade(a);
+  const pb = computeOsPrioridade(b);
+  const diff = NIVEL_PESO[pa.nivel] - NIVEL_PESO[pb.nivel];
+  return diff !== 0 ? diff : pb.elapsedHours - pa.elapsedHours;
+}
+
+export interface RotaCondominio {
+  condominio_id: string;
+  total: number;
+  /** OS no nível visual "urgente" — mesma escala dos badges da tela. */
+  urgentes: number;
+  /** OS no nível visual "alta". */
+  altas: number;
+  /** OS ativas do condomínio, já ordenadas por prioridade. */
+  oss: OS[];
+}
+
+// Agrupa as OS ATIVAS por condomínio para a tela de Gestão de Rotas e o card
+// "Rota do Dia" do dashboard.
+//
+// Existe apesar de computeResumoRotas em src/lib/sla.ts porque aquele conta
+// urgentes por `os.prioridade === 'alta'` (o campo manual cru, de 3 níveis),
+// enquanto os badges da tela usam computeOsPrioridade (a escala visual de 4
+// níveis, que escala por tipo/origem/tempo em aberto). Uma corretiva
+// automática do Hermes com prioridade manual "media" aparecia com badge
+// "Urgente" e o card do condomínio dizia "0 urgentes" — e o sort chegava a
+// empurrar o condomínio mais crítico para baixo. Aqui a contagem e a ordem
+// saem da MESMA função que pinta o badge, então não há como divergirem.
+export function resumoRotasPorCondominio(oss: OS[]): RotaCondominio[] {
+  const porCondominio = new Map<string, OS[]>();
+  for (const os of oss) {
+    if (os.status === 'finalizada' || os.status === 'cancelada') continue;
+    const lista = porCondominio.get(os.condominio_id) || [];
+    lista.push(os);
+    porCondominio.set(os.condominio_id, lista);
+  }
+
+  return Array.from(porCondominio.entries())
+    .map(([condominio_id, lista]) => {
+      const niveis = lista.map((os) => computeOsPrioridade(os).nivel);
+      return {
+        condominio_id,
+        total: lista.length,
+        urgentes: niveis.filter((n) => n === 'urgente').length,
+        altas: niveis.filter((n) => n === 'alta').length,
+        oss: [...lista].sort(compararPorPrioridade),
+      };
+    })
+    .sort((a, b) => b.urgentes - a.urgentes || b.altas - a.altas || b.total - a.total);
+}
+
 export const OS_TIPO_LABELS: Record<OS['tipo'], string> = {
   preventiva: 'Preventiva',
   corretiva: 'Corretiva',

@@ -8,22 +8,12 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { OSModal } from '@/components/os/OSModal';
 import { canManageOS } from '@/lib/permissions';
-import { computeOsPrioridade, OS_STATUS_LABELS } from '@/lib/os-priority';
-import { computeResumoRotas } from '@/lib/sla';
+import { computeOsPrioridade, resumoRotasPorCondominio, OS_STATUS_LABELS } from '@/lib/os-priority';
 import type { Condominio, OS } from '@/lib/db';
 
 interface TecnicoLite {
   id: string;
   nome: string;
-}
-
-const PRIORIDADE_ORDER = { urgente: 0, alta: 1, normal: 2, baixa: 3 } as const;
-
-function initials(nome: string): string {
-  const parts = nome.trim().split(/\s+/);
-  const first = parts[0]?.[0] ?? '';
-  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
-  return (first + last).toUpperCase();
 }
 
 function RotasContent() {
@@ -64,8 +54,13 @@ function RotasContent() {
       if (condRes.ok) setCondominios((await condRes.json()).condominios ?? []);
       if (userRes?.ok) {
         const data = await userRes.json();
-        const users: { id: string; nome: string; papel: string }[] = data.users || [];
-        setTecnicos(users.filter((u) => u.papel === 'tecnico'));
+        const users: { id: string; nome: string; papel?: string }[] = data.users || [];
+        // GET /api/users devolve dois formatos: admin recebe a lista completa
+        // (com `papel`), técnico recebe um payload reduzido `{id, nome}` que
+        // JÁ vem só com técnicos ativos. Filtrar por `papel === 'tecnico'`
+        // zerava a lista inteira pro técnico (o campo nem existe no payload
+        // dele) — daí aceitar também quem chega sem `papel`.
+        setTecnicos(users.filter((u) => u.papel === undefined || u.papel === 'tecnico'));
       }
     } catch {
       setError('Erro de conexão ao carregar as rotas.');
@@ -81,39 +76,19 @@ function RotasContent() {
     load();
   }, []);
 
-  const ossAtivas = useMemo(
-    () => oss.filter((o) => o.status !== 'finalizada' && o.status !== 'cancelada'),
-    [oss]
+  const grupos = useMemo(
+    () =>
+      resumoRotasPorCondominio(oss).map((r) => ({ ...r, nome: condominioNome(r.condominio_id) })),
+    [oss, condominioNome]
   );
-
-  const grupos = useMemo(() => {
-    const porCondominio = new Map<string, OS[]>();
-    for (const os of ossAtivas) {
-      const lista = porCondominio.get(os.condominio_id) || [];
-      lista.push(os);
-      porCondominio.set(os.condominio_id, lista);
-    }
-    const resumo = new Map(computeResumoRotas(ossAtivas).map((r) => [r.condominio_id, r]));
-    return Array.from(porCondominio.entries())
-      .map(([condominio_id, lista]) => ({
-        condominio_id,
-        nome: condominioNome(condominio_id),
-        urgentes: resumo.get(condominio_id)?.urgentes ?? 0,
-        total: lista.length,
-        oss: [...lista].sort((a, b) => {
-          const pa = computeOsPrioridade(a);
-          const pb = computeOsPrioridade(b);
-          const diff = PRIORIDADE_ORDER[pa.nivel] - PRIORIDADE_ORDER[pb.nivel];
-          return diff !== 0 ? diff : pb.elapsedHours - pa.elapsedHours;
-        }),
-      }))
-      .sort((a, b) => b.urgentes - a.urgentes || b.total - a.total);
-  }, [ossAtivas, condominioNome]);
 
   const totalUrgentes = useMemo(() => grupos.reduce((acc, g) => acc + g.urgentes, 0), [grupos]);
 
   const marcarVisitado = async (os: OS) => {
     setVisitando(os.id);
+    // Limpa o erro da tentativa anterior: sem isso o banner de "Falha ao
+    // marcar visita" continuava na tela mesmo depois de um retry que deu certo.
+    setError('');
     try {
       const res = await fetch(`/api/os/${os.id}`, {
         method: 'PATCH',
@@ -134,6 +109,21 @@ function RotasContent() {
   };
 
   if (!user) return null;
+
+  // Gestão de Rotas é tela de operação (admin ou técnico), igual ao gate do
+  // menu no AppShell. Sem isto o síndico não via o ícone mas abria a tela
+  // digitando a URL. Não é vazamento — o GET /api/os já escopa o síndico ao
+  // próprio condomínio no servidor — mas é uma tela que não é dele.
+  if (!canManageOS(user.role)) {
+    return (
+      <div className="flex-1 flex items-center justify-center px-4">
+        <EmptyState
+          title="Acesso negado"
+          description="A gestão de rotas é restrita à equipe de operação (administrador ou técnico)."
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -171,6 +161,7 @@ function RotasContent() {
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge tone="neutral">{g.total} em aberto</Badge>
                     {g.urgentes > 0 && <Badge tone="red">{g.urgentes} urgente{g.urgentes > 1 ? 's' : ''}</Badge>}
+                    {g.altas > 0 && <Badge tone="warning">{g.altas} alta{g.altas > 1 ? 's' : ''}</Badge>}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -197,7 +188,10 @@ function RotasContent() {
                             </p>
                             <p className="text-[11px] text-amx-muted truncate">
                               {OS_STATUS_LABELS[os.status]} · aberta há {prioridade.elapsedLabel}
-                              {os.tecnico_id ? ` · ${tecnicoNome(os.tecnico_id) ?? initials(os.tecnico_id)}` : ' · não atribuído'}
+                              {/* Sem cair pro id: o fallback anterior passava o
+                                  UUID do técnico pela função de iniciais e
+                                  exibia uma letra sem sentido na tela. */}
+                              {os.tecnico_id ? ` · ${tecnicoNome(os.tecnico_id) ?? 'técnico atribuído'}` : ' · não atribuído'}
                             </p>
                           </div>
                           <Badge tone={prioridade.nivel === 'urgente' ? 'red' : prioridade.nivel === 'alta' ? 'warning' : 'info'}>

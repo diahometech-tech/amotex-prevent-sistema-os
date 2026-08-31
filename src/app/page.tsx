@@ -98,8 +98,13 @@ function OsListContent() {
       }
       if (userRes?.ok) {
         const data = await userRes.json();
-        const users: { id: string; nome: string; papel: string }[] = data.users || [];
-        setTecnicos(users.filter((u) => u.papel === 'tecnico'));
+        const users: { id: string; nome: string; papel?: string }[] = data.users || [];
+        // Admin recebe a lista completa (com `papel`); técnico recebe um
+        // payload reduzido `{id, nome}` que já vem só com técnicos ativos —
+        // filtrar por `papel === 'tecnico'` zerava a lista pro técnico, que
+        // ficava sem nome/avatar de responsável e com o seletor de "Nova OS"
+        // vazio (ver o comentário do GET em src/app/api/users/route.ts).
+        setTecnicos(users.filter((u) => u.papel === undefined || u.papel === 'tecnico'));
       }
     } catch {
       setError('Erro de conexão ao carregar as ordens de serviço.');
