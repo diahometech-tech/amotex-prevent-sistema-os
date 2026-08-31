@@ -17,10 +17,15 @@ interface CatalogoItem {
   potencia_hp?: number;
 }
 
+// O label é a chave que identifica o item do catálogo (value do <option>,
+// key do React e critério de match na seleção), então precisa ser único.
+// `if (item.potencia_hp)` era falso para 0 — e o campo aceita 0 (`min="0"`) —
+// fazendo "Bomba X com 0 HP" e "Bomba X sem potência" colidirem no mesmo
+// label: chave duplicada no React e seleção do item errado.
 function catalogoLabel(item: CatalogoItem): string {
   const partes = [item.tipo];
   if (item.modelo) partes.push(item.modelo);
-  if (item.potencia_hp) partes.push(`${item.potencia_hp} HP`);
+  if (item.potencia_hp != null) partes.push(`${item.potencia_hp} HP`);
   return partes.join(' — ');
 }
 

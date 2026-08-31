@@ -58,7 +58,28 @@ Feito até agora:
 - `scripts/seed.ts` (`npm run seed`) — dados de exemplo pra dev/teste local: 2 condomínios, reservatórios com de-para SensorLog, cadeia de contatos por nível de escalonamento, 1 usuária síndica escopada (`marisa.sindica` / `sindica123`), 4 OS cobrindo tipo/status/prioridade/origem diferentes (inclusive uma com checklist obrigatório pendente, pra exercitar a trava de `finalizarOS`). Usa a classe `Database` — roda contra o backend JSON local por padrão, ou contra o Postgres se `DATABASE_URL` estiver definido no ambiente.
 - Banco de produção provisionado na VPS (`amotex_os`, schema aplicado) — ver `CLAUDE.md` do repo `amotex-prevent-infra`. Ainda sem dados de exemplo lá (seed rodou só localmente até agora).
 
+**Feito em 31/08 (frontend — fecha a issue #5 e a #6):**
+- **Dashboard admin (`/dashboard`)** — KPIs (OS abertas, pendências críticas, alertas nas últimas 24h, condomínios monitorados), lista de OS que precisam de atenção (abre o `OSModal`), alertas recentes e resumo de rota do dia. Admin apenas: o gate real é o 403 do servidor em `GET /api/alertas`, não uma checagem de papel no cliente. Alerta com de-para não resolvido é sinalizado na tela, nunca escondido.
+- **Gestão de Rotas (`/rotas`)** — OS ativas agrupadas por condomínio (mais crítico primeiro), com "Marcar Visitado" (`PATCH /api/os/[id]` com `entrada_em` + `status: em_andamento`) e detalhe via `OSModal`. Admin ou técnico.
+- **Catálogo de equipamento no `EquipamentoForm`** — combobox (`<datalist>` nativo) sobre `GET /api/equipamentos/catalogo`; selecionar preenche tipo/modelo/potência, digitar algo novo segue como cadastro manual.
+- **`AppShell`**: nav unificada com `gate` por item, reaproveitando `canManageUsers`/`canManageOS` de `permissions.ts`.
+
+**Correções da revisão de código do frontend (mesmo dia, 8 achados confirmados + 1 achado próprio):**
+- **Técnico nunca via nome de técnico nenhum** (`/` e `/rotas`): `GET /api/users` responde em dois formatos — admin recebe a lista completa (com `papel`), técnico recebe `{id, nome}` reduzido (já só com técnicos ativos). O filtro `papel === 'tecnico'` zerava a lista inteira pro técnico. Agora aceita também quem chega sem `papel`.
+- **Contagem de "urgentes" divergia do badge da própria tela**: `computeResumoRotas` (em `sla.ts`) conta por `os.prioridade === 'alta'` (campo manual cru de 3 níveis), enquanto os badges usam `computeOsPrioridade` (escala visual de 4 níveis, que escala por tipo/origem/tempo). Uma corretiva automática com prioridade "media" aparecia com badge **Urgente** e o card dizia **0 urgentes** — e o `sort` chegava a empurrar o condomínio mais crítico para baixo. Corrigido com `resumoRotasPorCondominio()` novo em `src/lib/os-priority.ts` (contagem e ordem saem da MESMA função que pinta o badge). `sla.ts` é do backend e **não foi tocado** — a divergência foi reportada lá.
+- **Falha do `GET /api/os` no dashboard era silenciosa**: KPIs zeravam sem aviso e o admin lia "nada pendente". Agora qualquer fonte que falhar aparece num banner nomeando o que não carregou.
+- **KPI de alertas saturava em 15** (era o `?limit=` do fetch exibido como número real). Agora busca 100 e o KPI conta uma janela real de 24h; a lista lateral continua cortada em 15.
+- Fallback de técnico não resolvido passava o **UUID pela função de iniciais** e exibia uma letra sem sentido — removido.
+- Banner de erro do "Marcar Visitado" **não limpava** num retry bem-sucedido.
+- `catalogoLabel` **colidia com `potencia_hp = 0`** (o campo aceita 0): chave duplicada no React e seleção do item errado no datalist.
+- **Achado próprio, fora da revisão**: o síndico não via o ícone de Rotas mas abria a tela pela URL. Sem vazamento (o `GET /api/os` já escopa síndico ao próprio condomínio no servidor), mas a tela ganhou o mesmo gate do menu.
+- Não corrigido de propósito: `<Button>` dentro de `<Link>` é aninhamento interativo inválido, mas é o padrão já usado em `painel/[id]` e `condominios/[id]` (3 ocorrências) — mexer só numa criaria inconsistência. Vale uma passada dedicada no projeto inteiro.
+
+**Validação dessas correções** (não só leitura de código): `tsc` e `eslint` limpos, `npm run build` OK, e teste ponta a ponta em navegador real (Playwright) nos 3 papéis — nome de técnico resolvendo como técnico, contagens batendo com os badges, banner de erro aparecendo com a API derrubada e limpando no retry, catálogo sem colisão em 0 HP, e RBAC conferido em `/dashboard` e `/rotas`.
+
 ## Armadilhas herdadas do NexusFlow (continuam valendo aqui)
 
 - Nunca rodar `npm run build` com o `dev` ativo — corrompe o cache do `.next` (Turbopack)
 - Se houver Service Worker, restringir escopo — um `sw.js` com escopo `/` já cacheou API e serviu dado velho no projeto original
+- `GET /api/users` tem **dois formatos de resposta** conforme o papel (completo pro admin, `{id, nome}` pro técnico). Qualquer filtro por `papel` no cliente precisa tolerar o campo ausente — já quebrou a lista de técnicos duas vezes.
+- Escala de prioridade tem **duas fontes**: `os.prioridade` (campo manual, 3 níveis, no banco) e `computeOsPrioridade` (escala visual, 4 níveis, com agravantes). Contagem/ordenação exibida ao lado de um badge tem que usar a mesma função do badge, senão diverge silenciosamente.
