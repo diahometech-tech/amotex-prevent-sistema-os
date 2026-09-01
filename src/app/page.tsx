@@ -9,7 +9,9 @@ import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { Field, Select, Textarea } from '@/components/ui/Form';
 import { OSModal } from '@/components/os/OSModal';
 import { canManageOS } from '@/lib/permissions';
-import { computeOsPrioridade, OS_STATUS_LABELS, type OsPrioridade } from '@/lib/os-priority';
+import { computeOsPrioridade, compararPorPrioridade, OS_STATUS_LABELS, type OsPrioridade } from '@/lib/os-priority';
+import { useCondominioNome } from '@/lib/useCondominioNome';
+import { parseTecnicosResponse, type TecnicoLite } from '@/lib/tecnicos';
 import type { Condominio, OS, OsStatus, OsTipo } from '@/lib/db';
 
 // Os 3 níveis do campo manual os.prioridade (distinto de OsPrioridade, a
@@ -18,24 +20,8 @@ type OsPrioridadeManual = NonNullable<OS['prioridade']>;
 
 type StatusFiltro = 'ativas' | OsStatus | 'todas';
 
-interface TecnicoLite {
-  id: string;
-  nome: string;
-}
-
-const PRIORIDADE_ORDER: Record<OsPrioridade, number> = { urgente: 0, alta: 1, normal: 2, baixa: 3 };
 const ROW_GRID = 'grid-cols-[28px_2.2fr_1.1fr_1fr_1.1fr_100px_20px]';
 const AVATAR_TONES = ['bg-amx-blue', 'bg-amx-red', 'bg-amx-green', 'bg-amx-amber'];
-
-function ordenarPorPrioridade(oss: OS[]): OS[] {
-  return [...oss].sort((a, b) => {
-    const pa = computeOsPrioridade(a);
-    const pb = computeOsPrioridade(b);
-    const diff = PRIORIDADE_ORDER[pa.nivel] - PRIORIDADE_ORDER[pb.nivel];
-    if (diff !== 0) return diff;
-    return pb.elapsedHours - pa.elapsedHours; // dentro do mesmo nível, a mais antiga primeiro
-  });
-}
 
 function initials(nome: string): string {
   const parts = nome.trim().split(/\s+/);
@@ -66,10 +52,7 @@ function OsListContent() {
   const [showCreate, setShowCreate] = useState(false);
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
 
-  const condominioNome = useMemo(() => {
-    const map = new Map(condominios.map((c) => [c.id, c.nome]));
-    return (id: string) => map.get(id) || 'Condomínio desconhecido';
-  }, [condominios]);
+  const condominioNome = useCondominioNome(condominios);
 
   const tecnicoNome = useMemo(() => {
     const map = new Map(tecnicos.map((t) => [t.id, t.nome]));
@@ -97,14 +80,7 @@ function OsListContent() {
         setCondominios(data.condominios || []);
       }
       if (userRes?.ok) {
-        const data = await userRes.json();
-        const users: { id: string; nome: string; papel?: string }[] = data.users || [];
-        // Admin recebe a lista completa (com `papel`); técnico recebe um
-        // payload reduzido `{id, nome}` que já vem só com técnicos ativos —
-        // filtrar por `papel === 'tecnico'` zerava a lista pro técnico, que
-        // ficava sem nome/avatar de responsável e com o seletor de "Nova OS"
-        // vazio (ver o comentário do GET em src/app/api/users/route.ts).
-        setTecnicos(users.filter((u) => u.papel === undefined || u.papel === 'tecnico'));
+        setTecnicos(parseTecnicosResponse(await userRes.json()));
       }
     } catch {
       setError('Erro de conexão ao carregar as ordens de serviço.');
@@ -135,7 +111,7 @@ function OsListContent() {
     });
   }, [oss, statusFiltro, tipoFiltro, condominioFiltro, busca, condominioNome, tecnicoNome]);
 
-  const ordenadas = useMemo(() => ordenarPorPrioridade(filtradas), [filtradas]);
+  const ordenadas = useMemo(() => [...filtradas].sort(compararPorPrioridade), [filtradas]);
   const totalAbertas = useMemo(() => oss.filter((o) => o.status !== 'finalizada' && o.status !== 'cancelada').length, [oss]);
   const totalPrioridadeAlta = useMemo(
     () =>
