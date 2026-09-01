@@ -63,8 +63,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       try {
         os = await Database.finalizarOS(id, updates);
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Não foi possível finalizar a OS.';
-        return NextResponse.json({ error: message }, { status: 422 });
+        // finalizarOS só lança de propósito a mensagem de checklist pendente
+        // (ver src/lib/db.ts) — essa é segura pra mostrar ao usuário verbatim.
+        // Qualquer outra coisa (erro de driver do Postgres, violação de
+        // constraint) não pode vazar pro cliente: registra e troca por uma
+        // mensagem genérica, igual ao resto das rotas.
+        const CHECKLIST_PENDENTE = 'Existem itens obrigatórios do checklist não concluídos.';
+        if (e instanceof Error && e.message === CHECKLIST_PENDENTE) {
+          return NextResponse.json({ error: e.message }, { status: 422 });
+        }
+        console.error('Erro ao finalizar OS:', e);
+        return NextResponse.json({ error: 'Não foi possível finalizar a OS.' }, { status: 422 });
       }
       if (!os) return NextResponse.json({ error: 'OS não encontrada.' }, { status: 404 });
 
