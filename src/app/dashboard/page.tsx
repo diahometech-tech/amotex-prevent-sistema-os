@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { OSModal } from '@/components/os/OSModal';
 import { computeOsPrioridade, compararPorPrioridade, resumoRotasPorCondominio } from '@/lib/os-priority';
+import { useCondominioNome } from '@/lib/useCondominioNome';
 import type { Alerta, Condominio, EventoAlerta, OS } from '@/lib/db';
 
 // Shape devolvido por GET /api/alertas: reservatorio/condominio já
@@ -59,10 +60,7 @@ function DashboardContent() {
   const [carregadoEm, setCarregadoEm] = useState<number | null>(null);
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
 
-  const condominioNome = useMemo(() => {
-    const map = new Map(condominios.map((c) => [c.id, c.nome]));
-    return (id: string) => map.get(id) || 'Condomínio desconhecido';
-  }, [condominios]);
+  const condominioNome = useCondominioNome(condominios);
 
   const load = async () => {
     try {
@@ -136,7 +134,16 @@ function DashboardContent() {
     const corte = carregadoEm - 24 * 60 * 60 * 1000;
     return alertas.filter((a) => new Date(a.recebido_em).getTime() >= corte).length;
   }, [alertas, carregadoEm]);
-  const alertasSemDePara = useMemo(() => alertas.filter((a) => !a.reservatorio).length, [alertas]);
+  // De-para não resolvido cobre DOIS casos: reservatorio_id do alerta sem
+  // reservatório cadastrado (a.reservatorio null), OU reservatório existe
+  // mas o condominio_id dele não bate com nenhum condomínio (a.condominio
+  // null mesmo com a.reservatorio presente — condomínio apagado, por
+  // exemplo). Contar só !a.reservatorio subestimava esse segundo caso e o
+  // texto do card correspondente errava o diagnóstico (issue #13).
+  const alertasSemDePara = useMemo(
+    () => alertas.filter((a) => !a.reservatorio || !a.condominio).length,
+    [alertas]
+  );
   const condominiosMonitorados = useMemo(
     () => condominios.filter((c) => c.monitoramento_ativo).length,
     [condominios]
@@ -255,10 +262,14 @@ function DashboardContent() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <Badge tone={EVENTO_TONE[a.evento]}>{EVENTO_LABELS[a.evento]}</Badge>
-                        {!a.reservatorio && <Badge tone="neutral">De-para não resolvido</Badge>}
+                        {(!a.reservatorio || !a.condominio) && <Badge tone="neutral">De-para não resolvido</Badge>}
                       </div>
                       <p className="text-xs text-white mt-1 truncate">
-                        {a.condominio ? `${a.condominio.nome} · ${a.reservatorio!.nome_interno}` : 'Reservatório não identificado'}
+                        {a.condominio && a.reservatorio
+                          ? `${a.condominio.nome} · ${a.reservatorio.nome_interno}`
+                          : a.reservatorio
+                            ? `Condomínio não identificado · ${a.reservatorio.nome_interno}`
+                            : 'Reservatório não identificado'}
                       </p>
                       <p className="text-[11px] text-amx-muted">{formatRecebidoEm(a.recebido_em)}</p>
                     </div>

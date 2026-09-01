@@ -9,12 +9,9 @@ import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { OSModal } from '@/components/os/OSModal';
 import { canManageOS } from '@/lib/permissions';
 import { computeOsPrioridade, resumoRotasPorCondominio, OS_STATUS_LABELS } from '@/lib/os-priority';
+import { useCondominioNome } from '@/lib/useCondominioNome';
+import { parseTecnicosResponse, type TecnicoLite } from '@/lib/tecnicos';
 import type { Condominio, OS } from '@/lib/db';
-
-interface TecnicoLite {
-  id: string;
-  nome: string;
-}
 
 function RotasContent() {
   const user = useAmxUser();
@@ -27,10 +24,7 @@ function RotasContent() {
   const [visitando, setVisitando] = useState<string | null>(null);
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
 
-  const condominioNome = useMemo(() => {
-    const map = new Map(condominios.map((c) => [c.id, c.nome]));
-    return (id: string) => map.get(id) || 'Condomínio desconhecido';
-  }, [condominios]);
+  const condominioNome = useCondominioNome(condominios);
 
   const tecnicoNome = useMemo(() => {
     const map = new Map(tecnicos.map((t) => [t.id, t.nome]));
@@ -53,14 +47,7 @@ function RotasContent() {
       }
       if (condRes.ok) setCondominios((await condRes.json()).condominios ?? []);
       if (userRes?.ok) {
-        const data = await userRes.json();
-        const users: { id: string; nome: string; papel?: string }[] = data.users || [];
-        // GET /api/users devolve dois formatos: admin recebe a lista completa
-        // (com `papel`), técnico recebe um payload reduzido `{id, nome}` que
-        // JÁ vem só com técnicos ativos. Filtrar por `papel === 'tecnico'`
-        // zerava a lista inteira pro técnico (o campo nem existe no payload
-        // dele) — daí aceitar também quem chega sem `papel`.
-        setTecnicos(users.filter((u) => u.papel === undefined || u.papel === 'tecnico'));
+        setTecnicos(parseTecnicosResponse(await userRes.json()));
       }
     } catch {
       setError('Erro de conexão ao carregar as rotas.');
