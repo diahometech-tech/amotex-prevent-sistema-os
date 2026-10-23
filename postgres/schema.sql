@@ -107,6 +107,10 @@ CREATE TABLE IF NOT EXISTS os (
   entrada_em TIMESTAMPTZ,
   saida_em TIMESTAMPTZ,
   observacao TEXT,
+  data_programada DATE, -- dia da visita (rota do dia do técnico)
+  solicitante_nome TEXT, -- chamado de corretiva sem sensor: quem pediu
+  solicitante_telefone TEXT,
+  descricao_problema TEXT,
   assinatura_zelador_url TEXT,
   assinatura_tecnico_url TEXT,
   pdf_url TEXT,
@@ -155,6 +159,7 @@ CREATE INDEX IF NOT EXISTS idx_contato_condominio ON contato(condominio_id);
 CREATE INDEX IF NOT EXISTS idx_equipamento_condominio ON equipamento(condominio_id);
 CREATE INDEX IF NOT EXISTS idx_alerta_reservatorio ON alerta(reservatorio_id);
 CREATE INDEX IF NOT EXISTS idx_os_condominio ON os(condominio_id);
+CREATE INDEX IF NOT EXISTS idx_os_data_programada ON os(data_programada);
 CREATE INDEX IF NOT EXISTS idx_checklist_os ON checklist_item(os_id);
 CREATE INDEX IF NOT EXISTS idx_foto_os ON foto(os_id);
 CREATE INDEX IF NOT EXISTS idx_escalonamento_alerta ON escalonamento(alerta_id);

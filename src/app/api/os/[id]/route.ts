@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Database } from '@/lib/db';
+import { Database, FinalizacaoBloqueadaError } from '@/lib/db';
+import { normalizarDataProgramada } from '@/lib/os-agenda';
 import { getSessionFromRequest, getClientIp, canAccessCondominio } from '@/lib/auth';
 import { saveAssinaturaDataUrl, saveOsPdfBuffer } from '@/lib/uploads';
 import { generateOsPdf } from '@/lib/os-pdf';
@@ -43,8 +44,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const body = await request.json();
     const { finalizar, assinatura_zelador, assinatura_tecnico, ...rest } = body;
     const updates: Record<string, unknown> = {};
-    for (const f of ['status', 'prioridade', 'tecnico_id', 'entrada_em', 'saida_em', 'observacao'] as const) {
+    for (const f of [
+      'status', 'prioridade', 'tecnico_id', 'entrada_em', 'saida_em', 'observacao',
+      'solicitante_nome', 'solicitante_telefone', 'descricao_problema',
+    ] as const) {
       if (rest[f] !== undefined) updates[f] = rest[f];
+    }
+    // tecnico_id vazio = desatribuir (o <select> manda ''; a coluna é UUID).
+    if (updates.tecnico_id === '') updates.tecnico_id = null;
+    if (rest.data_programada !== undefined) {
+      const data = normalizarDataProgramada(rest.data_programada);
+      if (data === undefined) return NextResponse.json({ error: 'Data da visita inválida.' }, { status: 400 });
+      updates.data_programada = data;
     }
 
     if (typeof assinatura_zelador === 'string') {
@@ -63,14 +74,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       try {
         os = await Database.finalizarOS(id, updates);
       } catch (e) {
-        // finalizarOS só lança de propósito a mensagem de checklist pendente
-        // (ver src/lib/db.ts) — essa é segura pra mostrar ao usuário verbatim.
-        // Qualquer outra coisa (erro de driver do Postgres, violação de
-        // constraint) não pode vazar pro cliente: registra e troca por uma
-        // mensagem genérica, igual ao resto das rotas.
-        const CHECKLIST_PENDENTE = 'Existem itens obrigatórios do checklist não concluídos.';
-        if (e instanceof Error && e.message === CHECKLIST_PENDENTE) {
-          return NextResponse.json({ error: e.message }, { status: 422 });
+        // finalizarOS só lança de propósito FinalizacaoBloqueadaError (trava
+        // de qualidade — ver src/lib/os-finalizacao.ts), cujas pendências são
+        // seguras pra mostrar ao usuário verbatim. Qualquer outra coisa (erro
+        // de driver do Postgres, violação de constraint) não pode vazar pro
+        // cliente: registra e troca por uma mensagem genérica.
+        if (e instanceof FinalizacaoBloqueadaError) {
+          return NextResponse.json(
+            { error: `${e.message} ${e.pendencias.join('; ')}.`, pendencias: e.pendencias },
+            { status: 422 }
+          );
         }
         console.error('Erro ao finalizar OS:', e);
         return NextResponse.json({ error: 'Não foi possível finalizar a OS.' }, { status: 422 });

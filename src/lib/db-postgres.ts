@@ -15,7 +15,11 @@ let ready: Promise<void> | null = null;
 function getPool(): Pool {
   if (!pool) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { Pool: PgPool } = require('pg') as typeof import('pg');
+    const { Pool: PgPool, types } = require('pg') as typeof import('pg');
+    // DATE (OID 1082) volta como string YYYY-MM-DD, não como Date: o driver
+    // converteria pra meia-noite no fuso do servidor e os.data_programada
+    // (data de calendário — ver src/lib/os-agenda.ts) mudaria de dia no JSON.
+    types.setTypeParser(1082, (v: string) => v);
     const url = process.env.DATABASE_URL ?? '';
     pool = new PgPool({
       connectionString: url,
@@ -188,6 +192,14 @@ async function runSchemaMigration(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_checklist_os ON checklist_item(os_id);
     CREATE INDEX IF NOT EXISTS idx_foto_os ON foto(os_id);
     CREATE INDEX IF NOT EXISTS idx_escalonamento_alerta ON escalonamento(alerta_id);
+
+    -- Migrações aditivas (banco de produção já existe — CREATE TABLE IF NOT
+    -- EXISTS não acrescenta coluna nova em tabela antiga).
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS data_programada DATE;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS solicitante_nome TEXT;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS solicitante_telefone TEXT;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS descricao_problema TEXT;
+    CREATE INDEX IF NOT EXISTS idx_os_data_programada ON os(data_programada);
   `);
 
   const { rows } = await p.query('SELECT COUNT(*)::int AS n FROM usuario');
@@ -404,17 +416,19 @@ export const pgBackend: DbBackend = {
   },
   async insertOS(os) {
     await q(
-      `INSERT INTO os (id, condominio_id, tipo, origem, alerta_id, status, prioridade, tecnico_id, entrada_em, saida_em, observacao, assinatura_zelador_url, assinatura_tecnico_url, pdf_url, criado_em)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      `INSERT INTO os (id, condominio_id, tipo, origem, alerta_id, status, prioridade, tecnico_id, entrada_em, saida_em, observacao, assinatura_zelador_url, assinatura_tecnico_url, pdf_url, criado_em, data_programada, solicitante_nome, solicitante_telefone, descricao_problema)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [os.id, os.condominio_id, os.tipo, os.origem, os.alerta_id ?? null, os.status, os.prioridade, os.tecnico_id ?? null,
        os.entrada_em ?? null, os.saida_em ?? null, os.observacao ?? null,
-       os.assinatura_zelador_url ?? null, os.assinatura_tecnico_url ?? null, os.pdf_url ?? null, os.criado_em]
+       os.assinatura_zelador_url ?? null, os.assinatura_tecnico_url ?? null, os.pdf_url ?? null, os.criado_em,
+       os.data_programada ?? null, os.solicitante_nome ?? null, os.solicitante_telefone ?? null, os.descricao_problema ?? null]
     );
   },
   async updateOS(id, updates) {
     const allowed = [
       'status', 'prioridade', 'tecnico_id', 'entrada_em', 'saida_em', 'observacao',
       'assinatura_zelador_url', 'assinatura_tecnico_url', 'pdf_url',
+      'data_programada', 'solicitante_nome', 'solicitante_telefone', 'descricao_problema',
     ];
     const { sets, vals } = buildSet(allowed, updates);
     if (sets.length === 0) return this.getOSById(id);

@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { OSModal } from '@/components/os/OSModal';
 import { computeOsPrioridade, compararPorPrioridade, resumoRotasPorCondominio } from '@/lib/os-priority';
+import { hojeISO, montarRotaDoDia } from '@/lib/os-agenda';
 import type { Alerta, Condominio, EventoAlerta, OS } from '@/lib/db';
 
 // Shape devolvido por GET /api/alertas: reservatorio/condominio já
@@ -142,11 +143,14 @@ function DashboardContent() {
     [condominios]
   );
 
-  const resumoRotas = useMemo(
-    () =>
-      resumoRotasPorCondominio(oss).map((r) => ({ ...r, nome: condominioNome(r.condominio_id) })),
-    [oss, condominioNome]
-  );
+  // Rota do dia = mesma regra da tela /rotas (agendadas pra hoje + atrasadas).
+  const resumoRotas = useMemo(() => {
+    const rota = montarRotaDoDia(oss, hojeISO());
+    return resumoRotasPorCondominio([...rota.doDia, ...rota.atrasadas]).map((r) => ({
+      ...r,
+      nome: condominioNome(r.condominio_id),
+    }));
+  }, [oss, condominioNome]);
 
   if (!user) return null;
 
@@ -278,7 +282,7 @@ function DashboardContent() {
             </Link>
           </div>
           {resumoRotas.length === 0 ? (
-            <p className="text-xs text-amx-muted">Nenhuma OS em aberto no momento.</p>
+            <p className="text-xs text-amx-muted">Nenhuma visita agendada para hoje.</p>
           ) : (
             <div className="space-y-2">
               {resumoRotas.slice(0, 6).map((r) => (
@@ -288,7 +292,7 @@ function DashboardContent() {
                 >
                   <p className="text-xs font-semibold text-white truncate">{r.nome}</p>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Badge tone="neutral">{r.total} em aberto</Badge>
+                    <Badge tone="neutral">{r.total} OS</Badge>
                     {r.urgentes > 0 && <Badge tone="red">{r.urgentes} urgente{r.urgentes > 1 ? 's' : ''}</Badge>}
                     {r.altas > 0 && <Badge tone="warning">{r.altas} alta{r.altas > 1 ? 's' : ''}</Badge>}
                   </div>

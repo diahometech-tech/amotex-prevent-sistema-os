@@ -11,6 +11,7 @@
 // "urgente" é só alcançável por agravante (nunca base manual direta) — é o
 // 4º nível da escala visual, sem equivalente direto no campo manual de 3.
 import type { OS } from './db';
+import { inicioDoDiaProgramado } from './os-agenda';
 
 export type OsPrioridade = 'urgente' | 'alta' | 'normal' | 'baixa';
 
@@ -55,7 +56,7 @@ function fmtDuration(hours: number): string {
 }
 
 export function computeOsPrioridade(
-  os: Pick<OS, 'tipo' | 'origem' | 'status' | 'criado_em' | 'prioridade'>
+  os: Pick<OS, 'tipo' | 'origem' | 'status' | 'criado_em' | 'prioridade'> & Partial<Pick<OS, 'data_programada'>>
 ): OsPrioridadeInfo {
   const now = Date.now();
   const criado = os.criado_em ? new Date(os.criado_em).getTime() : now;
@@ -74,8 +75,12 @@ export function computeOsPrioridade(
   if (os.tipo === 'corretiva') {
     const urgente = os.origem === 'hermes_automatica' || elapsedHours >= URGENTE_CORRETIVA_HORAS;
     nivel = maiorNivel(nivel, urgente ? 'urgente' : 'alta');
-  } else if (elapsedHours >= ALTA_PREVENTIVA_HORAS) {
-    nivel = maiorNivel(nivel, 'alta');
+  } else {
+    // Preventiva agendada conta o atraso a partir do DIA DA VISITA, não da
+    // criação: a rota da semana que vem é criada com dias de antecedência e
+    // não pode aparecer "Alta" antes de chegar o dia dela.
+    const referencia = os.data_programada ? inicioDoDiaProgramado(os.data_programada) : criado;
+    if ((now - referencia) / 3_600_000 >= ALTA_PREVENTIVA_HORAS) nivel = maiorNivel(nivel, 'alta');
   }
 
   const meta = NIVEL_META[nivel];

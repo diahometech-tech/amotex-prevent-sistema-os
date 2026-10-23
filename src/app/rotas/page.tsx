@@ -6,15 +6,22 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
+import { Input, Select } from '@/components/ui/Form';
 import { OSModal } from '@/components/os/OSModal';
 import { canManageOS } from '@/lib/permissions';
-import { computeOsPrioridade, resumoRotasPorCondominio, OS_STATUS_LABELS } from '@/lib/os-priority';
+import { computeOsPrioridade, resumoRotasPorCondominio, OS_STATUS_LABELS, type RotaCondominio } from '@/lib/os-priority';
+import { formatarDataCurta, hojeISO, montarRotaDoDia, somarDias } from '@/lib/os-agenda';
 import type { Condominio, OS } from '@/lib/db';
 
 interface TecnicoLite {
   id: string;
   nome: string;
 }
+
+// Filtro de técnico: '' = todos; SEM_TECNICO = só as não atribuídas; senão o id.
+const SEM_TECNICO = 'sem_tecnico';
+
+type GrupoNomeado = RotaCondominio & { nome: string };
 
 function RotasContent() {
   const user = useAmxUser();
@@ -26,6 +33,12 @@ function RotasContent() {
   const [error, setError] = useState('');
   const [visitando, setVisitando] = useState<string | null>(null);
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
+
+  const hoje = hojeISO();
+  const [dia, setDia] = useState(hoje);
+  // Técnico abre direto na própria rota; admin vê a equipe toda. (O AppShell
+  // só monta esta tela depois de carregar o usuário, então `user` já existe.)
+  const [filtroTecnico, setFiltroTecnico] = useState(user?.role === 'tecnico' ? user.id : '');
 
   const condominioNome = useMemo(() => {
     const map = new Map(condominios.map((c) => [c.id, c.nome]));
@@ -76,13 +89,25 @@ function RotasContent() {
     load();
   }, []);
 
-  const grupos = useMemo(
-    () =>
-      resumoRotasPorCondominio(oss).map((r) => ({ ...r, nome: condominioNome(r.condominio_id) })),
-    [oss, condominioNome]
-  );
+  const doTecnico = useMemo(() => {
+    if (!filtroTecnico) return oss;
+    if (filtroTecnico === SEM_TECNICO) return oss.filter((o) => !o.tecnico_id);
+    return oss.filter((o) => o.tecnico_id === filtroTecnico);
+  }, [oss, filtroTecnico]);
 
-  const totalUrgentes = useMemo(() => grupos.reduce((acc, g) => acc + g.urgentes, 0), [grupos]);
+  const rota = useMemo(() => montarRotaDoDia(doTecnico, dia, hoje), [doTecnico, dia, hoje]);
+
+  // Atrasadas entram junto na rota do dia (é trabalho pra hoje), marcadas
+  // na linha. Contagem e ordem saem de resumoRotasPorCondominio — a mesma
+  // função dos badges (ver o aviso em src/lib/os-priority.ts).
+  const gruposDoDia = useMemo(
+    () => nomear(resumoRotasPorCondominio([...rota.doDia, ...rota.atrasadas]), condominioNome),
+    [rota, condominioNome]
+  );
+  const gruposSemData = useMemo(() => nomear(resumoRotasPorCondominio(rota.semData), condominioNome), [rota, condominioNome]);
+
+  const totalDoDia = rota.doDia.length + rota.atrasadas.length;
+  const totalUrgentes = gruposDoDia.reduce((acc, g) => acc + g.urgentes, 0);
 
   const marcarVisitado = async (os: OS) => {
     setVisitando(os.id);
@@ -133,94 +158,152 @@ function RotasContent() {
     );
   }
 
-  const canMarcar = canManageOS(user.role);
+  const minhaRota = user.role === 'tecnico' && filtroTecnico === user.id;
+  const tituloDia = dia === hoje ? 'hoje' : formatarDataCurta(dia);
+
+  const renderGrupo = (g: GrupoNomeado) => (
+    <Card key={g.condominio_id}>
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <p className="text-sm font-semibold text-white">{g.nome}</p>
+        <div className="flex items-center gap-2 shrink-0">
+          <Badge tone="neutral">{g.total} OS</Badge>
+          {g.urgentes > 0 && <Badge tone="red">{g.urgentes} urgente{g.urgentes > 1 ? 's' : ''}</Badge>}
+          {g.altas > 0 && <Badge tone="warning">{g.altas} alta{g.altas > 1 ? 's' : ''}</Badge>}
+        </div>
+      </div>
+      <div className="space-y-2">
+        {g.oss.map((os) => {
+          const prioridade = computeOsPrioridade(os);
+          const atrasada = !!os.data_programada && os.data_programada < dia;
+          return (
+            <div
+              key={os.id}
+              className="flex items-center gap-3 bg-amx-panel-2 border border-amx-line rounded-lg px-3 py-2.5 flex-wrap"
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedOsId(os.id)}
+                className="flex items-center gap-3 flex-1 basis-60 min-w-0 text-left"
+              >
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${prioridade.nivel === 'urgente' || prioridade.nivel === 'alta' ? 'bg-amx-red' : 'bg-amx-blue'}`}
+                  aria-hidden
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-white truncate">
+                    {os.tipo === 'preventiva' ? 'Preventiva' : 'Corretiva'}
+                    {(os.descricao_problema || os.observacao) && ` · ${os.descricao_problema || os.observacao}`}
+                  </p>
+                  <p className="text-[11px] text-amx-muted truncate">
+                    {OS_STATUS_LABELS[os.status]} · aberta há {prioridade.elapsedLabel}
+                    {/* Sem cair pro id: o fallback anterior passava o
+                        UUID do técnico pela função de iniciais e
+                        exibia uma letra sem sentido na tela. */}
+                    {os.tecnico_id ? ` · ${tecnicoNome(os.tecnico_id) ?? 'técnico atribuído'}` : ' · não atribuído'}
+                  </p>
+                  {atrasada && (
+                    <p className="text-[11px] font-semibold text-amx-amber">
+                      Atrasada · era para {formatarDataCurta(os.data_programada!)}
+                    </p>
+                  )}
+                </div>
+                <Badge tone={prioridade.nivel === 'urgente' ? 'red' : prioridade.nivel === 'alta' ? 'warning' : 'info'}>
+                  {prioridade.label}
+                </Badge>
+              </button>
+              {os.entrada_em ? (
+                <Badge tone="success">Visitado</Badge>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={visitando === os.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    marcarVisitado(os);
+                  }}
+                >
+                  {visitando === os.id ? 'Marcando...' : 'Marcar Visitado'}
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-8 pt-6 pb-4 border-b border-amx-line">
-        <h1 className="text-[22px] font-semibold text-white normal-case tracking-normal">Gestão de Rotas</h1>
+      <div className="px-4 sm:px-8 pt-6 pb-4 border-b border-amx-line">
+        <h1 className="text-[22px] font-semibold text-white normal-case tracking-normal">
+          {minhaRota ? `Minha rota de ${tituloDia}` : `Rota de ${tituloDia}`}
+        </h1>
         <p className="text-[13px] text-amx-muted mt-1">
-          {grupos.length} condomínio{grupos.length !== 1 ? 's' : ''} com OS em aberto
+          {totalDoDia} OS em {gruposDoDia.length} condomínio{gruposDoDia.length !== 1 ? 's' : ''}
+          {rota.atrasadas.length > 0 ? ` · ${rota.atrasadas.length} atrasada${rota.atrasadas.length > 1 ? 's' : ''}` : ''}
           {totalUrgentes > 0 ? ` · ${totalUrgentes} urgente${totalUrgentes > 1 ? 's' : ''}` : ''}
         </p>
+
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+          <Button variant="secondary" size="sm" onClick={() => setDia(somarDias(dia, -1))} aria-label="Dia anterior">
+            ‹
+          </Button>
+          <Input
+            id="rota-dia"
+            type="date"
+            value={dia}
+            onChange={(e) => e.target.value && setDia(e.target.value)}
+            className="w-auto py-1.5 text-xs"
+          />
+          <Button variant="secondary" size="sm" onClick={() => setDia(somarDias(dia, 1))} aria-label="Próximo dia">
+            ›
+          </Button>
+          {dia !== hoje && (
+            <Button variant="secondary" size="sm" onClick={() => setDia(hoje)}>
+              Hoje
+            </Button>
+          )}
+          <Select
+            id="rota-tecnico"
+            value={filtroTecnico}
+            onChange={(e) => setFiltroTecnico(e.target.value)}
+            className="w-auto py-1.5 text-xs"
+          >
+            <option value="">Todos os técnicos</option>
+            {user.role === 'tecnico' && <option value={user.id}>Só as minhas</option>}
+            {tecnicos
+              .filter((t) => !(user.role === 'tecnico' && t.id === user.id))
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                </option>
+              ))}
+            <option value={SEM_TECNICO}>Não atribuídas</option>
+          </Select>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-8 py-6">
+      <div className="flex-1 overflow-auto px-4 sm:px-8 py-6">
         {error && (
           <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2 mb-4">{error}</p>
         )}
 
-        {grupos.length === 0 ? (
-          <EmptyState title="Nenhuma rota em aberto" description="Todas as OS estão finalizadas ou canceladas no momento." />
+        {gruposDoDia.length === 0 ? (
+          <EmptyState
+            title={`Nenhuma visita para ${tituloDia}`}
+            description="Agende OS para este dia pelo campo 'Data da visita', na criação ou no detalhe da OS."
+          />
         ) : (
-          <div className="space-y-5">
-            {grupos.map((g) => (
-              <Card key={g.condominio_id}>
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <p className="text-sm font-semibold text-white">{g.nome}</p>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge tone="neutral">{g.total} em aberto</Badge>
-                    {g.urgentes > 0 && <Badge tone="red">{g.urgentes} urgente{g.urgentes > 1 ? 's' : ''}</Badge>}
-                    {g.altas > 0 && <Badge tone="warning">{g.altas} alta{g.altas > 1 ? 's' : ''}</Badge>}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {g.oss.map((os) => {
-                    const prioridade = computeOsPrioridade(os);
-                    return (
-                      <div
-                        key={os.id}
-                        className="flex items-center gap-3 bg-amx-panel-2 border border-amx-line rounded-lg px-3 py-2.5"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setSelectedOsId(os.id)}
-                          className="flex items-center gap-3 flex-1 min-w-0 text-left"
-                        >
-                          <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${prioridade.nivel === 'urgente' || prioridade.nivel === 'alta' ? 'bg-amx-red' : 'bg-amx-blue'}`}
-                            aria-hidden
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-white truncate">
-                              {os.tipo === 'preventiva' ? 'Preventiva' : 'Corretiva'}
-                              {os.observacao && ` · ${os.observacao}`}
-                            </p>
-                            <p className="text-[11px] text-amx-muted truncate">
-                              {OS_STATUS_LABELS[os.status]} · aberta há {prioridade.elapsedLabel}
-                              {/* Sem cair pro id: o fallback anterior passava o
-                                  UUID do técnico pela função de iniciais e
-                                  exibia uma letra sem sentido na tela. */}
-                              {os.tecnico_id ? ` · ${tecnicoNome(os.tecnico_id) ?? 'técnico atribuído'}` : ' · não atribuído'}
-                            </p>
-                          </div>
-                          <Badge tone={prioridade.nivel === 'urgente' ? 'red' : prioridade.nivel === 'alta' ? 'warning' : 'info'}>
-                            {prioridade.label}
-                          </Badge>
-                        </button>
-                        {canMarcar && (
-                          os.entrada_em ? (
-                            <Badge tone="success">Visitado</Badge>
-                          ) : (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={visitando === os.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                marcarVisitado(os);
-                              }}
-                            >
-                              {visitando === os.id ? 'Marcando...' : 'Marcar Visitado'}
-                            </Button>
-                          )
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            ))}
+          <div className="space-y-5">{gruposDoDia.map(renderGrupo)}</div>
+        )}
+
+        {gruposSemData.length > 0 && (
+          <div className="mt-8">
+            <p className="font-heading text-[11px] font-semibold tracking-wider text-amx-muted mb-3">
+              SEM DATA DE VISITA · {rota.semData.length} OS · abra a OS e defina o dia
+            </p>
+            <div className="space-y-5">{gruposSemData.map(renderGrupo)}</div>
           </div>
         )}
       </div>
@@ -238,6 +321,10 @@ function RotasContent() {
       )}
     </div>
   );
+}
+
+function nomear(grupos: RotaCondominio[], condominioNome: (id: string) => string): GrupoNomeado[] {
+  return grupos.map((g) => ({ ...g, nome: condominioNome(g.condominio_id) }));
 }
 
 export default function RotasPage() {

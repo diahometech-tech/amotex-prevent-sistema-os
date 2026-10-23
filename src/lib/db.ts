@@ -2,6 +2,16 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { hashPassword } from './auth';
+import { pendenciasFinalizacao } from './os-finalizacao';
+
+// Lançado por Database.finalizarOS quando a trava de qualidade bloqueia.
+// As pendências são texto pronto pro usuário (a rota devolve verbatim).
+export class FinalizacaoBloqueadaError extends Error {
+  constructor(public pendencias: string[]) {
+    super('A OS ainda não pode ser finalizada.');
+    this.name = 'FinalizacaoBloqueadaError';
+  }
+}
 
 // =====================================================================
 // Tipos de domínio — Amotex Prevent (ver docs/Modelo-de-Dados.md no
@@ -124,6 +134,14 @@ export interface OS {
   entrada_em?: string;
   saida_em?: string;
   observacao?: string;
+  // Dia da visita (YYYY-MM-DD, sem hora — data de calendário, não instante).
+  // É o que monta a "rota do dia" de cada técnico. Ausente = sem agendamento.
+  data_programada?: string;
+  // Chamado de corretiva aberto por telefone/mensagem (sem sensor): quem
+  // pediu e o que relatou. Só faz sentido em corretiva manual.
+  solicitante_nome?: string;
+  solicitante_telefone?: string;
+  descricao_problema?: string;
   assinatura_zelador_url?: string;
   assinatura_tecnico_url?: string;
   pdf_url?: string;
@@ -762,6 +780,10 @@ export class Database {
       prioridade: data.prioridade || (data.tipo === 'corretiva' ? 'alta' : 'media'),
       tecnico_id: data.tecnico_id,
       observacao: data.observacao,
+      data_programada: data.data_programada,
+      solicitante_nome: data.solicitante_nome,
+      solicitante_telefone: data.solicitante_telefone,
+      descricao_problema: data.descricao_problema,
       criado_em: new Date().toISOString(),
     };
     await backend().insertOS(os);
@@ -774,14 +796,17 @@ export class Database {
 
   static updateOS(id: string, updates: Partial<OS>) { return backend().updateOS(id, updates); }
 
-  // Finaliza a OS só se todos os itens obrigatórios do checklist estiverem
-  // concluídos — a trava de qualidade descrita no PRD.
+  // Finaliza a OS só se a trava de qualidade do PRD estiver satisfeita:
+  // checklist obrigatório concluído, foto antes, foto depois e as duas
+  // assinaturas. A regra mora em pendenciasFinalizacao (src/lib/os-finalizacao.ts),
+  // a mesma função que a tela usa pra travar o botão — não duplicar aqui.
+  // Assinatura enviada no mesmo PATCH do finalizar já conta.
   static async finalizarOS(id: string, updates: Partial<OS>): Promise<OS | null> {
-    const itens = await backend().getChecklistByOS(id);
-    const pendente = itens.some((i) => i.obrigatorio && !i.concluido);
-    if (pendente) {
-      throw new Error('Existem itens obrigatórios do checklist não concluídos.');
-    }
+    const atual = await backend().getOSById(id);
+    if (!atual) return null;
+    const [checklist, fotos] = await Promise.all([backend().getChecklistByOS(id), backend().getFotosByOS(id)]);
+    const pendencias = pendenciasFinalizacao({ os: { ...atual, ...stripUndefined(updates) }, checklist, fotos });
+    if (pendencias.length > 0) throw new FinalizacaoBloqueadaError(pendencias);
     const os = await backend().updateOS(id, { ...updates, status: 'finalizada', saida_em: new Date().toISOString() });
     if (os) {
       await this.createAuditLog({ entidade: 'os', entidade_id: id, acao: 'FINALIZADA', ator: 'usuario' });
