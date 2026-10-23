@@ -5,6 +5,7 @@ import { getSessionFromRequest, getClientIp, canAccessCondominio } from '@/lib/a
 import { saveAssinaturaDataUrl, saveOsPdfBuffer } from '@/lib/uploads';
 import { generateOsPdf } from '@/lib/os-pdf';
 import { notifyN8n } from '@/lib/notify';
+import { avisarCorretiva } from '@/lib/notificacao-corretiva';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -52,6 +53,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
     // tecnico_id vazio = desatribuir (o <select> manda ''; a coluna é UUID).
     if (updates.tecnico_id === '') updates.tecnico_id = null;
+    // Chegada no condomínio = início do atendimento. "Iniciar atendimento"
+    // (OSModal) só mandava o status; sem isto o prazo de 3h da corretiva
+    // (src/lib/os-sla.ts) nunca via a chegada por esse caminho.
+    if (updates.status === 'em_andamento' && !original.entrada_em && updates.entrada_em === undefined) {
+      updates.entrada_em = new Date().toISOString();
+    }
     if (rest.data_programada !== undefined) {
       const data = normalizarDataProgramada(rest.data_programada);
       if (data === undefined) return NextResponse.json({ error: 'Data da visita inválida.' }, { status: 400 });
@@ -123,7 +130,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       });
       if (os) notifyN8n('os_status_changed', os, { de: original.status });
     }
-    return NextResponse.json({ success: true, os });
+    let aviso;
+    if (os && updates.tecnico_id !== undefined && (updates.tecnico_id ?? null) !== (original.tecnico_id ?? null)) {
+      await Database.createAuditLog({
+        entidade: 'os', entidade_id: id, acao: 'TECNICO_ATRIBUIDO', ator: session.name,
+        detalhe: { de: original.tecnico_id ?? null, para: updates.tecnico_id ?? null },
+      });
+      // Corretiva ativa ganhou técnico: avisa os outros pra ninguém ir em dobro.
+      if (os.tipo === 'corretiva' && os.tecnico_id && os.status !== 'finalizada' && os.status !== 'cancelada') {
+        aviso = await avisarCorretiva('os_corretiva_assumida', os);
+      }
+    }
+    return NextResponse.json({ success: true, os, ...(aviso ? { aviso } : {}) });
   } catch (e) {
     console.error('Erro ao atualizar OS:', e);
     return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });

@@ -200,6 +200,8 @@ async function runSchemaMigration(): Promise<void> {
     ALTER TABLE os ADD COLUMN IF NOT EXISTS solicitante_telefone TEXT;
     ALTER TABLE os ADD COLUMN IF NOT EXISTS descricao_problema TEXT;
     CREATE INDEX IF NOT EXISTS idx_os_data_programada ON os(data_programada);
+    ALTER TABLE usuario ADD COLUMN IF NOT EXISTS especialidade TEXT CHECK (especialidade IN ('corretiva', 'preventiva'));
+    ALTER TABLE usuario ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;
   `);
 
   const { rows } = await p.query('SELECT COUNT(*)::int AS n FROM usuario');
@@ -330,12 +332,13 @@ export const pgBackend: DbBackend = {
   },
   async insertUser(u) {
     await q(
-      'INSERT INTO usuario (id, nome, login, papel, condominio_id, senha_hash, ativo, criado_em) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [u.id, u.nome, u.login, u.papel, u.condominio_id ?? null, u.senha_hash, u.ativo, u.criado_em]
+      'INSERT INTO usuario (id, nome, login, papel, condominio_id, senha_hash, ativo, criado_em, especialidade, telegram_chat_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      [u.id, u.nome, u.login, u.papel, u.condominio_id ?? null, u.senha_hash, u.ativo, u.criado_em,
+       u.especialidade ?? null, u.telegram_chat_id ?? null]
     );
   },
   async updateUser(id, updates) {
-    const allowed = ['nome', 'login', 'papel', 'condominio_id', 'senha_hash', 'ativo'];
+    const allowed = ['nome', 'login', 'papel', 'condominio_id', 'senha_hash', 'ativo', 'especialidade', 'telegram_chat_id'];
     const { sets, vals } = buildSet(allowed, updates);
     if (sets.length === 0) return this.getUserById(id);
     vals.push(id);

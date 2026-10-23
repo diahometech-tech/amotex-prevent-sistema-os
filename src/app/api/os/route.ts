@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest, isScopedToOwnCondominio } from '@/lib/auth';
 import { notifyN8n } from '@/lib/notify';
-import { CHECKLIST_PADRAO } from '@/lib/checklist-padrao';
+import { avisarCorretiva } from '@/lib/notificacao-corretiva';
+import { criarChecklistInicial } from '@/lib/os-checklist-inicial';
 import { hojeISO, normalizarDataProgramada } from '@/lib/os-agenda';
 
 function textoOpcional(v: unknown): string | undefined {
@@ -58,26 +59,14 @@ export async function POST(request: NextRequest) {
       descricao_problema: textoOpcional(body.descricao_problema),
     });
 
-    // Checklist inicial: roteiro padrão do tipo (src/lib/checklist-padrao.ts)
-    // + um item por equipamento cadastrado no condomínio. O técnico ainda
-    // pode acrescentar itens na hora — o roteiro é guiado, não travado.
-    for (const item of CHECKLIST_PADRAO[tipo as 'preventiva' | 'corretiva']) {
-      await Database.createChecklistItem({ os_id: os.id, descricao: item.descricao, obrigatorio: item.obrigatorio });
-    }
-    const equipamentos = await Database.getEquipamentosByCondominio(condominio_id);
-    for (const eq of equipamentos) {
-      await Database.createChecklistItem({
-        os_id: os.id,
-        equipamento_id: eq.id,
-        descricao: `Inspecionar ${eq.tipo}${eq.modelo ? ` (${eq.modelo})` : ''}`,
-        // Na corretiva o foco é o defeito chamado — inspecionar cada
-        // equipamento do prédio fica como item opcional, não trava o fechamento.
-        obrigatorio: tipo === 'preventiva',
-      });
-    }
+    await criarChecklistInicial(os);
 
     notifyN8n('os_created', os);
-    return NextResponse.json({ success: true, os });
+    // Toda corretiva é urgente (prazo de 3h pra chegada): avisa técnicos de
+    // corretiva e gestores no Telegram. O resultado volta pra tela dizer a
+    // quem chegou — ou por que não chegou.
+    const aviso = tipo === 'corretiva' ? await avisarCorretiva('os_corretiva_aberta', os) : undefined;
+    return NextResponse.json({ success: true, os, ...(aviso ? { aviso } : {}) });
   } catch (e) {
     console.error('Erro ao criar OS:', e);
     return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });

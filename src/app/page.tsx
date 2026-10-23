@@ -11,6 +11,9 @@ import { OSModal } from '@/components/os/OSModal';
 import { canManageOS } from '@/lib/permissions';
 import { computeOsPrioridade, OS_STATUS_LABELS, type OsPrioridade } from '@/lib/os-priority';
 import { formatarDataCurta, hojeISO } from '@/lib/os-agenda';
+import { slaChegada } from '@/lib/os-sla';
+import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
+import { useTick } from '@/lib/useTick';
 import type { Condominio, OS, OsStatus, OsTipo } from '@/lib/db';
 
 // Os 3 níveis do campo manual os.prioridade (distinto de OsPrioridade, a
@@ -55,6 +58,7 @@ function avatarTone(id: string): string {
 
 function OsListContent() {
   const user = useAmxUser();
+  useTick(); // prazo de chegada das corretivas anda sozinho na lista
   const [oss, setOss] = useState<OS[]>([]);
   const [condominios, setCondominios] = useState<Condominio[]>([]);
   const [tecnicos, setTecnicos] = useState<TecnicoLite[]>([]);
@@ -67,7 +71,11 @@ function OsListContent() {
   const [condominioFiltro, setCondominioFiltro] = useState<string>('todos');
 
   const [showCreate, setShowCreate] = useState(false);
-  const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
+  // ?os=<id> abre a OS direto — é o link que vai no aviso do Telegram.
+  const [selectedOsId, setSelectedOsId] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('os')
+  );
+  const [avisoCriacao, setAvisoCriacao] = useState<{ texto: string; ok: boolean } | null>(null);
 
   const condominioNome = useMemo(() => {
     const map = new Map(condominios.map((c) => [c.id, c.nome]));
@@ -174,8 +182,8 @@ function OsListContent() {
               {totalAbertas} abertas{totalPrioridadeAlta > 0 ? ` · ${totalPrioridadeAlta} com prioridade alta` : ''}
             </p>
           </div>
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-2 bg-amx-panel border border-amx-line rounded-lg px-3.5 py-2 w-60">
+          <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
+            <div className="flex items-center gap-2 bg-amx-panel border border-amx-line rounded-lg px-3.5 py-2 flex-1 min-w-0 sm:flex-none sm:w-60">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-amx-muted)" strokeWidth="2" strokeLinecap="round">
                 <circle cx="11" cy="11" r="7" />
                 <path d="M21 21l-4.3-4.3" />
@@ -242,6 +250,15 @@ function OsListContent() {
       {error && (
         <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 mx-8 mt-4 rounded-lg px-3 py-2">{error}</p>
       )}
+      {avisoCriacao && (
+        <p
+          className={`text-xs font-semibold mx-8 mt-4 rounded-lg px-3 py-2 ${
+            avisoCriacao.ok ? 'text-amx-green bg-amx-green/10' : 'text-amx-amber bg-amx-amber/10'
+          }`}
+        >
+          {avisoCriacao.texto}
+        </p>
+      )}
 
       {ordenadas.length === 0 ? (
         <EmptyState
@@ -285,9 +302,10 @@ function OsListContent() {
           condominios={condominios}
           tecnicos={tecnicos}
           onClose={() => setShowCreate(false)}
-          onCreated={(os) => {
+          onCreated={(os, aviso) => {
             setShowCreate(false);
             setOss((prev) => [os, ...prev]);
+            setAvisoCriacao(aviso ? textoAviso(aviso) : null);
           }}
         />
       </Modal>
@@ -349,6 +367,7 @@ function OsRow({
 }) {
   const prioridade = computeOsPrioridade(os);
   const encerrada = os.status === 'finalizada' || os.status === 'cancelada';
+  const sla = encerrada ? null : slaChegada(os);
   return (
     <div
       role="button"
@@ -373,7 +392,12 @@ function OsRow({
         {(os.descricao_problema || os.observacao) && (
           <p className="text-xs text-amx-muted truncate mt-0.5">{os.descricao_problema || os.observacao}</p>
         )}
-        {os.data_programada && !encerrada && (
+        {sla && sla.situacao !== 'cumprido' && (
+          <p className={`text-[11px] mt-0.5 font-semibold ${sla.tone === 'red' ? 'text-amx-red-hover' : 'text-amx-amber'}`}>
+            ⏱ {sla.label}
+          </p>
+        )}
+        {os.data_programada && !encerrada && os.tipo === 'preventiva' && (
           <p className={`text-[11px] mt-0.5 ${os.data_programada < hojeISO() ? 'text-amx-amber font-semibold' : 'text-amx-muted'}`}>
             Visita: {formatarDataCurta(os.data_programada)}
             {os.data_programada < hojeISO() ? ' · atrasada' : ''}
@@ -423,7 +447,7 @@ function NovaOsForm({
   condominios: Condominio[];
   tecnicos: TecnicoLite[];
   onClose: () => void;
-  onCreated: (os: OS) => void;
+  onCreated: (os: OS, aviso?: ResultadoAviso) => void;
 }) {
   const user = useAmxUser();
   const [condominioId, setCondominioId] = useState(condominios[0]?.id || '');
@@ -475,7 +499,7 @@ function NovaOsForm({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.os) {
-        onCreated(data.os);
+        onCreated(data.os, data.aviso);
       } else {
         setError(data.error || 'Falha ao criar OS.');
       }
@@ -506,17 +530,20 @@ function NovaOsForm({
             <option value="corretiva">Corretiva</option>
           </Select>
         </Field>
-        <Field
-          label="Prioridade"
-          hint="Padrão por tipo: corretiva nasce alta, preventiva média. Tipo/origem/tempo em aberto ainda podem escalar a exibição pra cima."
-        >
-          <Select value={prioridade} onChange={(e) => setPrioridade(e.target.value as '' | OsPrioridadeManual)}>
-            <option value="">Padrão do tipo</option>
-            <option value="alta">Alta</option>
-            <option value="media">Média</option>
-            <option value="baixa">Baixa</option>
-          </Select>
-        </Field>
+        {tipo === 'corretiva' ? (
+          <p className="text-xs font-semibold text-amx-red-hover">
+            Corretiva é sempre urgente: o técnico tem até 3h para chegar. Técnicos de corretiva e gestores recebem aviso no Telegram.
+          </p>
+        ) : (
+          <Field label="Prioridade" hint="Preventiva atrasada 48h ou mais além do dia da visita sobe para Alta.">
+            <Select value={prioridade} onChange={(e) => setPrioridade(e.target.value as '' | OsPrioridadeManual)}>
+              <option value="">Média (padrão)</option>
+              <option value="alta">Alta</option>
+              <option value="media">Média</option>
+              <option value="baixa">Baixa</option>
+            </Select>
+          </Field>
+        )}
         {tipo === 'corretiva' && (
           <div className="flex flex-col gap-4 rounded-lg border border-amx-red/40 bg-amx-red/5 p-3">
             <p className="font-heading text-[11px] font-semibold tracking-wider text-amx-red-hover">CHAMADO</p>

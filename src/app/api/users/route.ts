@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Database, type User } from '@/lib/db';
 import { getSessionFromRequest, canManageUsers } from '@/lib/auth';
 import { isAdminOrTecnico } from '@/lib/roles';
+import { normalizarEspecialidade, normalizarTelegramChatId } from '@/lib/usuario-campos';
 
 const VALID_ROLES = ['admin', 'tecnico', 'sindico'];
 
@@ -42,7 +43,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
   try {
-    const { nome, login, senha, papel, condominio_id } = await request.json();
+    const body = await request.json();
+    const { nome, login, senha, papel, condominio_id } = body;
     if (!nome || !login || !senha || !papel) {
       return NextResponse.json({ error: 'Preencha nome, login, senha e papel.' }, { status: 400 });
     }
@@ -52,11 +54,21 @@ export async function POST(request: NextRequest) {
     if (papel === 'sindico' && !condominio_id) {
       return NextResponse.json({ error: 'Informe o condomínio do síndico.' }, { status: 400 });
     }
+    const especialidade = papel === 'tecnico' ? normalizarEspecialidade(body.especialidade ?? null) : null;
+    if (especialidade === undefined) return NextResponse.json({ error: 'Especialidade inválida.' }, { status: 400 });
+    const telegram_chat_id = normalizarTelegramChatId(body.telegram_chat_id ?? null);
+    if (telegram_chat_id === undefined) {
+      return NextResponse.json({ error: 'ID do Telegram inválido (só números).' }, { status: 400 });
+    }
     const exists = await Database.getUserByLogin(login);
     if (exists) {
       return NextResponse.json({ error: 'Este login já existe.' }, { status: 409 });
     }
-    const user = await Database.createUser({ nome, login, senha, papel, condominio_id });
+    const user = await Database.createUser({
+      nome, login, senha, papel, condominio_id,
+      especialidade: especialidade ?? undefined,
+      telegram_chat_id: telegram_chat_id ?? undefined,
+    });
     return NextResponse.json({ success: true, user: safe(user) });
   } catch (e) {
     console.error('Erro ao criar usuário:', e);

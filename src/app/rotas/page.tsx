@@ -8,9 +8,13 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { Input, Select } from '@/components/ui/Form';
 import { OSModal } from '@/components/os/OSModal';
+import { PlanejarPreventivas } from '@/components/os/PlanejarPreventivas';
+import { Modal } from '@/components/ui/Modal';
 import { canManageOS } from '@/lib/permissions';
 import { computeOsPrioridade, resumoRotasPorCondominio, OS_STATUS_LABELS, type RotaCondominio } from '@/lib/os-priority';
 import { formatarDataCurta, hojeISO, montarRotaDoDia, somarDias } from '@/lib/os-agenda';
+import { slaChegada } from '@/lib/os-sla';
+import { useTick } from '@/lib/useTick';
 import type { Condominio, OS } from '@/lib/db';
 
 interface TecnicoLite {
@@ -25,6 +29,7 @@ type GrupoNomeado = RotaCondominio & { nome: string };
 
 function RotasContent() {
   const user = useAmxUser();
+  useTick(); // prazo de chegada das corretivas anda sozinho na rota
 
   const [oss, setOss] = useState<OS[]>([]);
   const [condominios, setCondominios] = useState<Condominio[]>([]);
@@ -33,6 +38,7 @@ function RotasContent() {
   const [error, setError] = useState('');
   const [visitando, setVisitando] = useState<string | null>(null);
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
+  const [showPlanejar, setShowPlanejar] = useState(false);
 
   const hoje = hojeISO();
   const [dia, setDia] = useState(hoje);
@@ -174,7 +180,8 @@ function RotasContent() {
       <div className="space-y-2">
         {g.oss.map((os) => {
           const prioridade = computeOsPrioridade(os);
-          const atrasada = !!os.data_programada && os.data_programada < dia;
+          const atrasada = os.tipo === 'preventiva' && !!os.data_programada && os.data_programada < dia;
+          const sla = slaChegada(os);
           return (
             <div
               key={os.id}
@@ -201,6 +208,11 @@ function RotasContent() {
                         exibia uma letra sem sentido na tela. */}
                     {os.tecnico_id ? ` · ${tecnicoNome(os.tecnico_id) ?? 'técnico atribuído'}` : ' · não atribuído'}
                   </p>
+                  {sla && sla.situacao !== 'cumprido' && (
+                    <p className={`text-[11px] font-semibold ${sla.tone === 'red' ? 'text-amx-red-hover' : 'text-amx-amber'}`}>
+                      ⏱ {sla.label}
+                    </p>
+                  )}
                   {atrasada && (
                     <p className="text-[11px] font-semibold text-amx-amber">
                       Atrasada · era para {formatarDataCurta(os.data_programada!)}
@@ -281,6 +293,11 @@ function RotasContent() {
               ))}
             <option value={SEM_TECNICO}>Não atribuídas</option>
           </Select>
+          {user.role === 'admin' && (
+            <Button size="sm" onClick={() => setShowPlanejar(true)} className="sm:ml-auto">
+              Planejar preventivas do mês
+            </Button>
+          )}
         </div>
       </div>
 
@@ -307,6 +324,10 @@ function RotasContent() {
           </div>
         )}
       </div>
+
+      <Modal open={showPlanejar} onClose={() => setShowPlanejar(false)} maxWidth="max-w-2xl">
+        {showPlanejar && <PlanejarPreventivas onClose={() => setShowPlanejar(false)} onCriado={load} />}
+      </Modal>
 
       {selectedOsId && (
         <OSModal

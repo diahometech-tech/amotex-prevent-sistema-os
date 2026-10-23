@@ -9,7 +9,7 @@ import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { Field, Input, Select } from '@/components/ui/Form';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { ROLE_LABELS } from '@/lib/permissions';
-import type { Condominio, UserRole } from '@/lib/db';
+import type { Condominio, Especialidade, UserRole } from '@/lib/db';
 
 // Shape de src/app/api/users/route.ts `safe()` — User sem senha_hash.
 interface UserRow {
@@ -18,9 +18,20 @@ interface UserRow {
   login: string;
   papel: UserRole;
   condominio_id?: string;
+  especialidade?: Especialidade;
+  telegram_chat_id?: string;
   ativo: boolean;
   criado_em: string;
 }
+
+const ESPECIALIDADE_LABEL: Record<Especialidade | '', string> = {
+  '': 'Corretiva e preventiva',
+  corretiva: 'Corretiva (urgências)',
+  preventiva: 'Preventiva (rota mensal)',
+};
+
+const TELEGRAM_HINT =
+  'Para receber aviso de corretiva. A pessoa abre o bot de avisos da Amotex no Telegram e envia /start; o bot responde com o número.';
 
 const PAPEL_TONE: Record<UserRole, 'red' | 'info' | 'navy'> = {
   admin: 'red',
@@ -42,7 +53,14 @@ function UsuariosContent() {
     senha: '',
     papel: 'tecnico' as UserRole,
     condominio_id: '',
+    especialidade: '' as Especialidade | '',
+    telegram_chat_id: '',
   });
+
+  const [editTarget, setEditTarget] = useState<UserRow | null>(null);
+  const [editForm, setEditForm] = useState({ especialidade: '' as Especialidade | '', telegram_chat_id: '' });
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
 
@@ -104,12 +122,14 @@ function UsuariosContent() {
           senha: createForm.senha,
           papel: createForm.papel,
           condominio_id: createForm.papel === 'sindico' ? createForm.condominio_id : undefined,
+          especialidade: createForm.papel === 'tecnico' ? createForm.especialidade : undefined,
+          telegram_chat_id: createForm.telegram_chat_id || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setMsg(`"${createForm.login}" criado.`);
-        setCreateForm({ nome: '', login: '', senha: '', papel: 'tecnico', condominio_id: '' });
+        setCreateForm({ nome: '', login: '', senha: '', papel: 'tecnico', condominio_id: '', especialidade: '', telegram_chat_id: '' });
         load();
       } else {
         setCreateError(data.error || 'Falha ao criar usuário.');
@@ -144,6 +164,35 @@ function UsuariosContent() {
       setResetError('Erro de conexão.');
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    setEditing(true);
+    setEditError('');
+    try {
+      const res = await fetch(`/api/users/${editTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(editTarget.papel === 'tecnico' ? { especialidade: editForm.especialidade } : {}),
+          telegram_chat_id: editForm.telegram_chat_id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMsg(`"${editTarget.login}" atualizado.`);
+        setEditTarget(null);
+        load();
+      } else {
+        setEditError(data.error || 'Falha ao salvar.');
+      }
+    } catch {
+      setEditError('Erro de conexão.');
+    } finally {
+      setEditing(false);
     }
   };
 
@@ -242,6 +291,32 @@ function UsuariosContent() {
                 ))}
               </Select>
             </Field>
+            {createForm.papel === 'tecnico' && (
+              <Field label="Especialidade" hint="Quem atende corretiva recebe os avisos de urgência; preventiva entra no planejamento mensal">
+                <Select
+                  id="novo-especialidade"
+                  value={createForm.especialidade}
+                  onChange={(e) => setCreateForm({ ...createForm, especialidade: e.target.value as Especialidade | '' })}
+                >
+                  {Object.entries(ESPECIALIDADE_LABEL).map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {createForm.papel !== 'sindico' && (
+              <Field label="ID do Telegram" hint={TELEGRAM_HINT}>
+                <Input
+                  id="novo-telegram"
+                  inputMode="numeric"
+                  value={createForm.telegram_chat_id}
+                  onChange={(e) => setCreateForm({ ...createForm, telegram_chat_id: e.target.value })}
+                  placeholder="ex.: 123456789"
+                />
+              </Field>
+            )}
             {createForm.papel === 'sindico' && (
               <Field label="Condomínio" required hint="Síndico só enxerga o próprio condomínio" >
                 <Select
@@ -278,11 +353,33 @@ function UsuariosContent() {
                   <p className="text-xs text-amx-muted">{u.login}</p>
                 </div>
                 <Badge tone={PAPEL_TONE[u.papel]}>{ROLE_LABELS[u.papel]}</Badge>
+                {u.papel === 'tecnico' && (
+                  <span className="text-xs text-amx-muted">{ESPECIALIDADE_LABEL[u.especialidade ?? '']}</span>
+                )}
+                {u.papel !== 'sindico' && (
+                  <Badge tone={u.telegram_chat_id ? 'success' : 'warning'}>
+                    {u.telegram_chat_id ? 'Telegram ok' : 'Sem Telegram'}
+                  </Badge>
+                )}
                 {u.papel === 'sindico' && (
                   <span className="text-xs text-amx-muted">{condominioNome(u.condominio_id) || 'sem condomínio'}</span>
                 )}
                 <Badge tone={u.ativo ? 'success' : 'neutral'}>{u.ativo ? 'Ativo' : 'Inativo'}</Badge>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                  {u.papel !== 'sindico' && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setEditTarget(u);
+                        setEditForm({ especialidade: u.especialidade ?? '', telegram_chat_id: u.telegram_chat_id ?? '' });
+                        setEditError('');
+                      }}
+                    >
+                      Editar
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     size="sm"
@@ -307,6 +404,45 @@ function UsuariosContent() {
           </div>
         )}
       </div>
+
+      <Modal open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="max-w-sm">
+        <ModalHeader title={`Editar — ${editTarget?.nome ?? ''}`} onClose={() => setEditTarget(null)} />
+        <form onSubmit={handleEdit} className="p-5 flex flex-col gap-4">
+          {editTarget?.papel === 'tecnico' && (
+            <Field label="Especialidade">
+              <Select
+                id="editar-especialidade"
+                value={editForm.especialidade}
+                onChange={(e) => setEditForm({ ...editForm, especialidade: e.target.value as Especialidade | '' })}
+              >
+                {Object.entries(ESPECIALIDADE_LABEL).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          <Field label="ID do Telegram" hint={TELEGRAM_HINT}>
+            <Input
+              id="editar-telegram"
+              inputMode="numeric"
+              value={editForm.telegram_chat_id}
+              onChange={(e) => setEditForm({ ...editForm, telegram_chat_id: e.target.value })}
+              placeholder="ex.: 123456789"
+            />
+          </Field>
+          {editError && <p className="text-xs font-semibold text-amx-red-hover">{editError}</p>}
+          <div className="flex items-center justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setEditTarget(null)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={editing}>
+              {editing ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={!!resetTarget} onClose={() => setResetTarget(null)} maxWidth="max-w-sm">
         <ModalHeader title={`Redefinir senha — ${resetTarget?.login ?? ''}`} onClose={() => setResetTarget(null)} />

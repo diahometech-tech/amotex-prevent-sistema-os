@@ -14,6 +14,9 @@ import { canFinalizeOS, canManageOS } from '@/lib/permissions';
 import { computeOsPrioridade, OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-priority';
 import { pendenciasFinalizacao } from '@/lib/os-finalizacao';
 import { formatarDataCurta } from '@/lib/os-agenda';
+import { slaChegada } from '@/lib/os-sla';
+import { textoAviso } from '@/lib/aviso';
+import { useTick } from '@/lib/useTick';
 import type { AuditLog, ChecklistItem, Foto, OS } from '@/lib/db';
 
 type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico';
@@ -39,7 +42,9 @@ export function OSModal({
   onChanged: (os: OS) => void;
 }) {
   const user = useAmxUser();
+  useTick();
   const canManage = !!user && canManageOS(user.role);
+  const [avisoMsg, setAvisoMsg] = useState<{ texto: string; ok: boolean } | null>(null);
   const canFinalize = !!user && canFinalizeOS(user.role);
 
   const [os, setOs] = useState<OS | null>(null);
@@ -124,6 +129,7 @@ export function OSModal({
       if (res.ok && data.os) {
         setOs(data.os);
         onChanged(data.os);
+        setAvisoMsg(data.aviso ? textoAviso(data.aviso) : null);
       } else {
         setActionError(data.error || 'Falha ao salvar o agendamento.');
       }
@@ -311,6 +317,24 @@ export function OSModal({
 
             {os.observacao && <p className="text-[13px] text-amx-muted">{os.observacao}</p>}
 
+            <SlaBox os={os} />
+
+            {canManage && !isClosed && !os.tecnico_id && user?.role === 'tecnico' && (
+              <Button size="sm" onClick={() => salvarAgendamento('tecnico_id', user.id)} className="w-fit">
+                Assumir esta OS
+              </Button>
+            )}
+
+            {avisoMsg && (
+              <p
+                className={`text-xs font-semibold rounded-lg px-3 py-2 ${
+                  avisoMsg.ok ? 'text-amx-green bg-amx-green/10' : 'text-amx-amber bg-amx-amber/10'
+                }`}
+              >
+                {avisoMsg.texto}
+              </p>
+            )}
+
             {canManage && !isClosed ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Data da visita">
@@ -451,6 +475,22 @@ export function OSModal({
         </>
       )}
     </Modal>
+  );
+}
+
+function SlaBox({ os }: { os: OS }) {
+  const sla = slaChegada(os);
+  if (!sla) return null;
+  const cor =
+    sla.tone === 'red'
+      ? 'border-amx-red bg-amx-red/10 text-amx-red-hover'
+      : sla.tone === 'success'
+        ? 'border-amx-green/50 bg-amx-green/10 text-amx-green'
+        : 'border-amx-amber/50 bg-amx-amber/10 text-amx-amber';
+  return (
+    <div className={`rounded-lg border px-3.5 py-2.5 text-[13px] font-semibold ${cor}`}>
+      ⏱ Prazo de chegada (3h): {sla.label}
+    </div>
   );
 }
 

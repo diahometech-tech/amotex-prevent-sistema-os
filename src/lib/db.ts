@@ -69,6 +69,7 @@ export interface Equipamento {
 }
 
 export type UserRole = 'admin' | 'tecnico' | 'sindico';
+export type Especialidade = 'corretiva' | 'preventiva';
 
 export interface User {
   id: string;
@@ -76,6 +77,13 @@ export interface User {
   login: string; // identificador único de acesso, distinto do nome de exibição
   papel: UserRole;
   condominio_id?: string; // só preenchido para papel = sindico
+  // Só técnico: qual fila ele atende. Ausente = atende as duas.
+  // Decide quem é avisado de corretiva aberta e quem entra no planejamento
+  // mensal das preventivas.
+  especialidade?: Especialidade;
+  // Chat do Telegram pra avisos operacionais (corretiva aberta/assumida).
+  // Ausente = a pessoa não recebe aviso. Ver src/lib/notificacao-corretiva.ts.
+  telegram_chat_id?: string;
   senha_hash: string;
   ativo: boolean;
   criado_em: string;
@@ -687,6 +695,8 @@ export class Database {
       login: (data.login || '').toLowerCase(),
       papel: data.papel || 'tecnico',
       condominio_id: data.condominio_id,
+      especialidade: data.especialidade,
+      telegram_chat_id: data.telegram_chat_id,
       senha_hash: data.senha ? hashPassword(data.senha) : (data.senha_hash || ''),
       ativo: data.ativo ?? true,
       criado_em: new Date().toISOString(),

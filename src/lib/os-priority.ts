@@ -10,6 +10,10 @@
 // o tempo em aberto — nunca desce de "baixa" por conta do tipo/tempo.
 // "urgente" é só alcançável por agravante (nunca base manual direta) — é o
 // 4º nível da escala visual, sem equivalente direto no campo manual de 3.
+//
+// Regra da Amotex (23/10): TODA corretiva é urgente — prazo de 3h pra chegada
+// do técnico (src/lib/os-sla.ts). Então corretiva ativa é sempre "urgente",
+// independente do campo manual.
 import type { OS } from './db';
 import { inicioDoDiaProgramado } from './os-agenda';
 
@@ -34,7 +38,6 @@ const NIVEL_META: Record<OsPrioridade, { label: string; tone: OsPrioridadeInfo['
   baixa: { label: 'Baixa', tone: 'neutral' },
 };
 
-const URGENTE_CORRETIVA_HORAS = 4;
 const ALTA_PREVENTIVA_HORAS = 48;
 
 export interface OsPrioridadeInfo {
@@ -70,11 +73,10 @@ export function computeOsPrioridade(
   let nivel = nivelBase(os.prioridade);
 
   // Agravantes: cada regra só escala pra cima a partir da prioridade manual,
-  // nunca rebaixa. `origem` é agravante DENTRO de corretiva, não isolado — uma
-  // preventiva aberta pelo Hermes não é urgente só por ser automática.
+  // nunca rebaixa. Uma preventiva aberta pelo Hermes não é urgente só por
+  // ser automática.
   if (os.tipo === 'corretiva') {
-    const urgente = os.origem === 'hermes_automatica' || elapsedHours >= URGENTE_CORRETIVA_HORAS;
-    nivel = maiorNivel(nivel, urgente ? 'urgente' : 'alta');
+    nivel = 'urgente';
   } else {
     // Preventiva agendada conta o atraso a partir do DIA DA VISITA, não da
     // criação: a rota da semana que vem é criada com dias de antecedência e
