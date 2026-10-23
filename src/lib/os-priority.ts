@@ -10,7 +10,12 @@
 // o tempo em aberto — nunca desce de "baixa" por conta do tipo/tempo.
 // "urgente" é só alcançável por agravante (nunca base manual direta) — é o
 // 4º nível da escala visual, sem equivalente direto no campo manual de 3.
+//
+// Regra da Amotex (23/10): TODA corretiva é urgente — prazo de 3h pra chegada
+// do técnico (src/lib/os-sla.ts). Então corretiva ativa é sempre "urgente",
+// independente do campo manual.
 import type { OS } from './db';
+import { inicioDoDiaProgramado } from './os-agenda';
 
 export type OsPrioridade = 'urgente' | 'alta' | 'normal' | 'baixa';
 
@@ -33,7 +38,6 @@ const NIVEL_META: Record<OsPrioridade, { label: string; tone: OsPrioridadeInfo['
   baixa: { label: 'Baixa', tone: 'neutral' },
 };
 
-const URGENTE_CORRETIVA_HORAS = 4;
 const ALTA_PREVENTIVA_HORAS = 48;
 
 export interface OsPrioridadeInfo {
@@ -55,7 +59,7 @@ function fmtDuration(hours: number): string {
 }
 
 export function computeOsPrioridade(
-  os: Pick<OS, 'tipo' | 'origem' | 'status' | 'criado_em' | 'prioridade'>
+  os: Pick<OS, 'tipo' | 'origem' | 'status' | 'criado_em' | 'prioridade'> & Partial<Pick<OS, 'data_programada'>>
 ): OsPrioridadeInfo {
   const now = Date.now();
   const criado = os.criado_em ? new Date(os.criado_em).getTime() : now;
@@ -69,13 +73,16 @@ export function computeOsPrioridade(
   let nivel = nivelBase(os.prioridade);
 
   // Agravantes: cada regra só escala pra cima a partir da prioridade manual,
-  // nunca rebaixa. `origem` é agravante DENTRO de corretiva, não isolado — uma
-  // preventiva aberta pelo Hermes não é urgente só por ser automática.
+  // nunca rebaixa. Uma preventiva aberta pelo Hermes não é urgente só por
+  // ser automática.
   if (os.tipo === 'corretiva') {
-    const urgente = os.origem === 'hermes_automatica' || elapsedHours >= URGENTE_CORRETIVA_HORAS;
-    nivel = maiorNivel(nivel, urgente ? 'urgente' : 'alta');
-  } else if (elapsedHours >= ALTA_PREVENTIVA_HORAS) {
-    nivel = maiorNivel(nivel, 'alta');
+    nivel = 'urgente';
+  } else {
+    // Preventiva agendada conta o atraso a partir do DIA DA VISITA, não da
+    // criação: a rota da semana que vem é criada com dias de antecedência e
+    // não pode aparecer "Alta" antes de chegar o dia dela.
+    const referencia = os.data_programada ? inicioDoDiaProgramado(os.data_programada) : criado;
+    if ((now - referencia) / 3_600_000 >= ALTA_PREVENTIVA_HORAS) nivel = maiorNivel(nivel, 'alta');
   }
 
   const meta = NIVEL_META[nivel];

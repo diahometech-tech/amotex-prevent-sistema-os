@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { CondominioForm } from '@/components/cadastro/CondominioForm';
+import { ImportarCondominios } from '@/components/cadastro/ImportarCondominios';
 import { canEditCondominio } from '@/lib/permissions';
 import type { Condominio } from '@/lib/db';
 
@@ -33,6 +34,9 @@ function CondominiosContent() {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  // Incrementa pra recarregar a lista depois de uma importação em lote.
+  const [recarregar, setRecarregar] = useState(0);
 
   useEffect(() => {
     const loadCondominios = async () => {
@@ -58,7 +62,7 @@ function CondominiosContent() {
     };
 
     loadCondominios();
-  }, []);
+  }, [recarregar]);
 
   const handleCreateCondominio = async (data: Partial<Condominio>) => {
     try {
@@ -97,14 +101,19 @@ function CondominiosContent() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-white">Condomínios</h1>
         {canEditCondominio(user.role) && (
-          <Button
-            onClick={() => {
-              setShowForm(true);
-              setSubmitError(null);
-            }}
-          >
-            + Novo Condomínio
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <Button variant="secondary" onClick={() => setShowImport(true)}>
+              Importar planilha
+            </Button>
+            <Button
+              onClick={() => {
+                setShowForm(true);
+                setSubmitError(null);
+              }}
+            >
+              + Novo Condomínio
+            </Button>
+          </div>
         )}
       </div>
 
@@ -176,6 +185,12 @@ function CondominiosContent() {
           ))}
         </div>
       )}
+
+      <Modal open={showImport} onClose={() => setShowImport(false)} maxWidth="max-w-2xl">
+        {showImport && (
+          <ImportarCondominios onClose={() => setShowImport(false)} onImported={() => setRecarregar((n) => n + 1)} />
+        )}
+      </Modal>
 
       <Modal
         open={showForm}

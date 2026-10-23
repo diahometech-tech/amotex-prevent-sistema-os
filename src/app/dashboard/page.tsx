@@ -9,6 +9,8 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { OSModal } from '@/components/os/OSModal';
 import { computeOsPrioridade, compararPorPrioridade, resumoRotasPorCondominio } from '@/lib/os-priority';
+import { hojeISO, montarRotaDoDia } from '@/lib/os-agenda';
+import { resumoSla } from '@/lib/os-sla';
 import type { Alerta, Condominio, EventoAlerta, OS } from '@/lib/db';
 
 // Shape devolvido por GET /api/alertas: reservatorio/condominio já
@@ -136,17 +138,23 @@ function DashboardContent() {
     const corte = carregadoEm - 24 * 60 * 60 * 1000;
     return alertas.filter((a) => new Date(a.recebido_em).getTime() >= corte).length;
   }, [alertas, carregadoEm]);
+  // Prazo de 3h pra chegada na corretiva — ancorado no instante da carga,
+  // mesmo motivo de `alertas24h` acima.
+  const sla = useMemo(() => (carregadoEm === null ? null : resumoSla(oss, carregadoEm)), [oss, carregadoEm]);
   const alertasSemDePara = useMemo(() => alertas.filter((a) => !a.reservatorio).length, [alertas]);
   const condominiosMonitorados = useMemo(
     () => condominios.filter((c) => c.monitoramento_ativo).length,
     [condominios]
   );
 
-  const resumoRotas = useMemo(
-    () =>
-      resumoRotasPorCondominio(oss).map((r) => ({ ...r, nome: condominioNome(r.condominio_id) })),
-    [oss, condominioNome]
-  );
+  // Rota do dia = mesma regra da tela /rotas (agendadas pra hoje + atrasadas).
+  const resumoRotas = useMemo(() => {
+    const rota = montarRotaDoDia(oss, hojeISO());
+    return resumoRotasPorCondominio([...rota.doDia, ...rota.atrasadas]).map((r) => ({
+      ...r,
+      nome: condominioNome(r.condominio_id),
+    }));
+  }, [oss, condominioNome]);
 
   if (!user) return null;
 
@@ -179,7 +187,23 @@ function DashboardContent() {
         )}
 
         {/* KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <Card>
+            <p className="font-heading text-[10px] text-amx-muted uppercase tracking-wider mb-2">Corretivas Fora do Prazo</p>
+            <p className={`text-3xl font-bold ${sla && sla.estouradasAgora > 0 ? 'text-amx-red-hover' : 'text-white'}`}>
+              {sla?.estouradasAgora ?? 0}
+            </p>
+            <p className="text-xs text-amx-muted mt-1">sem técnico no local após 3h, agora</p>
+          </Card>
+          <Card>
+            <p className="font-heading text-[10px] text-amx-muted uppercase tracking-wider mb-2">Chegada em até 3h (30 dias)</p>
+            <p className="text-3xl font-bold text-white">
+              {sla && sla.atendidas > 0 ? `${Math.round((sla.noPrazo / sla.atendidas) * 100)}%` : '—'}
+            </p>
+            <p className="text-xs text-amx-muted mt-1">
+              {sla && sla.atendidas > 0 ? `${sla.noPrazo} de ${sla.atendidas} corretivas no prazo` : 'nenhuma corretiva atendida ainda'}
+            </p>
+          </Card>
           <Card>
             <p className="font-heading text-[10px] text-amx-muted uppercase tracking-wider mb-2">OS Abertas</p>
             <p className="text-3xl font-bold text-white">{ossAbertas.length}</p>
@@ -278,7 +302,7 @@ function DashboardContent() {
             </Link>
           </div>
           {resumoRotas.length === 0 ? (
-            <p className="text-xs text-amx-muted">Nenhuma OS em aberto no momento.</p>
+            <p className="text-xs text-amx-muted">Nenhuma visita agendada para hoje.</p>
           ) : (
             <div className="space-y-2">
               {resumoRotas.slice(0, 6).map((r) => (
@@ -288,7 +312,7 @@ function DashboardContent() {
                 >
                   <p className="text-xs font-semibold text-white truncate">{r.nome}</p>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Badge tone="neutral">{r.total} em aberto</Badge>
+                    <Badge tone="neutral">{r.total} OS</Badge>
                     {r.urgentes > 0 && <Badge tone="red">{r.urgentes} urgente{r.urgentes > 1 ? 's' : ''}</Badge>}
                     {r.altas > 0 && <Badge tone="warning">{r.altas} alta{r.altas > 1 ? 's' : ''}</Badge>}
                   </div>

@@ -5,13 +5,18 @@ import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
-import { Field, Input } from '@/components/ui/Form';
+import { Field, Input, Select } from '@/components/ui/Form';
 import { SignaturePad } from '@/components/os/SignaturePad';
 import { FotoUpload } from '@/components/os/FotoUpload';
 import { HistoricoPanel } from '@/components/os/HistoricoPanel';
 import { useAmxUser } from '@/components/layout/AppShell';
 import { canFinalizeOS, canManageOS } from '@/lib/permissions';
 import { computeOsPrioridade, OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-priority';
+import { pendenciasFinalizacao } from '@/lib/os-finalizacao';
+import { formatarDataCurta } from '@/lib/os-agenda';
+import { slaChegada } from '@/lib/os-sla';
+import { textoAviso } from '@/lib/aviso';
+import { useTick } from '@/lib/useTick';
 import type { AuditLog, ChecklistItem, Foto, OS } from '@/lib/db';
 
 type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico';
@@ -37,7 +42,9 @@ export function OSModal({
   onChanged: (os: OS) => void;
 }) {
   const user = useAmxUser();
+  useTick();
   const canManage = !!user && canManageOS(user.role);
+  const [avisoMsg, setAvisoMsg] = useState<{ texto: string; ok: boolean } | null>(null);
   const canFinalize = !!user && canFinalizeOS(user.role);
 
   const [os, setOs] = useState<OS | null>(null);
@@ -49,6 +56,7 @@ export function OSModal({
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [fotos, setFotos] = useState<Foto[]>([]);
   const [historico, setHistorico] = useState<AuditLog[]>([]);
+  const [tecnicos, setTecnicos] = useState<{ id: string; nome: string }[]>([]);
 
   const [uploadingMomento, setUploadingMomento] = useState<'antes' | 'depois' | null>(null);
   const [savingSignature, setSavingSignature] = useState<'tecnico' | 'zelador' | null>(null);
@@ -84,9 +92,51 @@ export function OSModal({
     };
   }, [osId]);
 
+  // Diretório de técnicos pro bloco de agendamento. Mesmo cuidado de
+  // src/app/page.tsx: técnico recebe {id, nome} sem `papel`.
+  useEffect(() => {
+    if (!canManage) return;
+    let cancelled = false;
+    fetch('/api/users', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const users: { id: string; nome: string; papel?: string }[] = data.users || [];
+        setTecnicos(users.filter((u) => u.papel === undefined || u.papel === 'tecnico'));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage]);
+
   const isClosed = os?.status === 'finalizada' || os?.status === 'cancelada';
-  const itensObrigatoriosPendentes = checklist.filter((i) => i.obrigatorio && !i.concluido);
-  const podeFinalizar = canFinalize && !isClosed && itensObrigatoriosPendentes.length === 0;
+  // Mesma função que o backend usa em Database.finalizarOS — o botão trava
+  // exatamente pelo que o servidor recusaria.
+  const pendencias = os ? pendenciasFinalizacao({ os, checklist, fotos }) : [];
+  const podeFinalizar = canFinalize && !isClosed && pendencias.length === 0;
+
+  // Agendamento (data da visita / técnico) — PATCH simples de um campo.
+  const salvarAgendamento = async (campo: 'data_programada' | 'tecnico_id', valor: string) => {
+    setActionError('');
+    try {
+      const res = await fetch(`/api/os/${osId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [campo]: valor || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.os) {
+        setOs(data.os);
+        onChanged(data.os);
+        setAvisoMsg(data.aviso ? textoAviso(data.aviso) : null);
+      } else {
+        setActionError(data.error || 'Falha ao salvar o agendamento.');
+      }
+    } catch {
+      setActionError('Erro de conexão ao salvar o agendamento.');
+    }
+  };
 
   // API só marca item como concluído (Database.concluirChecklistItem é uma
   // via só de ida — ver src/lib/db.ts) — não existe "desmarcar" no backend.
@@ -253,6 +303,65 @@ export function OSModal({
           <div className="p-5 flex flex-col gap-4">
             <OsSummary os={os} />
 
+            {(os.descricao_problema || os.solicitante_nome || os.solicitante_telefone) && (
+              <div className="rounded-lg border border-amx-red/40 bg-amx-red/5 px-3.5 py-3 flex flex-col gap-1">
+                <p className="font-heading text-[11px] font-semibold tracking-wider text-amx-red-hover">CHAMADO</p>
+                {os.descricao_problema && <p className="text-[13px] text-white">{os.descricao_problema}</p>}
+                {(os.solicitante_nome || os.solicitante_telefone) && (
+                  <p className="text-xs text-amx-muted">
+                    {[os.solicitante_nome, os.solicitante_telefone].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {os.observacao && <p className="text-[13px] text-amx-muted">{os.observacao}</p>}
+
+            <SlaBox os={os} />
+
+            {canManage && !isClosed && !os.tecnico_id && user?.role === 'tecnico' && (
+              <Button size="sm" onClick={() => salvarAgendamento('tecnico_id', user.id)} className="w-fit">
+                Assumir esta OS
+              </Button>
+            )}
+
+            {avisoMsg && (
+              <p
+                className={`text-xs font-semibold rounded-lg px-3 py-2 ${
+                  avisoMsg.ok ? 'text-amx-green bg-amx-green/10' : 'text-amx-amber bg-amx-amber/10'
+                }`}
+              >
+                {avisoMsg.texto}
+              </p>
+            )}
+
+            {canManage && !isClosed ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Data da visita">
+                  <Input
+                    id="os-data-programada"
+                    type="date"
+                    value={os.data_programada || ''}
+                    onChange={(e) => salvarAgendamento('data_programada', e.target.value)}
+                  />
+                </Field>
+                <Field label="Técnico responsável">
+                  <Select id="os-tecnico" value={os.tecnico_id || ''} onChange={(e) => salvarAgendamento('tecnico_id', e.target.value)}>
+                    <option value="">Não atribuído</option>
+                    {tecnicos.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nome}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+            ) : (
+              os.data_programada && (
+                <p className="text-xs text-amx-muted">Visita agendada: {formatarDataCurta(os.data_programada)}</p>
+              )
+            )}
+
             {os.pdf_url && (
               <a
                 href={os.pdf_url}
@@ -280,10 +389,12 @@ export function OSModal({
                     <Button size="sm" onClick={finalizar} disabled={!podeFinalizar || busyAction}>
                       {busyAction ? 'Finalizando...' : 'Finalizar OS'}
                     </Button>
-                    {itensObrigatoriosPendentes.length > 0 && (
-                      <p className="text-[11px] font-semibold text-amx-amber">
-                        {itensObrigatoriosPendentes.length} item(ns) obrigatório(s) do checklist ainda pendente(s).
-                      </p>
+                    {pendencias.length > 0 && (
+                      <ul className="text-[11px] font-semibold text-amx-amber list-disc pl-4">
+                        {pendencias.map((p) => (
+                          <li key={p}>{p}</li>
+                        ))}
+                      </ul>
                     )}
                   </div>
                 )}
@@ -364,6 +475,22 @@ export function OSModal({
         </>
       )}
     </Modal>
+  );
+}
+
+function SlaBox({ os }: { os: OS }) {
+  const sla = slaChegada(os);
+  if (!sla) return null;
+  const cor =
+    sla.tone === 'red'
+      ? 'border-amx-red bg-amx-red/10 text-amx-red-hover'
+      : sla.tone === 'success'
+        ? 'border-amx-green/50 bg-amx-green/10 text-amx-green'
+        : 'border-amx-amber/50 bg-amx-amber/10 text-amx-amber';
+  return (
+    <div className={`rounded-lg border px-3.5 py-2.5 text-[13px] font-semibold ${cor}`}>
+      ⏱ Prazo de chegada (3h): {sla.label}
+    </div>
   );
 }
 
