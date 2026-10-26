@@ -40,16 +40,23 @@ export async function GET(request: NextRequest, context: RouteContext) {
   // válida não basta, precisa ser de alguém com acesso ao condomínio daquela
   // OS. Sem isto, um síndico autenticado abre foto/assinatura de qualquer
   // condomínio só sabendo (ou adivinhando) o UUID da OS na URL.
-  const [kind, osId] = parts;
-  if (kind !== 'os' || !osId) {
+  const [kind, ownerId] = parts;
+  if (kind === 'financeiro') {
+    // Comprovantes de pagamento (uploads/financeiro/<cobrancaId>/...): só o
+    // gestor (admin) — técnico e síndico não veem o financeiro.
+    if (session.role !== 'admin') {
+      return NextResponse.json({ error: 'Você não tem acesso a este arquivo.' }, { status: 403 });
+    }
+  } else if (kind === 'os' && ownerId) {
+    const os = await Database.getOSById(ownerId);
+    if (!os) {
+      return NextResponse.json({ error: 'Arquivo não encontrado.' }, { status: 404 });
+    }
+    if (!(await canAccessCondominio(session, os.condominio_id))) {
+      return NextResponse.json({ error: 'Você não tem acesso a este arquivo.' }, { status: 403 });
+    }
+  } else {
     return NextResponse.json({ error: 'Arquivo não encontrado.' }, { status: 404 });
-  }
-  const os = await Database.getOSById(osId);
-  if (!os) {
-    return NextResponse.json({ error: 'Arquivo não encontrado.' }, { status: 404 });
-  }
-  if (!(await canAccessCondominio(session, os.condominio_id))) {
-    return NextResponse.json({ error: 'Você não tem acesso a este arquivo.' }, { status: 403 });
   }
 
   const url = '/uploads/' + parts.join('/');

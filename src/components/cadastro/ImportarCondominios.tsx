@@ -9,9 +9,12 @@ import {
   parseCsv,
   type ResultadoLeitura,
 } from '@/lib/importacao-condominios';
+import { formatarCnpj } from '@/lib/financeiro/cnpj';
+import { formatarReais } from '@/lib/financeiro/dinheiro';
 
 interface ResultadoImportacao {
   criados: string[];
+  atualizados: string[];
   ignorados: { linha: number; nome?: string; motivo: string }[];
   avisos: { linha: number; nome: string; motivo: string }[];
 }
@@ -29,7 +32,7 @@ async function lerArquivoTexto(file: File): Promise<string> {
 }
 
 function baixarModelo() {
-  const exemplo = 'Condomínio Exemplo;Rua das Flores, 100 - Centro - 01000-000;Administradora X;José da Silva;11999990000;Maria Souza;11988880000';
+  const exemplo = 'Condomínio Exemplo;11.222.333/0001-81;Rua das Flores, 100;Administradora X;500,00;10;financeiro@adm.com.br;Maria Souza;11988880000;maria@adm.com.br;15/03/2024;IGP-M;;mensal;José da Silva;11999990000;Maria Souza;11988880000;';
   const csv = `﻿${CABECALHO_MODELO.join(';')}\r\n${exemplo}\r\n`;
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
@@ -68,7 +71,7 @@ export function ImportarCondominios({ onClose, onImported }: { onClose: () => vo
       const res = await fetch('/api/condominios/importar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ linhas: leitura.linhas }),
+        body: JSON.stringify({ linhas: leitura.linhas.map((l) => l.bruto) }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
@@ -92,7 +95,8 @@ export function ImportarCondominios({ onClose, onImported }: { onClose: () => vo
           <div className="flex flex-col gap-3">
             <p className="text-sm font-semibold text-white">
               {resultado.criados.length} condomínio{resultado.criados.length !== 1 ? 's' : ''} cadastrado
-              {resultado.criados.length !== 1 ? 's' : ''}.
+              {resultado.criados.length !== 1 ? 's' : ''}
+              {resultado.atualizados.length > 0 ? `, ${resultado.atualizados.length} atualizado${resultado.atualizados.length !== 1 ? 's' : ''}` : ''}.
             </p>
             {resultado.ignorados.length > 0 && (
               <ListaMotivos titulo="Não importados" itens={resultado.ignorados} tom="text-amx-red-hover" />
@@ -108,10 +112,14 @@ export function ImportarCondominios({ onClose, onImported }: { onClose: () => vo
           <>
             <div className="text-[13px] text-amx-muted flex flex-col gap-1.5">
               <p>
-                Uma linha por condomínio. Colunas: <b className="text-white">nome</b> (obrigatória), endereco,
-                administradora, zelador_nome, zelador_telefone, sindico_nome, sindico_telefone.
+                Uma linha por condomínio, com <b className="text-white">nome</b> ou <b className="text-white">CNPJ</b>. Também aceita
+                endereço, administradora, valor mensal, dia de vencimento, e-mails de cobrança, responsável, início do contrato,
+                índice de reajuste e zelador/síndico. A planilha de cobranças da Amotex já serve do jeito que está.
               </p>
-              <p>Telefone com DDD vira contato de WhatsApp (zelador nível 1, síndico nível 2). Nome já cadastrado é ignorado.</p>
+              <p>
+                <b className="text-white">CNPJ já cadastrado é atualizado</b> com as colunas preenchidas: é assim que a planilha de
+                levantamento de contratos volta pro sistema. Telefone de zelador/síndico vira contato de WhatsApp.
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="secondary" size="sm" onClick={baixarModelo}>
@@ -134,7 +142,8 @@ export function ImportarCondominios({ onClose, onImported }: { onClose: () => vo
                       <tr>
                         <th className="text-left px-2 py-1.5">Linha</th>
                         <th className="text-left px-2 py-1.5">Condomínio</th>
-                        <th className="text-left px-2 py-1.5">Endereço</th>
+                        <th className="text-left px-2 py-1.5">CNPJ</th>
+                        <th className="text-left px-2 py-1.5">Valor</th>
                         <th className="text-left px-2 py-1.5">Zelador</th>
                         <th className="text-left px-2 py-1.5">Síndico</th>
                       </tr>
@@ -143,8 +152,9 @@ export function ImportarCondominios({ onClose, onImported }: { onClose: () => vo
                       {leitura.linhas.map((l) => (
                         <tr key={l.linha} className="border-t border-amx-line text-white">
                           <td className="px-2 py-1.5 text-amx-muted tabular-nums">{l.linha}</td>
-                          <td className="px-2 py-1.5 font-semibold">{l.nome}</td>
-                          <td className="px-2 py-1.5 text-amx-muted">{l.endereco || '—'}</td>
+                          <td className="px-2 py-1.5 font-semibold">{l.cadastro.nome || '(atualização por CNPJ)'}</td>
+                          <td className="px-2 py-1.5 text-amx-muted whitespace-nowrap">{l.cadastro.cnpj ? formatarCnpj(l.cadastro.cnpj) : '—'}</td>
+                          <td className="px-2 py-1.5 whitespace-nowrap">{l.cadastro.valor_mensal_centavos ? formatarReais(l.cadastro.valor_mensal_centavos) : '—'}</td>
                           <td className="px-2 py-1.5">{[l.zelador_nome, l.zelador_telefone].filter(Boolean).join(' · ') || '—'}</td>
                           <td className="px-2 py-1.5">{[l.sindico_nome, l.sindico_telefone].filter(Boolean).join(' · ') || '—'}</td>
                         </tr>

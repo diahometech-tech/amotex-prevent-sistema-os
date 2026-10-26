@@ -44,3 +44,27 @@ export function saveAssinaturaDataUrl(dataUrl: string, osId: string, papel: 'zel
 export function saveOsPdfBuffer(buffer: Buffer, osId: string): string {
   return saveUpload(path.join('os', osId, 'os.pdf'), buffer);
 }
+
+const COMPROVANTE_MIMES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
+const COMPROVANTE_MAX_BYTES = 10 * 1024 * 1024;
+
+// Comprovante de pagamento de uma cobrança (PDF ou foto). Fica em
+// uploads/financeiro/<cobrancaId>/ — a rota /uploads só serve essa pasta pra
+// admin (ver src/app/uploads/[...path]/route.ts). Nome legível (padrão da
+// planilha: "Gaivotas - 11-2026.pdf") + sufixo curto pra não sobrescrever um
+// segundo comprovante do mesmo mês.
+export function saveComprovanteDataUrl(
+  dataUrl: string,
+  cobrancaId: string,
+  nomeBase: string
+): { url: string } | { erro: string } {
+  const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!matches) return { erro: 'Arquivo do comprovante em formato inválido.' };
+  const [, mime, b64] = matches;
+  if (!COMPROVANTE_MIMES.has(mime)) return { erro: 'Comprovante deve ser PDF, JPG, PNG ou WEBP.' };
+  const buffer = Buffer.from(b64, 'base64');
+  if (buffer.length > COMPROVANTE_MAX_BYTES) return { erro: 'Comprovante maior que 10 MB.' };
+  const seguro = nomeBase.replace(/[^\w\- ]/g, '').replace(/\s+/g, ' ').trim() || 'comprovante';
+  const filename = `${seguro} - ${randomUUID().slice(0, 6)}.${extFromMime(mime)}`;
+  return { url: saveUpload(path.join('financeiro', cobrancaId, filename), buffer) };
+}

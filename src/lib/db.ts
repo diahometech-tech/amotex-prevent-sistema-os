@@ -26,6 +26,99 @@ export interface Condominio {
   administradora?: string;
   monitoramento_ativo: boolean;
   criado_em: string;
+  // --- Cadastro / contrato (módulo financeiro, 26/10) ---
+  // Dinheiro sempre em CENTAVOS inteiros: o driver pg devolve NUMERIC como
+  // string, e float soma errado (0,1 + 0,2). Exibição em src/lib/dinheiro.ts.
+  cnpj?: string; // só dígitos (14)
+  razao_social?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+  cep?: string;
+  // Quem cuida do condomínio do lado do cliente (síndico/administradora).
+  responsavel_nome?: string;
+  responsavel_telefone?: string;
+  responsavel_email?: string;
+  // Para onde vão boleto, nota e avisos de reajuste — separados por ";".
+  emails_cobranca?: string;
+  valor_mensal_centavos?: number;
+  dia_vencimento?: number; // 1..28
+  contrato_inicio?: string; // YYYY-MM-DD — aniversário do reajuste
+  reajuste_indice?: IndiceReajuste;
+  reajuste_percentual_fixo?: number; // % ao ano, quando índice = 'fixo'
+  preventivas_por_mes?: number; // 1 (padrão), 2 (quinzenal), 4 (semanal)
+  ativo?: boolean; // carteira ativa (ausente = true)
+  desativado_em?: string;
+  observacoes?: string;
+}
+
+export type IndiceReajuste = 'igpm' | 'ipca' | 'inpc' | 'fixo';
+
+// Campos de cadastro/contrato do condomínio — lista única usada pelo INSERT
+// e pelo UPDATE do Postgres e pela rota PATCH (o que o cliente pode mandar).
+export const CONDOMINIO_CAMPOS_CADASTRO = [
+  'cnpj', 'razao_social', 'bairro', 'cidade', 'uf', 'cep',
+  'responsavel_nome', 'responsavel_telefone', 'responsavel_email', 'emails_cobranca',
+  'valor_mensal_centavos', 'dia_vencimento', 'contrato_inicio', 'reajuste_indice', 'reajuste_percentual_fixo',
+  'preventivas_por_mes', 'ativo', 'desativado_em', 'observacoes',
+] as const;
+
+// Cobrança mensal de um condomínio (uma por competência).
+// Status "atrasada" NÃO é gravado: é derivado (vencimento passou e não está
+// paga/isenta) em src/lib/cobranca.ts — gravar daria status velho no banco.
+export type CobrancaStatus = 'pendente' | 'enviada' | 'paga' | 'isenta';
+export type FormaPagamento = 'pix' | 'boleto' | 'ted' | 'transferencia' | 'dinheiro' | 'cheque';
+
+export interface Cobranca {
+  id: string;
+  condominio_id: string;
+  competencia: string; // YYYY-MM
+  valor_previsto_centavos: number;
+  vencimento: string; // YYYY-MM-DD
+  status: CobrancaStatus;
+  enviada_em?: string;
+  pago_em?: string; // YYYY-MM-DD
+  valor_recebido_centavos?: number;
+  forma_pagamento?: FormaPagamento;
+  comprovante_url?: string;
+  observacao?: string;
+  criado_em: string;
+}
+
+// Acréscimo (ou desconto, se negativo) temporário no valor mensal — ex.:
+// adequação de quadros elétricos de set a nov; valor maior por 6 meses.
+export interface AjusteValor {
+  id: string;
+  condominio_id: string;
+  descricao: string;
+  valor_centavos: number;
+  inicio: string; // YYYY-MM (inclusive)
+  fim: string; // YYYY-MM (inclusive)
+  criado_em: string;
+}
+
+// Reajuste anual do contrato — um por ciclo (aniversário).
+export type ReajusteStatus = 'pendente' | 'enviado' | 'aceito' | 'recusado' | 'adiado';
+
+export interface Reajuste {
+  id: string;
+  condominio_id: string;
+  aniversario: string; // YYYY-MM-DD do ciclo
+  valor_atual_centavos: number;
+  indice?: IndiceReajuste;
+  percentual: number; // definido pelo gestor (sugestão = índice)
+  valor_novo_centavos: number;
+  vigencia: string; // YYYY-MM a partir de quando vale
+  status: ReajusteStatus;
+  enviado_em?: string;
+  decidido_em?: string;
+  observacao?: string;
+  criado_em: string;
+}
+
+export interface Configuracao {
+  chave: string;
+  valor: string;
 }
 
 // Ponto monitorado dentro de um condomínio. nome_sensorlog é a chave de
@@ -263,6 +356,22 @@ export interface DbBackend {
   getFotosByOS(osId: string): Promise<Foto[]>;
   insertFoto(f: Foto): Promise<void>;
 
+  // Financeiro
+  getCobrancas(competencia?: string): Promise<Cobranca[]>;
+  getCobrancasByCondominio(condominioId: string): Promise<Cobranca[]>;
+  getCobrancaById(id: string): Promise<Cobranca | null>;
+  insertCobranca(c: Cobranca): Promise<void>;
+  updateCobranca(id: string, updates: Partial<Cobranca>): Promise<Cobranca | null>;
+  getAjustes(): Promise<AjusteValor[]>;
+  insertAjuste(a: AjusteValor): Promise<void>;
+  deleteAjuste(id: string): Promise<boolean>;
+  getReajustes(): Promise<Reajuste[]>;
+  getReajusteById(id: string): Promise<Reajuste | null>;
+  insertReajuste(r: Reajuste): Promise<void>;
+  updateReajuste(id: string, updates: Partial<Reajuste>): Promise<Reajuste | null>;
+  getConfiguracao(chave: string): Promise<string | null>;
+  setConfiguracao(chave: string, valor: string): Promise<void>;
+
   // Auditoria
   getAuditLogs(): Promise<AuditLog[]>;
   getAuditLogsByEntidade(entidade: string, entidadeId: string): Promise<AuditLog[]>;
@@ -315,6 +424,10 @@ function emptyDB() {
     fotos: [] as Foto[],
     audit_logs: [] as AuditLog[],
     session_logs: [] as SessionLog[],
+    cobrancas: [] as Cobranca[],
+    ajustes: [] as AjusteValor[],
+    reajustes: [] as Reajuste[],
+    configuracoes: [] as Configuracao[],
   };
 }
 
@@ -555,6 +668,72 @@ const jsonBackend: DbBackend = {
     writeLocalDB(db);
   },
 
+  async getCobrancas(competencia) {
+    const all = readLocalDB().cobrancas;
+    return competencia ? all.filter((c) => c.competencia === competencia) : all;
+  },
+  async getCobrancasByCondominio(condominioId) {
+    return readLocalDB().cobrancas.filter((c) => c.condominio_id === condominioId);
+  },
+  async getCobrancaById(id) {
+    return readLocalDB().cobrancas.find((c) => c.id === id) || null;
+  },
+  async insertCobranca(c) {
+    const db = readLocalDB();
+    // Mesma regra do UNIQUE (condominio_id, competencia) do Postgres.
+    if (db.cobrancas.some((x) => x.condominio_id === c.condominio_id && x.competencia === c.competencia)) {
+      throw new Error('Cobrança já existe para este condomínio e competência.');
+    }
+    db.cobrancas.push(c);
+    writeLocalDB(db);
+  },
+  async updateCobranca(id, updates) {
+    const db = readLocalDB();
+    const i = db.cobrancas.findIndex((c) => c.id === id);
+    if (i === -1) return null;
+    db.cobrancas[i] = { ...db.cobrancas[i], ...stripUndefined(updates) };
+    writeLocalDB(db);
+    return db.cobrancas[i];
+  },
+  async getAjustes() { return readLocalDB().ajustes; },
+  async insertAjuste(a) {
+    const db = readLocalDB();
+    db.ajustes.push(a);
+    writeLocalDB(db);
+  },
+  async deleteAjuste(id) {
+    const db = readLocalDB();
+    const antes = db.ajustes.length;
+    db.ajustes = db.ajustes.filter((a) => a.id !== id);
+    writeLocalDB(db);
+    return db.ajustes.length < antes;
+  },
+  async getReajustes() { return readLocalDB().reajustes; },
+  async getReajusteById(id) {
+    return readLocalDB().reajustes.find((r) => r.id === id) || null;
+  },
+  async insertReajuste(r) {
+    const db = readLocalDB();
+    db.reajustes.push(r);
+    writeLocalDB(db);
+  },
+  async updateReajuste(id, updates) {
+    const db = readLocalDB();
+    const i = db.reajustes.findIndex((r) => r.id === id);
+    if (i === -1) return null;
+    db.reajustes[i] = { ...db.reajustes[i], ...stripUndefined(updates) };
+    writeLocalDB(db);
+    return db.reajustes[i];
+  },
+  async getConfiguracao(chave) {
+    return readLocalDB().configuracoes.find((c) => c.chave === chave)?.valor ?? null;
+  },
+  async setConfiguracao(chave, valor) {
+    const db = readLocalDB();
+    db.configuracoes = [...db.configuracoes.filter((c) => c.chave !== chave), { chave, valor }];
+    writeLocalDB(db);
+  },
+
   async getAuditLogs() { return readLocalDB().audit_logs; },
   async getAuditLogsByEntidade(entidade, entidadeId) {
     return readLocalDB().audit_logs.filter((l) => l.entidade === entidade && l.entidade_id === entidadeId);
@@ -603,12 +782,19 @@ export class Database {
   static getCondominioById(id: string) { return backend().getCondominioById(id); }
 
   static async createCondominio(data: Partial<Condominio>): Promise<Condominio> {
+    const cadastro: Partial<Condominio> = {};
+    for (const k of CONDOMINIO_CAMPOS_CADASTRO) {
+      if (data[k] !== undefined) (cadastro as Record<string, unknown>)[k] = data[k];
+    }
     const condominio: Condominio = {
+      ...cadastro,
       id: randomUUID(),
       nome: data.nome || '',
       endereco: data.endereco,
       administradora: data.administradora,
       monitoramento_ativo: data.monitoramento_ativo ?? false,
+      ativo: data.ativo ?? true,
+      preventivas_por_mes: data.preventivas_por_mes ?? 1,
       criado_em: new Date().toISOString(),
     };
     await backend().insertCondominio(condominio);
@@ -843,6 +1029,34 @@ export class Database {
   static async concluirChecklistItem(id: string): Promise<ChecklistItem | null> {
     return backend().updateChecklistItem(id, { concluido: true, concluido_em: new Date().toISOString() });
   }
+
+  // ----- Financeiro -----
+  static getCobrancas(competencia?: string) { return backend().getCobrancas(competencia); }
+  static getCobrancasByCondominio(condominioId: string) { return backend().getCobrancasByCondominio(condominioId); }
+  static getCobrancaById(id: string) { return backend().getCobrancaById(id); }
+  static async createCobranca(data: Omit<Cobranca, 'id' | 'criado_em' | 'status'> & { status?: CobrancaStatus }): Promise<Cobranca> {
+    const c: Cobranca = { ...data, status: data.status ?? 'pendente', id: randomUUID(), criado_em: new Date().toISOString() };
+    await backend().insertCobranca(c);
+    return c;
+  }
+  static updateCobranca(id: string, updates: Partial<Cobranca>) { return backend().updateCobranca(id, updates); }
+  static getAjustes() { return backend().getAjustes(); }
+  static async createAjuste(data: Omit<AjusteValor, 'id' | 'criado_em'>): Promise<AjusteValor> {
+    const a: AjusteValor = { ...data, id: randomUUID(), criado_em: new Date().toISOString() };
+    await backend().insertAjuste(a);
+    return a;
+  }
+  static deleteAjuste(id: string) { return backend().deleteAjuste(id); }
+  static getReajustes() { return backend().getReajustes(); }
+  static getReajusteById(id: string) { return backend().getReajusteById(id); }
+  static async createReajuste(data: Omit<Reajuste, 'id' | 'criado_em'>): Promise<Reajuste> {
+    const r: Reajuste = { ...data, id: randomUUID(), criado_em: new Date().toISOString() };
+    await backend().insertReajuste(r);
+    return r;
+  }
+  static updateReajuste(id: string, updates: Partial<Reajuste>) { return backend().updateReajuste(id, updates); }
+  static getConfiguracao(chave: string) { return backend().getConfiguracao(chave); }
+  static setConfiguracao(chave: string, valor: string) { return backend().setConfiguracao(chave, valor); }
 
   // ----- Foto -----
   static getFotosByOS(osId: string) { return backend().getFotosByOS(osId); }
