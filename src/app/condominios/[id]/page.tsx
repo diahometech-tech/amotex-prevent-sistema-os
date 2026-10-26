@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
-import { CondominioForm } from '@/components/cadastro/CondominioForm';
+import { CondominioForm, type CondominioFormData } from '@/components/cadastro/CondominioForm';
+import { ContratoCondominio } from '@/components/financeiro/ContratoCondominio';
 import { ReservatorioForm } from '@/components/cadastro/ReservatorioForm';
 import { ContatoForm } from '@/components/cadastro/ContatoForm';
 import { EquipamentoForm } from '@/components/cadastro/EquipamentoForm';
@@ -152,7 +153,7 @@ function CondominioDetailContent() {
     }
   };
 
-  const handleEditCondominio = async (data: Partial<Condominio>) => {
+  const handleEditCondominio = async (data: CondominioFormData) => {
     try {
       setSubmitting(true);
       setSubmitError(null);
@@ -444,6 +445,8 @@ function CondominioDetailContent() {
         </div>
       </div>
 
+      {user.role === 'admin' && <ContratoCondominio condominio={condominio} />}
+
       {/* Tab bar */}
       <div className="flex gap-2 mb-6 border-b border-amx-line pb-4">
         {(['reservatorios', 'contatos', 'equipamentos'] as TabType[]).map(
@@ -527,7 +530,7 @@ function CondominioDetailContent() {
           setEditingType(null);
           setSubmitError(null);
         }}
-        maxWidth="max-w-md"
+        maxWidth="max-w-2xl"
       >
         <ModalHeader
           title="Editar Condomínio"

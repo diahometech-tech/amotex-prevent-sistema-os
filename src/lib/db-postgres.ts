@@ -6,8 +6,9 @@ type Pool = InstanceType<typeof import('pg').Pool>;
 import type {
   DbBackend, Condominio, Reservatorio, Contato, Equipamento, User, EventoAlerta,
   Alerta, Playbook, Escalonamento, OS, ChecklistItem, Foto, AuditLog, SessionLog,
+  Cobranca, AjusteValor, Reajuste,
 } from './db';
-import { defaultUsers } from './db';
+import { defaultUsers, CONDOMINIO_CAMPOS_CADASTRO } from './db';
 
 let pool: Pool | null = null;
 let ready: Promise<void> | null = null;
@@ -202,6 +203,79 @@ async function runSchemaMigration(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_os_data_programada ON os(data_programada);
     ALTER TABLE usuario ADD COLUMN IF NOT EXISTS especialidade TEXT CHECK (especialidade IN ('corretiva', 'preventiva'));
     ALTER TABLE usuario ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;
+
+    -- Módulo financeiro (26/10): cadastro/contrato do condomínio, cobranças
+    -- mensais, ajustes temporários de valor, reajuste anual, configuração.
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS cnpj TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS razao_social TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS bairro TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS cidade TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS uf TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS cep TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS responsavel_nome TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS responsavel_telefone TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS responsavel_email TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS emails_cobranca TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS valor_mensal_centavos INTEGER;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS dia_vencimento INTEGER CHECK (dia_vencimento BETWEEN 1 AND 28);
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS contrato_inicio DATE;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS reajuste_indice TEXT CHECK (reajuste_indice IN ('igpm', 'ipca', 'inpc', 'fixo'));
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS reajuste_percentual_fixo DOUBLE PRECISION;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS preventivas_por_mes INTEGER NOT NULL DEFAULT 1 CHECK (preventivas_por_mes IN (1, 2, 4));
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS desativado_em DATE;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS observacoes TEXT;
+    CREATE INDEX IF NOT EXISTS idx_condominio_cnpj ON condominio(cnpj);
+
+    CREATE TABLE IF NOT EXISTS cobranca (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      condominio_id UUID NOT NULL REFERENCES condominio(id) ON DELETE CASCADE,
+      competencia TEXT NOT NULL CHECK (competencia ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+      valor_previsto_centavos INTEGER NOT NULL,
+      vencimento DATE NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'enviada', 'paga', 'isenta')),
+      enviada_em TIMESTAMPTZ,
+      pago_em DATE,
+      valor_recebido_centavos INTEGER,
+      forma_pagamento TEXT CHECK (forma_pagamento IN ('pix', 'boleto', 'ted', 'transferencia', 'dinheiro', 'cheque')),
+      comprovante_url TEXT,
+      observacao TEXT,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (condominio_id, competencia)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cobranca_competencia ON cobranca(competencia);
+
+    CREATE TABLE IF NOT EXISTS ajuste_valor (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      condominio_id UUID NOT NULL REFERENCES condominio(id) ON DELETE CASCADE,
+      descricao TEXT NOT NULL,
+      valor_centavos INTEGER NOT NULL,
+      inicio TEXT NOT NULL,
+      fim TEXT NOT NULL,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS reajuste (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      condominio_id UUID NOT NULL REFERENCES condominio(id) ON DELETE CASCADE,
+      aniversario DATE NOT NULL,
+      valor_atual_centavos INTEGER NOT NULL,
+      indice TEXT,
+      percentual DOUBLE PRECISION NOT NULL,
+      valor_novo_centavos INTEGER NOT NULL,
+      vigencia TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'enviado', 'aceito', 'recusado', 'adiado')),
+      enviado_em TIMESTAMPTZ,
+      decidido_em TIMESTAMPTZ,
+      observacao TEXT,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (condominio_id, aniversario)
+    );
+
+    CREATE TABLE IF NOT EXISTS configuracao (
+      chave TEXT PRIMARY KEY,
+      valor TEXT NOT NULL
+    );
   `);
 
   const { rows } = await p.query('SELECT COUNT(*)::int AS n FROM usuario');
@@ -232,13 +306,16 @@ export const pgBackend: DbBackend = {
     return (rows[0] as Condominio) || null;
   },
   async insertCondominio(c) {
-    await q(
-      'INSERT INTO condominio (id, nome, endereco, administradora, monitoramento_ativo, criado_em) VALUES ($1,$2,$3,$4,$5,$6)',
-      [c.id, c.nome, c.endereco ?? null, c.administradora ?? null, c.monitoramento_ativo, c.criado_em]
-    );
+    const cols = ['id', 'nome', 'endereco', 'administradora', 'monitoramento_ativo', 'criado_em', ...CONDOMINIO_CAMPOS_CADASTRO];
+    const vals = cols.map((k) => (c as unknown as Record<string, unknown>)[k] ?? null);
+    // ativo/preventivas_por_mes têm DEFAULT no banco; null violaria o NOT NULL.
+    const ix = (k: string) => cols.indexOf(k);
+    if (vals[ix('ativo')] === null) vals[ix('ativo')] = true;
+    if (vals[ix('preventivas_por_mes')] === null) vals[ix('preventivas_por_mes')] = 1;
+    await q(`INSERT INTO condominio (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(',')})`, vals);
   },
   async updateCondominio(id, updates) {
-    const allowed = ['nome', 'endereco', 'administradora', 'monitoramento_ativo'];
+    const allowed = ['nome', 'endereco', 'administradora', 'monitoramento_ativo', ...CONDOMINIO_CAMPOS_CADASTRO];
     const { sets, vals } = buildSet(allowed, updates);
     if (sets.length === 0) return this.getCondominioById(id);
     vals.push(id);
@@ -469,6 +546,92 @@ export const pgBackend: DbBackend = {
     await q(
       'INSERT INTO foto (id, os_id, momento, url, enviado_em) VALUES ($1,$2,$3,$4,$5)',
       [f.id, f.os_id, f.momento, f.url, f.enviado_em]
+    );
+  },
+
+  // ----- Financeiro -----
+  async getCobrancas(competencia) {
+    const { rows } = competencia
+      ? await q('SELECT * FROM cobranca WHERE competencia = $1', [competencia])
+      : await q('SELECT * FROM cobranca');
+    return rows as Cobranca[];
+  },
+  async getCobrancasByCondominio(condominioId) {
+    const { rows } = await q('SELECT * FROM cobranca WHERE condominio_id = $1 ORDER BY competencia DESC', [condominioId]);
+    return rows as Cobranca[];
+  },
+  async getCobrancaById(id) {
+    const { rows } = await q('SELECT * FROM cobranca WHERE id = $1', [id]);
+    return (rows[0] as Cobranca) || null;
+  },
+  async insertCobranca(c) {
+    await q(
+      `INSERT INTO cobranca (id, condominio_id, competencia, valor_previsto_centavos, vencimento, status, enviada_em, pago_em,
+         valor_recebido_centavos, forma_pagamento, comprovante_url, observacao, criado_em)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [c.id, c.condominio_id, c.competencia, c.valor_previsto_centavos, c.vencimento, c.status, c.enviada_em ?? null,
+       c.pago_em ?? null, c.valor_recebido_centavos ?? null, c.forma_pagamento ?? null, c.comprovante_url ?? null,
+       c.observacao ?? null, c.criado_em]
+    );
+  },
+  async updateCobranca(id, updates) {
+    const allowed = [
+      'valor_previsto_centavos', 'vencimento', 'status', 'enviada_em', 'pago_em', 'valor_recebido_centavos',
+      'forma_pagamento', 'comprovante_url', 'observacao',
+    ];
+    const { sets, vals } = buildSet(allowed, updates);
+    if (sets.length === 0) return this.getCobrancaById(id);
+    vals.push(id);
+    const { rows } = await q(`UPDATE cobranca SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+    return (rows[0] as Cobranca) || null;
+  },
+  async getAjustes() {
+    const { rows } = await q('SELECT * FROM ajuste_valor ORDER BY inicio');
+    return rows as AjusteValor[];
+  },
+  async insertAjuste(a) {
+    await q(
+      'INSERT INTO ajuste_valor (id, condominio_id, descricao, valor_centavos, inicio, fim, criado_em) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [a.id, a.condominio_id, a.descricao, a.valor_centavos, a.inicio, a.fim, a.criado_em]
+    );
+  },
+  async deleteAjuste(id) {
+    const res = await q('DELETE FROM ajuste_valor WHERE id = $1', [id]);
+    return (res.rowCount || 0) > 0;
+  },
+  async getReajustes() {
+    const { rows } = await q('SELECT * FROM reajuste ORDER BY aniversario');
+    return rows as Reajuste[];
+  },
+  async getReajusteById(id) {
+    const { rows } = await q('SELECT * FROM reajuste WHERE id = $1', [id]);
+    return (rows[0] as Reajuste) || null;
+  },
+  async insertReajuste(r) {
+    await q(
+      `INSERT INTO reajuste (id, condominio_id, aniversario, valor_atual_centavos, indice, percentual, valor_novo_centavos,
+         vigencia, status, enviado_em, decidido_em, observacao, criado_em)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [r.id, r.condominio_id, r.aniversario, r.valor_atual_centavos, r.indice ?? null, r.percentual, r.valor_novo_centavos,
+       r.vigencia, r.status, r.enviado_em ?? null, r.decidido_em ?? null, r.observacao ?? null, r.criado_em]
+    );
+  },
+  async updateReajuste(id, updates) {
+    const allowed = ['percentual', 'valor_novo_centavos', 'vigencia', 'status', 'enviado_em', 'decidido_em', 'observacao'];
+    const { sets, vals } = buildSet(allowed, updates);
+    if (sets.length === 0) return this.getReajusteById(id);
+    vals.push(id);
+    const { rows } = await q(`UPDATE reajuste SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+    return (rows[0] as Reajuste) || null;
+  },
+  async getConfiguracao(chave) {
+    const { rows } = await q('SELECT valor FROM configuracao WHERE chave = $1', [chave]);
+    return rows[0]?.valor ?? null;
+  },
+  async setConfiguracao(chave, valor) {
+    await q(
+      'INSERT INTO configuracao (chave, valor) VALUES ($1,$2) ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor',
+      [chave, valor]
     );
   },
 
