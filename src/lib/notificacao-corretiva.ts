@@ -11,6 +11,7 @@ import { Database, type Condominio, type OS, type User } from './db';
 import { notifyN8n, webhookConfigurado } from './notify';
 import { fmtHora, slaChegada } from './os-sla';
 import type { ResultadoAviso } from './aviso';
+import { escaparMarkdown } from './telegram-texto';
 
 export interface Destinatario {
   nome: string;
@@ -47,18 +48,18 @@ export function mensagemCorretivaAberta(os: OS, condominio: Condominio, tecnico?
     sla && `⏱ Chegar até ${fmtHora(sla.prazo)} (prazo de 3h)`,
     linkOs(os.id),
   ];
-  return linhas.filter(Boolean).join('\n');
+  return escaparMarkdown(linhas.filter(Boolean).join('\n'));
 }
 
 export function mensagemCorretivaAssumida(os: OS, condominio: Condominio, tecnico: User): string {
   const sla = slaChegada(os);
-  return [
+  return escaparMarkdown([
     `✅ ${tecnico.nome} assumiu a corretiva — ${condominio.nome}`,
     sla && `⏱ Chegar até ${fmtHora(sla.prazo)}`,
     linkOs(os.id),
   ]
     .filter(Boolean)
-    .join('\n');
+    .join('\n'));
 }
 
 export async function avisarCorretiva(

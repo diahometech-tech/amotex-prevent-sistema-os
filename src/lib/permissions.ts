@@ -65,3 +65,9 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   tecnico: 'Técnico',
   sindico: 'Síndico',
 };
+
+// Financeiro (cobranças, reajustes, faturamento) — só gestor (reunião de
+// 26/10: "o administrativo vê faturamento; técnico vê as OS").
+export function canSeeFinanceiro(role: UserRole): boolean {
+  return isAdmin(role);
+}

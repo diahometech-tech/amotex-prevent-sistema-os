@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest, isScopedToOwnCondominio } from '@/lib/auth';
+import { validarCadastro } from '@/lib/financeiro/cadastro';
 
 // GET /api/condominios — lista condomínios. Síndico só vê o próprio.
 export async function GET(request: NextRequest) {
@@ -23,9 +24,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Apenas administradores podem cadastrar condomínios.' }, { status: 403 });
   }
   try {
-    const { nome, endereco, administradora, monitoramento_ativo } = await request.json();
-    if (!nome) return NextResponse.json({ error: 'Informe o nome do condomínio.' }, { status: 400 });
-    const condominio = await Database.createCondominio({ nome, endereco, administradora, monitoramento_ativo });
+    const { dados, erro } = validarCadastro(await request.json());
+    if (erro) return NextResponse.json({ error: erro }, { status: 400 });
+    if (!dados.nome) return NextResponse.json({ error: 'Informe o nome do condomínio.' }, { status: 400 });
+    // Nome pode repetir (há "Panorama" em bairros diferentes); CNPJ não.
+    if (dados.cnpj) {
+      const outro = (await Database.getCondominios()).find((c) => c.cnpj === dados.cnpj);
+      if (outro) return NextResponse.json({ error: `CNPJ já cadastrado em "${outro.nome}".` }, { status: 409 });
+    }
+    const limpo = Object.fromEntries(Object.entries(dados).filter(([, v]) => v !== null));
+    const condominio = await Database.createCondominio(limpo);
     return NextResponse.json({ success: true, condominio });
   } catch (e) {
     console.error('Erro ao criar condomínio:', e);

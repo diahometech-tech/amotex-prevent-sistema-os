@@ -48,6 +48,12 @@
   --color-amx-white: #ffffff;
   --color-amx-muted: #9baac4; /* texto secundário */
   --color-amx-line: #22406b; /* bordas */
+  /* Séries de gráfico (painel financeiro) — slots 1 e 2 da paleta categórica
+     de referência, validados contra o panel #132a4d (validate_palette.js,
+     modo dark: banda de luminosidade, croma, daltonismo e contraste ok).
+     Ordem fixa: série 1 = previsto, série 2 = recebido. */
+  --color-amx-serie-1: #3987e5;
+  --color-amx-serie-2: #d95926;
 
   --font-heading: var(--font-oswald), ui-sans-serif, sans-serif;
   --font-body: var(--font-ibm-plex-sans), ui-sans-serif, sans-serif;

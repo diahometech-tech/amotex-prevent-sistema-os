@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
-import { CondominioForm } from '@/components/cadastro/CondominioForm';
+import { CondominioForm, type CondominioFormData } from '@/components/cadastro/CondominioForm';
 import { ImportarCondominios } from '@/components/cadastro/ImportarCondominios';
 import { canEditCondominio } from '@/lib/permissions';
 import type { Condominio } from '@/lib/db';
@@ -64,7 +64,7 @@ function CondominiosContent() {
     loadCondominios();
   }, [recarregar]);
 
-  const handleCreateCondominio = async (data: Partial<Condominio>) => {
+  const handleCreateCondominio = async (data: CondominioFormData) => {
     try {
       setSubmitting(true);
       setSubmitError(null);
@@ -198,7 +198,7 @@ function CondominiosContent() {
           setShowForm(false);
           setSubmitError(null);
         }}
-        maxWidth="max-w-md"
+        maxWidth="max-w-2xl"
       >
         <ModalHeader
           title="Novo Condomínio"
