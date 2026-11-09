@@ -9,6 +9,7 @@ import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { Field, Input, Select } from '@/components/ui/Form';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { ROLE_LABELS } from '@/lib/permissions';
+import { PlantaoCard } from '@/components/equipe/PlantaoCard';
 import type { Condominio, Especialidade, UserRole } from '@/lib/db';
 
 // Shape de src/app/api/users/route.ts `safe()` — User sem senha_hash.
@@ -20,6 +21,7 @@ interface UserRow {
   condominio_id?: string;
   especialidade?: Especialidade;
   telegram_chat_id?: string;
+  de_plantao?: boolean;
   ativo: boolean;
   criado_em: string;
 }
@@ -342,13 +344,15 @@ function UsuariosContent() {
           </form>
         </Card>
 
+        <PlantaoCard onChange={load} />
+
         {users.length === 0 ? (
           <EmptyState title="Nenhum usuário cadastrado" />
         ) : (
           <div className="flex flex-col gap-2">
             {users.map((u) => (
               <Card key={u.id} className="p-4 flex items-center gap-3 flex-wrap">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-[11rem] flex-1">
                   <p className="text-sm font-semibold text-white">{u.nome}</p>
                   <p className="text-xs text-amx-muted">{u.login}</p>
                 </div>
@@ -356,6 +360,7 @@ function UsuariosContent() {
                 {u.papel === 'tecnico' && (
                   <span className="text-xs text-amx-muted">{ESPECIALIDADE_LABEL[u.especialidade ?? '']}</span>
                 )}
+                {u.papel === 'tecnico' && u.de_plantao && <Badge tone="success">De plantão</Badge>}
                 {u.papel !== 'sindico' && (
                   <Badge tone={u.telegram_chat_id ? 'success' : 'warning'}>
                     {u.telegram_chat_id ? 'Telegram ok' : 'Sem Telegram'}

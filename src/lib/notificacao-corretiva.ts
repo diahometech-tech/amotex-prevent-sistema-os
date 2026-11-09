@@ -12,6 +12,7 @@ import { notifyN8n, webhookConfigurado } from './notify';
 import { fmtHora, slaChegada } from './os-sla';
 import type { ResultadoAviso } from './aviso';
 import { escaparMarkdown } from './telegram-texto';
+import { escolherDestinatarios } from './plantao';
 
 export interface Destinatario {
   nome: string;
@@ -21,14 +22,19 @@ export interface Destinatario {
 
 export type { ResultadoAviso };
 
-// Gestores (admin) + técnicos de corretiva (ou sem especialidade = as duas),
-// ativos e com Telegram cadastrado.
-export async function destinatariosCorretiva(): Promise<Destinatario[]> {
-  const users = await Database.getUsers();
-  return users
-    .filter((u) => u.ativo && u.telegram_chat_id)
-    .filter((u) => u.papel === 'admin' || (u.papel === 'tecnico' && u.especialidade !== 'preventiva'))
-    .map((u) => ({ nome: u.nome, papel: u.papel, telegram_chat_id: u.telegram_chat_id! }));
+// Gestores (admin) + técnico(s) de plantão — ou, sem ninguém de plantão, todos
+// os técnicos de corretiva (ou sem especialidade = as duas). Regra em
+// src/lib/plantao.ts.
+export async function destinatariosCorretiva(): Promise<{
+  destinatarios: Destinatario[];
+  plantao: string[];
+  plantaoSemTelegram: string[];
+}> {
+  const escolha = escolherDestinatarios(await Database.getUsers());
+  return {
+    ...escolha,
+    destinatarios: escolha.destinatarios.map((u) => ({ nome: u.nome, papel: u.papel, telegram_chat_id: u.telegram_chat_id! })),
+  };
 }
 
 function linkOs(osId: string): string | undefined {
@@ -36,7 +42,7 @@ function linkOs(osId: string): string | undefined {
   return base ? `${base}/?os=${osId}` : undefined;
 }
 
-export function mensagemCorretivaAberta(os: OS, condominio: Condominio, tecnico?: User | null): string {
+export function mensagemCorretivaAberta(os: OS, condominio: Condominio, tecnico?: User | null, plantao: string[] = []): string {
   const sla = slaChegada(os);
   const linhas = [
     `🚨 CORRETIVA URGENTE — ${condominio.nome}`,
@@ -44,7 +50,11 @@ export function mensagemCorretivaAberta(os: OS, condominio: Condominio, tecnico?
     os.descricao_problema && `Problema: ${os.descricao_problema}`,
     (os.solicitante_nome || os.solicitante_telefone) &&
       `Solicitante: ${[os.solicitante_nome, os.solicitante_telefone].filter(Boolean).join(' · ')}`,
-    `Técnico: ${tecnico?.nome ?? 'ninguém ainda — quem for, assuma a OS no sistema'}`,
+    tecnico
+      ? `Técnico: ${tecnico.nome}`
+      : plantao.length > 0
+        ? `De plantão: ${plantao.join(', ')} — assuma a OS no sistema`
+        : 'Técnico: ninguém ainda — quem for, assuma a OS no sistema',
     sla && `⏱ Chegar até ${fmtHora(sla.prazo)} (prazo de 3h)`,
     linkOs(os.id),
   ];
@@ -67,7 +77,7 @@ export async function avisarCorretiva(
   os: OS
 ): Promise<ResultadoAviso> {
   if (os.tipo !== 'corretiva') return { enviado: false, destinatarios: 0, motivo: 'não é corretiva' };
-  const [condominio, tecnico, destinatarios] = await Promise.all([
+  const [condominio, tecnico, { destinatarios, plantao, plantaoSemTelegram }] = await Promise.all([
     Database.getCondominioById(os.condominio_id),
     os.tecnico_id ? Database.getUserById(os.tecnico_id) : Promise.resolve(null),
     destinatariosCorretiva(),
@@ -85,7 +95,7 @@ export async function avisarCorretiva(
 
   const mensagem =
     evento === 'os_corretiva_aberta'
-      ? mensagemCorretivaAberta(os, condominio, tecnico)
+      ? mensagemCorretivaAberta(os, condominio, tecnico, plantao)
       : mensagemCorretivaAssumida(os, condominio, tecnico!);
   const sla = slaChegada(os);
   notifyN8n(evento, os, {
@@ -98,7 +108,7 @@ export async function avisarCorretiva(
   });
   await Database.createAuditLog({
     entidade: 'os', entidade_id: os.id, acao: evento === 'os_corretiva_aberta' ? 'AVISO_ABERTURA' : 'AVISO_ASSUMIDA',
-    ator: 'sistema', detalhe: { destinatarios: destinatarios.map((d) => d.nome) },
+    ator: 'sistema', detalhe: { destinatarios: destinatarios.map((d) => d.nome), plantao },
   });
-  return { enviado: true, destinatarios: destinatarios.length };
+  return { enviado: true, destinatarios: destinatarios.length, plantao, plantaoSemTelegram };
 }

@@ -203,6 +203,10 @@ async function runSchemaMigration(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_os_data_programada ON os(data_programada);
     ALTER TABLE usuario ADD COLUMN IF NOT EXISTS especialidade TEXT CHECK (especialidade IN ('corretiva', 'preventiva'));
     ALTER TABLE usuario ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;
+    ALTER TABLE usuario ADD COLUMN IF NOT EXISTS de_plantao BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS categoria TEXT;
+    ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS identificacao TEXT;
+    ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS foto_url TEXT;
 
     -- Módulo financeiro (26/10): cadastro/contrato do condomínio, cobranças
     -- mensais, ajustes temporários de valor, reajuste anual, configuração.
@@ -380,18 +384,39 @@ export const pgBackend: DbBackend = {
 
   // ----- Equipamento -----
   async getEquipamentosByCondominio(condominioId) {
-    const { rows } = await q('SELECT * FROM equipamento WHERE condominio_id = $1', [condominioId]);
-    return rows as Equipamento[];
+    const { rows } = await q('SELECT * FROM equipamento WHERE condominio_id = $1 ORDER BY cadastrado_em', [condominioId]);
+    return rows.map(equipamentoDaLinha);
   },
   async getEquipamentos() {
     const { rows } = await q('SELECT * FROM equipamento ORDER BY tipo, modelo');
-    return rows as Equipamento[];
+    return rows.map(equipamentoDaLinha);
   },
   async insertEquipamento(e) {
     await q(
-      'INSERT INTO equipamento (id, condominio_id, tipo, modelo, potencia_hp, cadastrado_em) VALUES ($1,$2,$3,$4,$5,$6)',
-      [e.id, e.condominio_id, e.tipo, e.modelo ?? null, e.potencia_hp ?? null, e.cadastrado_em]
+      'INSERT INTO equipamento (id, condominio_id, tipo, categoria, identificacao, modelo, potencia_hp, foto_url, cadastrado_em) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [e.id, e.condominio_id, e.tipo, e.categoria ?? null, e.identificacao ?? null, e.modelo ?? null, e.potencia_hp ?? null,
+       e.foto_url ?? null, e.cadastrado_em]
     );
+  },
+  async getEquipamentoById(id) {
+    const { rows } = await q('SELECT * FROM equipamento WHERE id = $1', [id]);
+    return rows[0] ? equipamentoDaLinha(rows[0]) : null;
+  },
+  async updateEquipamento(id, updates) {
+    const allowed = ['tipo', 'categoria', 'identificacao', 'modelo', 'potencia_hp', 'foto_url'];
+    const { sets, vals } = buildSet(allowed, updates);
+    if (sets.length === 0) return this.getEquipamentoById(id);
+    vals.push(id);
+    const { rows } = await q(`UPDATE equipamento SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+    return rows[0] ? equipamentoDaLinha(rows[0]) : null;
+  },
+  async deleteEquipamento(id) {
+    const { rowCount } = await q('DELETE FROM equipamento WHERE id = $1', [id]);
+    return (rowCount ?? 0) > 0;
+  },
+  async equipamentoEmUso(id) {
+    const { rows } = await q('SELECT 1 FROM checklist_item WHERE equipamento_id = $1 LIMIT 1', [id]);
+    return rows.length > 0;
   },
 
   // ----- Usuário -----
@@ -409,13 +434,13 @@ export const pgBackend: DbBackend = {
   },
   async insertUser(u) {
     await q(
-      'INSERT INTO usuario (id, nome, login, papel, condominio_id, senha_hash, ativo, criado_em, especialidade, telegram_chat_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      'INSERT INTO usuario (id, nome, login, papel, condominio_id, senha_hash, ativo, criado_em, especialidade, telegram_chat_id, de_plantao) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
       [u.id, u.nome, u.login, u.papel, u.condominio_id ?? null, u.senha_hash, u.ativo, u.criado_em,
-       u.especialidade ?? null, u.telegram_chat_id ?? null]
+       u.especialidade ?? null, u.telegram_chat_id ?? null, u.de_plantao ?? false]
     );
   },
   async updateUser(id, updates) {
-    const allowed = ['nome', 'login', 'papel', 'condominio_id', 'senha_hash', 'ativo', 'especialidade', 'telegram_chat_id'];
+    const allowed = ['nome', 'login', 'papel', 'condominio_id', 'senha_hash', 'ativo', 'especialidade', 'telegram_chat_id', 'de_plantao'];
     const { sets, vals } = buildSet(allowed, updates);
     if (sets.length === 0) return this.getUserById(id);
     vals.push(id);
@@ -664,6 +689,12 @@ export const pgBackend: DbBackend = {
     );
   },
 };
+
+// NUMERIC volta do pg como string — potencia_hp é número no resto do app.
+function equipamentoDaLinha(row: Record<string, unknown>): Equipamento {
+  const e = row as unknown as Equipamento;
+  return { ...e, potencia_hp: row.potencia_hp == null ? undefined : Number(row.potencia_hp) };
+}
 
 function buildSet(allowed: string[], updates: Record<string, unknown>) {
   const sets: string[] = [];

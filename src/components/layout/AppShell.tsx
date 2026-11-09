@@ -6,6 +6,7 @@ import { useIdleLogout } from '@/lib/useIdleLogout';
 import type { UserRole } from '@/lib/db';
 import { ROLE_LABELS, canManageUsers, canManageOS, canSeeFinanceiro } from '@/lib/permissions';
 import { Spinner } from '@/components/ui/EmptyState';
+import { TrocarSenhaModal } from './TrocarSenhaModal';
 
 export interface AmxUser {
   id: string;
@@ -111,6 +112,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const [trocarSenha, setTrocarSenha] = useState(false);
+
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     window.location.href = '/login';
@@ -174,12 +177,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="flex flex-col items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-full bg-amx-blue flex items-center justify-center text-[11px] font-semibold text-white"
-              title={`${user.name} · ${ROLE_LABELS[user.role]}`}
+            <button
+              type="button"
+              onClick={() => setTrocarSenha(true)}
+              className="w-8 h-8 rounded-full bg-amx-blue flex items-center justify-center text-[11px] font-semibold text-white hover:ring-2 hover:ring-amx-line"
+              title={`${user.name} · ${ROLE_LABELS[user.role]} — trocar minha senha`}
+              aria-label="Trocar minha senha"
             >
               {initials(user.name)}
-            </div>
+            </button>
             <button
               type="button"
               onClick={handleLogout}
@@ -196,6 +202,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <main className="flex-1 min-w-0 flex flex-col">{children}</main>
       </div>
+      <TrocarSenhaModal open={trocarSenha} onClose={() => setTrocarSenha(false)} nome={user.name} />
     </UserContext.Provider>
   );
 }

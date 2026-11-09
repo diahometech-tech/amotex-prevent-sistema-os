@@ -113,6 +113,14 @@ Pedido a partir da planilha `Controle_Cobrancas_AMOTEX_Preventivas.xlsx` e da re
 - `criado_em` (TIMESTAMPTZ) chega como `Date` no servidor: usar `hojeISO(new Date(x))`, nunca `.slice`.
 - **Nunca guardar credencial bancária** (a planilha original tinha o acesso do Sicredi).
 
+**Feito em 09/11 (piloto com a equipe real):**
+A equipe passada pela Amotex: um supervisor técnico (admin, define a escala), três técnicos plantonistas que fazem corretiva **e** vistoria (especialidade "as duas"), uma assistente financeira (admin) e os donos (admin).
+- **Plantão** (`usuario.de_plantao`, regra pura em `src/lib/plantao.ts`): o gestor marca quem está de plantão no card "Plantão agora" (Dashboard e Usuários). O aviso de corretiva vai pros gestores + técnicos de plantão; **sem ninguém marcado, vai pra todos** os técnicos de corretiva. Plantonista sem Telegram aparece na tela de quem abriu a OS ("avise por telefone"). O resumo diário diz quem está de plantão.
+- **Planejamento de preventivas**: técnico com especialidade `preventiva` tem prioridade; sem nenhum, entram os técnicos "as duas". Condomínio inativo fica de fora. O login `tecnico` padrão também conta como técnico, então precisa ser **desativado** antes do piloto (senão recebe visitas).
+- **Parque de máquinas**: catálogo fixo da Amotex em `src/lib/catalogo-equipamentos.ts` (8 categorias, lista "Bombas e Motores em Condomínios"). `equipamento` ganhou `categoria`, `identificacao` e `foto_url`. A foto é reduzida no navegador (`src/lib/imagem-cliente.ts`, 1600 px JPEG), salva em `uploads/equipamentos/<condominio_id>/` e a rota `/uploads` checa acesso ao condomínio. Editar: `PATCH /api/equipamentos/[id]` (admin/técnico); remover só admin e só se nenhuma OS usou o equipamento (409). O checklist da OS mostra a identificação ("Bomba 2 — barrilete").
+- `potencia_hp` (NUMERIC) chegava como string do `pg`; agora é convertido em `equipamentoDaLinha`.
+- **Trocar a própria senha**: clique nas iniciais no menu lateral (`POST /api/auth/senha`, exige a atual, mínimo 8, mesmo limite de tentativas do login).
+
 ## Armadilhas herdadas do NexusFlow (continuam valendo aqui)
 
 - Nunca rodar `npm run build` com o `dev` ativo — corrompe o cache do `.next` (Turbopack)
