@@ -78,6 +78,27 @@ Feito até agora:
 
 **Validação dessas correções** (não só leitura de código): `tsc` e `eslint` limpos, `npm run build` OK, e teste ponta a ponta em navegador real (Playwright) nos 3 papéis — nome de técnico resolvendo como técnico, contagens batendo com os badges, banner de erro aparecendo com a API derrubada e limpando no retry, catálogo sem colisão em 0 HP, e RBAC conferido em `/dashboard` e `/rotas`.
 
+**Feito em 23/10 (operação sem sensores — rota preventiva e corretiva de urgência):**
+Os sensores ainda não chegaram; a Amotex começou a usar o sistema só com OS manuais. Adaptações:
+- **Agenda**: `os.data_programada` (DATE, `YYYY-MM-DD`) — dia da visita. Lógica pura em `src/lib/os-agenda.ts` (fuso `America/Sao_Paulo`; compara string com string, nunca via `new Date()`). O driver `pg` foi configurado pra devolver DATE como string (OID 1082) — sem isso a data mudava de dia no JSON. Corretiva sem data nasce agendada pra hoje.
+- **`/rotas` virou rota do dia**: seletor de dia + filtro de técnico (técnico abre em "Minha rota de hoje"). Mostra agendadas do dia + atrasadas (só quando o dia é hoje) + bloco "sem data". Card "Rota do Dia" do dashboard usa a mesma regra (`montarRotaDoDia`).
+- **Preventiva agendada conta atraso a partir do dia da visita**, não da criação (`computeOsPrioridade`): rota da semana seguinte criada com antecedência não aparece "Alta" antes do dia.
+- **Trava de qualidade completa** (PRD Must): finalizar exige checklist obrigatório + foto antes + foto depois + assinatura do técnico + do zelador. Regra única em `src/lib/os-finalizacao.ts`, usada pelo backend (`Database.finalizarOS` → `FinalizacaoBloqueadaError`, 422 com `pendencias`) e pelo `OSModal` (botão e lista do que falta).
+- **Checklist padrão por tipo** em `src/lib/checklist-padrao.ts` (texto editável) + itens por equipamento (obrigatórios só na preventiva). Antes, condomínio sem equipamento gerava OS de checklist vazio.
+- **Chamado de corretiva**: `solicitante_nome`, `solicitante_telefone`, `descricao_problema` na OS (Nova OS, `OSModal`, rota, PDF).
+- **Importação de condomínios por CSV** (`POST /api/condominios/importar`, admin): parser/validação puros em `src/lib/importacao-condominios.ts`, usados pela prévia da tela e revalidados no servidor. Aceita `;`/`,`/tab, cabeçalho sem depender de acento/ordem, arquivo do Excel em Windows-1252. Nome já cadastrado é ignorado. Telefone de zelador/síndico vira contato WhatsApp nível 1/2.
+- **Lista de OS no celular**: a grade de 7 colunas espremia o nome do condomínio a zero abaixo de `md` — agora a linha empilha.
+- Migração: colunas novas entram por `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` no `ensureSchema` — o deploy só precisa do rebuild, sem passo manual no banco. Validado contra Postgres com o schema antigo de produção.
+
+**Feito em 23/10, 2ª parte (regras da operação passadas pelo cliente):**
+Operação real: ~70 condomínios (em expansão), 2 técnicos de corretiva + 1 de preventiva, atendimento de segunda a domingo.
+- **Toda corretiva é urgente, com 3h para o técnico CHEGAR** (não para concluir). `src/lib/os-sla.ts` (`slaChegada`, `resumoSla`) — chegada = `entrada_em`, gravada em "Marcar Visitado" e, agora também no servidor, quando a OS passa a `em_andamento` sem chegada registrada (antes "Iniciar atendimento" não gravava). `computeOsPrioridade`: corretiva ativa é sempre "urgente" (o agravante de 4h saiu). Contagem regressiva na lista, rota e `OSModal` (`useTick` re-renderiza a cada minuto). Dashboard ganhou "Corretivas fora do prazo" e "% chegada em até 3h (30 dias)".
+- **Usuário: `especialidade`** (`corretiva` | `preventiva` | ausente = as duas, só técnico) e **`telegram_chat_id`**. Editáveis em Usuários (validação em `src/lib/usuario-campos.ts`).
+- **Aviso no Telegram** (`src/lib/notificacao-corretiva.ts`): na abertura de corretiva e quando ela ganha técnico ("assumida" — evita dois técnicos no mesmo chamado). Destinatários = admins + técnicos não-preventiva, ativos, com Telegram. O app monta texto e lista e manda pro n8n (`notifyN8n`, agora com header `X-Amotex-Secret` de `N8N_WEBHOOK_SECRET`); o n8n só entrega — workflows e passo a passo em `amotex-prevent-infra` (`n8n/workflows/`, `docs/Avisos-Telegram.md`). A resposta da API traz `aviso` ({enviado, destinatarios, motivo}) e a tela mostra se saiu ou por que não. **Antes disto `N8N_WEBHOOK_URL` nem estava no compose — todo `notifyN8n` era no-op em produção.**
+- **"Assumir esta OS"** no `OSModal` (técnico, OS sem técnico). **Link direto** `/?os=<id>` abre a OS (é o link do aviso; precisa de `APP_URL` no ambiente).
+- **Planejamento mensal das preventivas** (`POST /api/os/preventivas/planejar`, admin, prévia + confirmação; botão em Rotas). Regra pura em `src/lib/planejamento-preventiva.ts`: idempotente (quem já tem preventiva no mês fica de fora), mantém o mesmo dia do mês do último atendimento (cadência ~30 dias) — manter o dia vale mais que manter o técnico —, capacidade por técnico/dia e por técnico/mês (2º técnico de preventiva divide a carga), novos em rodízio pelos dias mais vazios, mês corrente só de hoje em diante. Só entram técnicos com especialidade `preventiva`.
+- `src/lib/os-checklist-inicial.ts`: checklist inicial extraído de `POST /api/os` (usado também pelo planejamento).
+
 ## Armadilhas herdadas do NexusFlow (continuam valendo aqui)
 
 - Nunca rodar `npm run build` com o `dev` ativo — corrompe o cache do `.next` (Turbopack)

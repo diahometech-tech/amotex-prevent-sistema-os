@@ -109,6 +109,14 @@ export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
   doc.text(`Tipo: ${OS_TIPO_LABELS[os.tipo]}    Status: ${OS_STATUS_LABELS[os.status]}    Prioridade: ${os.prioridade}`);
   doc.text(`Técnico: ${tecnico?.nome ?? '—'}`);
   doc.text(`Aberta em: ${fmtData(os.criado_em)}    Entrada: ${fmtData(os.entrada_em)}    Saída: ${fmtData(os.saida_em)}`);
+  if (os.descricao_problema || os.solicitante_nome || os.solicitante_telefone) {
+    doc.moveDown(0.3);
+    doc.font('Helvetica-Bold').text('Chamado:', { continued: false });
+    doc.font('Helvetica');
+    if (os.descricao_problema) doc.text(os.descricao_problema);
+    const solicitante = [os.solicitante_nome, os.solicitante_telefone].filter(Boolean).join(' · ');
+    if (solicitante) doc.text(`Solicitante: ${solicitante}`);
+  }
   if (os.observacao) {
     doc.moveDown(0.3);
     doc.font('Helvetica-Bold').text('Observação:', { continued: false });
