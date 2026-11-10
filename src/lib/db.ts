@@ -156,8 +156,17 @@ export interface Equipamento {
   id: string;
   condominio_id: string;
   tipo: string;
+  // Categoria do catálogo padrão da Amotex (src/lib/catalogo-equipamentos.ts)
+  // ou 'outro'. Ausente em equipamento cadastrado antes do catálogo.
+  categoria?: string;
+  // Como a equipe reconhece o equipamento no local: "Bomba 2 — barrilete",
+  // "Subsolo 1, lado da rampa". Vários iguais no mesmo condomínio são comuns.
+  identificacao?: string;
   modelo?: string;
   potencia_hp?: number;
+  // Foto do equipamento (parque de máquinas), tirada na visita — em
+  // uploads/equipamentos/<condominio_id>/, servida só a quem acessa o condomínio.
+  foto_url?: string;
   cadastrado_em: string;
 }
 
@@ -177,6 +186,10 @@ export interface User {
   // Chat do Telegram pra avisos operacionais (corretiva aberta/assumida).
   // Ausente = a pessoa não recebe aviso. Ver src/lib/notificacao-corretiva.ts.
   telegram_chat_id?: string;
+  // Só técnico: está no plantão agora. O supervisor marca em Usuários ou no
+  // painel. Com alguém de plantão, o aviso de corretiva vai só pra ele (e pros
+  // gestores); sem ninguém marcado, vai pra todos — ver src/lib/plantao.ts.
+  de_plantao?: boolean;
   senha_hash: string;
   ativo: boolean;
   criado_em: string;
@@ -315,6 +328,11 @@ export interface DbBackend {
   getEquipamentosByCondominio(condominioId: string): Promise<Equipamento[]>;
   getEquipamentos(): Promise<Equipamento[]>;
   insertEquipamento(e: Equipamento): Promise<void>;
+  getEquipamentoById(id: string): Promise<Equipamento | null>;
+  updateEquipamento(id: string, updates: Partial<Equipamento>): Promise<Equipamento | null>;
+  /** Remove; false se não existe. Quem chama verifica antes se está em uso. */
+  deleteEquipamento(id: string): Promise<boolean>;
+  equipamentoEmUso(id: string): Promise<boolean>;
 
   // Usuário (RBAC)
   getUsers(): Promise<User[]>;
@@ -552,6 +570,27 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     db.equipamentos.push(e);
     writeLocalDB(db);
+  },
+  async getEquipamentoById(id) {
+    return readLocalDB().equipamentos.find((e) => e.id === id) ?? null;
+  },
+  async updateEquipamento(id, updates) {
+    const db = readLocalDB();
+    const i = db.equipamentos.findIndex((e) => e.id === id);
+    if (i < 0) return null;
+    db.equipamentos[i] = { ...db.equipamentos[i], ...stripUndefined(updates) };
+    writeLocalDB(db);
+    return db.equipamentos[i];
+  },
+  async deleteEquipamento(id) {
+    const db = readLocalDB();
+    const antes = db.equipamentos.length;
+    db.equipamentos = db.equipamentos.filter((e) => e.id !== id);
+    writeLocalDB(db);
+    return db.equipamentos.length < antes;
+  },
+  async equipamentoEmUso(id) {
+    return readLocalDB().checklist_items.some((c) => c.equipamento_id === id);
   },
 
   async getUsers() { return readLocalDB().users; },
@@ -861,13 +900,21 @@ export class Database {
       id: randomUUID(),
       condominio_id: data.condominio_id || '',
       tipo: data.tipo || '',
+      categoria: data.categoria,
+      identificacao: data.identificacao,
       modelo: data.modelo,
       potencia_hp: data.potencia_hp,
+      foto_url: data.foto_url,
       cadastrado_em: new Date().toISOString(),
     };
     await backend().insertEquipamento(equipamento);
     return equipamento;
   }
+
+  static getEquipamentoById(id: string) { return backend().getEquipamentoById(id); }
+  static updateEquipamento(id: string, updates: Partial<Equipamento>) { return backend().updateEquipamento(id, updates); }
+  static deleteEquipamento(id: string) { return backend().deleteEquipamento(id); }
+  static equipamentoEmUso(id: string) { return backend().equipamentoEmUso(id); }
 
   // ----- Usuário (RBAC) -----
   static getUsers() { return backend().getUsers(); }
@@ -883,6 +930,7 @@ export class Database {
       condominio_id: data.condominio_id,
       especialidade: data.especialidade,
       telegram_chat_id: data.telegram_chat_id,
+      de_plantao: data.de_plantao ?? false,
       senha_hash: data.senha ? hashPassword(data.senha) : (data.senha_hash || ''),
       ativo: data.ativo ?? true,
       criado_em: new Date().toISOString(),

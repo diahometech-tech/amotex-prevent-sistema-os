@@ -47,6 +47,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (session.role !== 'admin') {
       return NextResponse.json({ error: 'Você não tem acesso a este arquivo.' }, { status: 403 });
     }
+  } else if (kind === 'equipamentos' && ownerId) {
+    // Fotos do parque de máquinas: uploads/equipamentos/<condominioId>/...
+    if (!(await canAccessCondominio(session, ownerId))) {
+      return NextResponse.json({ error: 'Você não tem acesso a este arquivo.' }, { status: 403 });
+    }
   } else if (kind === 'os' && ownerId) {
     const os = await Database.getOSById(ownerId);
     if (!os) {

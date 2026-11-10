@@ -24,17 +24,22 @@ export async function POST(request: NextRequest) {
     if (mes < hoje.slice(0, 7)) return NextResponse.json({ error: 'Esse mês já passou.' }, { status: 400 });
 
     const [condominios, users, oss] = await Promise.all([Database.getCondominios(), Database.getUsers(), Database.getOSs()]);
-    const tecnicos = users.filter((u) => u.papel === 'tecnico' && u.ativo && u.especialidade === 'preventiva');
+    // Técnico dedicado à preventiva tem prioridade; sem nenhum, entram os que
+    // fazem as duas (sem especialidade) — é o caso da equipe de plantonistas
+    // (09/11), em que os três fazem corretiva e vistoria.
+    const ativos = users.filter((u) => u.papel === 'tecnico' && u.ativo);
+    const dedicados = ativos.filter((u) => u.especialidade === 'preventiva');
+    const tecnicos = dedicados.length > 0 ? dedicados : ativos.filter((u) => !u.especialidade);
     if (tecnicos.length === 0) {
       return NextResponse.json(
-        { error: 'Nenhum técnico com especialidade "Preventiva". Defina em Usuários › Editar.' },
+        { error: 'Nenhum técnico que faça preventiva. Defina a especialidade em Usuários › Editar.' },
         { status: 400 }
       );
     }
 
     const plano = planejarPreventivasMes({
       mes, hoje, oss,
-      condominios: condominios.map((c) => ({ id: c.id, nome: c.nome })),
+      condominios: condominios.filter((c) => c.ativo !== false).map((c) => ({ id: c.id, nome: c.nome })),
       tecnicos: tecnicos.map((t) => t.id),
     });
     const nomeCondominio = new Map(condominios.map((c) => [c.id, c.nome]));

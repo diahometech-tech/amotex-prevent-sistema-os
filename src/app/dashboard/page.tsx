@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
+import { PlantaoCard } from '@/components/equipe/PlantaoCard';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -185,6 +186,10 @@ function DashboardContent() {
         {error && (
           <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2 mb-4">{error}</p>
         )}
+
+        <div className="mb-6">
+          <PlantaoCard />
+        </div>
 
         {/* KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { Database } from '@/lib/db';
 import { resumoDiarioGestor } from '@/lib/financeiro/resumo-diario';
 import { hojeISO } from '@/lib/os-agenda';
+import { plantonistas } from '@/lib/plantao';
 
 // GET /api/integracoes/resumo-diario — chamado pelo n8n (workflow agendado,
 // todo dia de manhã), não por gente. Autenticado pelo mesmo segredo do
@@ -19,7 +20,10 @@ export async function GET(request: NextRequest) {
   const [condominios, cobrancas, reajustes, oss, users] = await Promise.all([
     Database.getCondominios(), Database.getCobrancas(), Database.getReajustes(), Database.getOSs(), Database.getUsers(),
   ]);
-  const { mensagem, temAlgo } = resumoDiarioGestor({ hoje: hojeISO(), agora: Date.now(), condominios, cobrancas, reajustes, oss });
+  const { mensagem, temAlgo } = resumoDiarioGestor({
+    hoje: hojeISO(), agora: Date.now(), condominios, cobrancas, reajustes, oss,
+    plantao: plantonistas(users).map((u) => u.nome),
+  });
   const destinatarios = users
     .filter((u) => u.ativo && u.papel === 'admin' && u.telegram_chat_id)
     .map((u) => ({ nome: u.nome, telegram_chat_id: u.telegram_chat_id }));

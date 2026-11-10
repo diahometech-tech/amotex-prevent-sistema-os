@@ -7,11 +7,22 @@ export interface ResultadoAviso {
   destinatarios: number;
   /** Quando não saiu, por quê — mostrado na tela pra quem abriu a OS. */
   motivo?: string;
+  /** Técnicos de plantão avisados (vazio/ausente = aviso foi a todos). */
+  plantao?: string[];
+  /** De plantão mas sem Telegram: o aviso não chegou neles. */
+  plantaoSemTelegram?: string[];
 }
 
 export function textoAviso(aviso: ResultadoAviso): { texto: string; ok: boolean } {
   if (aviso.enviado) {
-    return { texto: `Aviso enviado no Telegram para ${aviso.destinatarios} pessoa${aviso.destinatarios > 1 ? 's' : ''}.`, ok: true };
+    const plantao = aviso.plantao?.length ? ` (plantão: ${aviso.plantao.join(', ')})` : '';
+    const semTelegram = aviso.plantaoSemTelegram?.length
+      ? ` Atenção: ${aviso.plantaoSemTelegram.join(', ')} ${aviso.plantaoSemTelegram.length > 1 ? 'estão' : 'está'} de plantão sem Telegram cadastrado — avise por telefone.`
+      : '';
+    return {
+      texto: `Aviso enviado no Telegram para ${aviso.destinatarios} pessoa${aviso.destinatarios > 1 ? 's' : ''}${plantao}.${semTelegram}`,
+      ok: !semTelegram,
+    };
   }
   return { texto: `Aviso NÃO enviado: ${aviso.motivo ?? 'motivo desconhecido'}. Avise a equipe por telefone.`, ok: false };
 }

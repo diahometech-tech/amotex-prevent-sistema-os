@@ -9,7 +9,7 @@ function safe(u: User) {
 }
 
 // PATCH /api/users/[id] — reseta senha, ativa/desativa, especialidade do
-// técnico e chat do Telegram. Só admin.
+// técnico, plantão e chat do Telegram. Só admin.
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = getSessionFromRequest(request);
   if (!session || !canManageUsers(session.role)) {
@@ -22,6 +22,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const updates: Record<string, unknown> = {};
     if (typeof senha === 'string' && senha.length > 0) updates.senha_hash = hashPassword(senha);
     if (typeof ativo === 'boolean') updates.ativo = ativo;
+    if (typeof body.de_plantao === 'boolean') updates.de_plantao = body.de_plantao;
     if (typeof condominio_id === 'string') updates.condominio_id = condominio_id;
     if (body.especialidade !== undefined) {
       const especialidade = normalizarEspecialidade(body.especialidade);

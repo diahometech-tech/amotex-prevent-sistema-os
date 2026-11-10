@@ -68,3 +68,20 @@ export function saveComprovanteDataUrl(
   const filename = `${seguro} - ${randomUUID().slice(0, 6)}.${extFromMime(mime)}`;
   return { url: saveUpload(path.join('financeiro', cobrancaId, filename), buffer) };
 }
+
+const FOTO_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const FOTO_EQUIPAMENTO_MAX_BYTES = 8 * 1024 * 1024;
+
+// Foto do equipamento (parque de máquinas). Fica em
+// uploads/equipamentos/<condominioId>/ — a rota /uploads checa o acesso ao
+// condomínio pela pasta (ver src/app/uploads/[...path]/route.ts). Nome único:
+// trocar a foto gera arquivo novo, nunca sobrescreve o de outro equipamento.
+export function saveFotoEquipamentoDataUrl(dataUrl: string, condominioId: string): { url: string } | { erro: string } {
+  const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!matches) return { erro: 'Foto em formato inválido.' };
+  const [, mime, b64] = matches;
+  if (!FOTO_MIMES.has(mime)) return { erro: 'A foto deve ser JPG, PNG ou WEBP.' };
+  const buffer = Buffer.from(b64, 'base64');
+  if (buffer.length > FOTO_EQUIPAMENTO_MAX_BYTES) return { erro: 'Foto maior que 8 MB.' };
+  return { url: saveUpload(path.join('equipamentos', condominioId, `${randomUUID()}.${extFromMime(mime)}`), buffer) };
+}

@@ -13,7 +13,8 @@ import { CondominioForm, type CondominioFormData } from '@/components/cadastro/C
 import { ContratoCondominio } from '@/components/financeiro/ContratoCondominio';
 import { ReservatorioForm } from '@/components/cadastro/ReservatorioForm';
 import { ContatoForm } from '@/components/cadastro/ContatoForm';
-import { EquipamentoForm } from '@/components/cadastro/EquipamentoForm';
+import { EquipamentoForm, type EquipamentoFormData } from '@/components/cadastro/EquipamentoForm';
+import { CATEGORIAS_EQUIPAMENTO, nomeCategoria } from '@/lib/catalogo-equipamentos';
 import { canEditCondominio, canEditReservatorio, canEditContato, canEditEquipamento } from '@/lib/permissions';
 import type { AmxUser } from '@/components/layout/AppShell';
 import type {
@@ -54,9 +55,10 @@ function CondominioDetailContent() {
   const [loadingTab, setLoadingTab] = useState(false);
 
   const [editingType, setEditingType] = useState<EditingItemType | null>(null);
-  // Equipamento nunca entra aqui (não tem modo de edição, só criação) — daí
-  // o union cobrir só os dois tipos que realmente são editados.
   const [editingItem, setEditingItem] = useState<Reservatorio | Contato | null>(null);
+  // Equipamento em edição (null = cadastro novo) — estado próprio porque o
+  // formulário e a rota de salvar são outros.
+  const [editingEquipamento, setEditingEquipamento] = useState<Equipamento | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -325,38 +327,57 @@ function CondominioDetailContent() {
     }
   };
 
-  const handleCreateEquipamento = async (data: Partial<Equipamento>) => {
+  const handleSaveEquipamento = async (data: EquipamentoFormData) => {
+    const editando = editingEquipamento;
     try {
       setSubmitting(true);
       setSubmitError(null);
 
-      const response = await fetch(`/api/condominios/${id}/equipamentos`, {
-        method: 'POST',
+      const response = await fetch(editando ? `/api/equipamentos/${editando.id}` : `/api/condominios/${id}/equipamentos`, {
+        method: editando ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
 
-      const result: { equipamento?: Equipamento; error?: string } =
-        await response.json();
+      const result: { equipamento?: Equipamento; error?: string } = await response.json().catch(() => ({}));
 
-      if (!response.ok || result.error) {
-        setSubmitError(result.error || 'Erro ao criar equipamento');
+      if (!response.ok || result.error || !result.equipamento) {
+        setSubmitError(result.error || 'Erro ao salvar equipamento');
         return;
       }
 
-      setTabData((prev: TabState) => ({
-        ...prev,
-        equipamentos: {
-          data: [...(prev.equipamentos?.data ?? []), result.equipamento!],
-          loaded: true,
-        },
-      }));
+      const salvo = result.equipamento;
+      setTabData((prev: TabState) => {
+        const lista = prev.equipamentos?.data ?? [];
+        return {
+          ...prev,
+          equipamentos: {
+            data: editando ? lista.map((e) => (e.id === salvo.id ? salvo : e)) : [...lista, salvo],
+            loaded: true,
+          },
+        };
+      });
       setEditingType(null);
+      setEditingEquipamento(null);
     } catch {
-      setSubmitError('Erro ao criar equipamento');
+      setSubmitError('Erro ao salvar equipamento');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleDeleteEquipamento = async (equipamento: Equipamento) => {
+    if (!window.confirm(`Remover "${equipamento.tipo}"${equipamento.identificacao ? ` (${equipamento.identificacao})` : ''} do parque de máquinas?`)) return;
+    const response = await fetch(`/api/equipamentos/${equipamento.id}`, { method: 'DELETE' }).catch(() => null);
+    const result = response ? await response.json().catch(() => ({})) : {};
+    if (!response?.ok) {
+      window.alert(result.error || 'Não foi possível remover o equipamento.');
+      return;
+    }
+    setTabData((prev: TabState) => ({
+      ...prev,
+      equipamentos: { data: (prev.equipamentos?.data ?? []).filter((e) => e.id !== equipamento.id), loaded: true },
+    }));
   };
 
   const handleTabClick = (tab: TabType) => {
@@ -517,9 +538,15 @@ function CondominioDetailContent() {
           loading={isLoadingCurrentTab}
           onCreateClick={() => {
             setEditingType('equipamento');
-            setEditingItem(null);
+            setEditingEquipamento(null);
             setSubmitError(null);
           }}
+          onEditClick={(item) => {
+            setEditingType('equipamento');
+            setEditingEquipamento(item);
+            setSubmitError(null);
+          }}
+          onDeleteClick={handleDeleteEquipamento}
         />
       )}
 
@@ -637,10 +664,10 @@ function CondominioDetailContent() {
           setEditingType(null);
           setSubmitError(null);
         }}
-        maxWidth="max-w-md"
+        maxWidth="max-w-lg"
       >
         <ModalHeader
-          title="Novo Equipamento"
+          title={editingEquipamento ? 'Editar equipamento' : 'Novo equipamento'}
           onClose={() => {
             setEditingType(null);
             setSubmitError(null);
@@ -653,7 +680,9 @@ function CondominioDetailContent() {
             </div>
           )}
           <EquipamentoForm
-            onSubmit={handleCreateEquipamento}
+            key={editingEquipamento?.id ?? 'novo'}
+            inicial={editingEquipamento ?? undefined}
+            onSubmit={handleSaveEquipamento}
             onCancel={() => {
               setEditingType(null);
               setSubmitError(null);
@@ -845,8 +874,11 @@ function EquipamentosTab({
   data,
   loading,
   onCreateClick,
-}: TabPanelProps<Equipamento>) {
+  onEditClick,
+  onDeleteClick,
+}: TabPanelProps<Equipamento> & { onDeleteClick?: (item: Equipamento) => void }) {
   const canEdit = canEditEquipamento(user.role);
+  const canDelete = user.role === 'admin';
 
   if (loading) {
     return (
@@ -860,51 +892,80 @@ function EquipamentosTab({
     return (
       <EmptyState
         title="Nenhum equipamento cadastrado"
-        action={
-          canEdit ? (
-            <Button onClick={onCreateClick}>
-              + Novo Equipamento
-            </Button>
-          ) : undefined
-        }
+        description="O parque de máquinas é montado na visita: categoria, tipo, identificação no local e foto de cada bomba ou motor."
+        action={canEdit ? <Button onClick={onCreateClick}>+ Novo equipamento</Button> : undefined}
       />
     );
   }
 
+  // Agrupa na ordem do catálogo da Amotex; "Outro"/sem categoria no fim.
+  const ordem = [...CATEGORIAS_EQUIPAMENTO.map((c) => c.id), 'outro', ''];
+  const grupos = new Map<string, Equipamento[]>();
+  for (const e of data) {
+    const k = e.categoria && ordem.includes(e.categoria) ? e.categoria : '';
+    grupos.set(k, [...(grupos.get(k) ?? []), e]);
+  }
+  const semFoto = data.filter((e) => !e.foto_url).length;
+
   return (
-    <div className="space-y-3">
-      {canEdit && (
-        <div className="mb-4">
-          <Button onClick={onCreateClick}>
-            + Novo Equipamento
-          </Button>
-        </div>
-      )}
-      {data.map((equipamento: Equipamento) => (
-        <Card key={equipamento.id}>
-          <div>
-            <h3 className="font-semibold text-white mb-1">
-              {equipamento.tipo}
-            </h3>
-            {equipamento.modelo && (
-              <p className="text-sm text-amx-muted mb-1">
-                Modelo: {equipamento.modelo}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-4 text-xs text-amx-muted">
-              {equipamento.potencia_hp && (
-                <span>{equipamento.potencia_hp.toLocaleString('pt-BR')} HP</span>
-              )}
-              <span>
-                Cadastrado em{' '}
-                {new Date(equipamento.cadastrado_em).toLocaleString(
-                  'pt-BR'
-                )}
-              </span>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-sm text-amx-muted">
+          <b className="text-white">{data.length}</b> equipamento{data.length > 1 ? 's' : ''}
+          {semFoto > 0 && <> · <span className="text-amx-amber">{semFoto} sem foto</span></>}
+        </p>
+        {canEdit && <Button onClick={onCreateClick}>+ Novo equipamento</Button>}
+      </div>
+      {ordem
+        .filter((k) => grupos.has(k))
+        .map((k) => (
+          <section key={k || 'sem'}>
+            <h3 className="font-heading text-[11px] text-amx-muted uppercase tracking-wider mb-2">{nomeCategoria(k || undefined)}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {grupos.get(k)!.map((equipamento) => (
+                <Card key={equipamento.id} className="p-3 flex gap-3">
+                  {equipamento.foto_url ? (
+                    <a href={equipamento.foto_url} target="_blank" rel="noreferrer" className="shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- foto autenticada servida por /uploads */}
+                      <img
+                        src={equipamento.foto_url}
+                        alt={`Foto: ${equipamento.tipo}`}
+                        className="h-20 w-20 object-cover rounded-[10px] border border-amx-line"
+                      />
+                    </a>
+                  ) : (
+                    <div className="h-20 w-20 shrink-0 rounded-[10px] border border-dashed border-amx-amber/50 grid place-items-center text-[11px] text-amx-amber">
+                      sem foto
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-white text-sm">{equipamento.tipo}</p>
+                    {equipamento.identificacao && <p className="text-xs text-white/80">{equipamento.identificacao}</p>}
+                    <p className="text-xs text-amx-muted mt-0.5">
+                      {[equipamento.modelo, equipamento.potencia_hp != null ? `${equipamento.potencia_hp.toLocaleString('pt-BR')} CV` : null]
+                        .filter(Boolean)
+                        .join(' · ') || 'modelo não informado'}
+                    </p>
+                    {(canEdit || canDelete) && (
+                      <div className="flex gap-1.5 mt-2">
+                        {canEdit && onEditClick && (
+                          <Button size="sm" variant="secondary" onClick={() => onEditClick(equipamento)}>
+                            {equipamento.foto_url ? 'Editar' : 'Editar / foto'}
+                          </Button>
+                        )}
+                        {canDelete && onDeleteClick && (
+                          <Button size="sm" variant="secondary" onClick={() => onDeleteClick(equipamento)}>
+                            Remover
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              ))}
             </div>
-          </div>
-        </Card>
-      ))}
+          </section>
+        ))}
     </div>
   );
 }

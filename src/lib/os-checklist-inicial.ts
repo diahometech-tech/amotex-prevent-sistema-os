@@ -15,7 +15,9 @@ export async function criarChecklistInicial(os: Pick<OS, 'id' | 'tipo' | 'condom
     await Database.createChecklistItem({
       os_id: os.id,
       equipamento_id: eq.id,
-      descricao: `Inspecionar ${eq.tipo}${eq.modelo ? ` (${eq.modelo})` : ''}`,
+      // Identificação primeiro: com várias bombas iguais no prédio, é ela que
+      // diz ao técnico qual é qual.
+      descricao: `Inspecionar ${eq.tipo}${[eq.identificacao, eq.modelo].filter(Boolean).length ? ` (${[eq.identificacao, eq.modelo].filter(Boolean).join(' · ')})` : ''}`,
       // Na corretiva o foco é o defeito chamado — inspecionar cada
       // equipamento do prédio fica como item opcional, não trava o fechamento.
       obrigatorio: os.tipo === 'preventiva',

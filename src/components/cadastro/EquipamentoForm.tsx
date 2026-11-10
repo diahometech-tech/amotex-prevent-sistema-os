@@ -1,12 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Field, Input } from '@/components/ui/Form';
+import { Field, Input, Select } from '@/components/ui/Form';
 import type { Equipamento } from '@/lib/db';
+import { CATEGORIAS_EQUIPAMENTO, CATEGORIA_OUTRO, categoriaDoTipo } from '@/lib/catalogo-equipamentos';
+import { fotoReduzidaDataUrl } from '@/lib/imagem-cliente';
+
+// O que o formulário entrega: os campos do equipamento + `foto` (data URL)
+// quando uma foto nova foi tirada. Ver POST /api/condominios/[id]/equipamentos
+// e PATCH /api/equipamentos/[id].
+export type EquipamentoFormData = Partial<Equipamento> & { foto?: string };
 
 interface EquipamentoFormProps {
-  onSubmit: (data: Partial<Equipamento>) => void | Promise<void>;
+  inicial?: Equipamento;
+  onSubmit: (data: EquipamentoFormData) => void | Promise<void>;
   onCancel: () => void;
   busy?: boolean;
 }
@@ -17,36 +25,31 @@ interface CatalogoItem {
   potencia_hp?: number;
 }
 
-// O label é a chave que identifica o item do catálogo (value do <option>,
-// key do React e critério de match na seleção), então precisa ser único.
-// `if (item.potencia_hp)` era falso para 0 — e o campo aceita 0 (`min="0"`) —
-// fazendo "Bomba X com 0 HP" e "Bomba X sem potência" colidirem no mesmo
-// label: chave duplicada no React e seleção do item errado.
-function catalogoLabel(item: CatalogoItem): string {
-  const partes = [item.tipo];
-  if (item.modelo) partes.push(item.modelo);
-  if (item.potencia_hp != null) partes.push(`${item.potencia_hp} HP`);
-  return partes.join(' — ');
+const OUTRO_TIPO = '__outro__';
+
+function tiposDe(categoria: string): string[] {
+  return CATEGORIAS_EQUIPAMENTO.find((c) => c.id === categoria)?.tipos ?? [];
 }
 
-export function EquipamentoForm({
-  onSubmit,
-  onCancel,
-  busy = false,
-}: EquipamentoFormProps) {
-  const [form, setForm] = useState<Partial<Equipamento>>({
-    tipo: '',
-    modelo: '',
-    potencia_hp: undefined,
-  });
+export function EquipamentoForm({ inicial, onSubmit, onCancel, busy = false }: EquipamentoFormProps) {
+  const categoriaInicial = inicial ? inicial.categoria ?? categoriaDoTipo(inicial.tipo) ?? CATEGORIA_OUTRO : '';
+  const tipoInicialNoCatalogo = !!inicial && tiposDe(categoriaInicial).includes(inicial.tipo);
+  const [categoria, setCategoria] = useState<string>(categoriaInicial);
+  const [tipoEscolhido, setTipoEscolhido] = useState<string>(
+    inicial ? (tipoInicialNoCatalogo ? inicial.tipo : OUTRO_TIPO) : ''
+  );
+  const [tipoLivre, setTipoLivre] = useState(inicial && !tipoInicialNoCatalogo ? inicial.tipo : '');
+  const [identificacao, setIdentificacao] = useState(inicial?.identificacao ?? '');
+  const [modelo, setModelo] = useState(inicial?.modelo ?? '');
+  const [potencia, setPotencia] = useState(inicial?.potencia_hp != null ? String(inicial.potencia_hp) : '');
+  const [foto, setFoto] = useState<string | null>(null);
+  const [preparandoFoto, setPreparandoFoto] = useState(false);
+  const [erro, setErro] = useState('');
+  const fotoRef = useRef<HTMLInputElement>(null);
 
-  // Combinações já cadastradas em QUALQUER condomínio (bombas/boias se
-  // repetem entre condomínios — ver issue #6). Selecionar uma preenche os 3
-  // campos abaixo; continuar digitando algo que não bate segue como cadastro
-  // novo, sem passo extra — o catálogo se atualiza sozinho na próxima busca.
+  // Modelos/potências já cadastrados em outros condomínios: sugestão pro
+  // campo Modelo do mesmo tipo (bombas se repetem entre condomínios).
   const [catalogo, setCatalogo] = useState<CatalogoItem[]>([]);
-  const [busca, setBusca] = useState('');
-
   useEffect(() => {
     let cancelled = false;
     fetch('/api/equipamentos/catalogo', { cache: 'no-store' })
@@ -55,96 +58,173 @@ export function EquipamentoForm({
         if (!cancelled && data?.catalogo) setCatalogo(data.catalogo);
       })
       .catch(() => {
-        // Catálogo é um atalho, não uma dependência — falha aqui não impede
-        // o cadastro manual normal.
+        // Sugestão é atalho; sem ela o cadastro segue manual.
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const handleBuscaChange = (valor: string) => {
-    setBusca(valor);
-    const item = catalogo.find((c) => catalogoLabel(c) === valor);
-    if (item) {
-      setForm({ ...form, tipo: item.tipo, modelo: item.modelo ?? '', potencia_hp: item.potencia_hp });
+  const outro = categoria === CATEGORIA_OUTRO || tipoEscolhido === OUTRO_TIPO;
+  const tipo = outro ? tipoLivre : tipoEscolhido;
+  const modelosSugeridos = useMemo(() => catalogo.filter((c) => c.tipo === tipo && c.modelo), [catalogo, tipo]);
+
+  const escolherModelo = (valor: string) => {
+    setModelo(valor);
+    const item = modelosSugeridos.find((c) => c.modelo === valor);
+    if (item?.potencia_hp != null && !potencia) setPotencia(String(item.potencia_hp));
+  };
+
+  const escolherFoto = async (file?: File) => {
+    if (!file) return;
+    setPreparandoFoto(true);
+    try {
+      setFoto(await fotoReduzidaDataUrl(file));
+    } finally {
+      setPreparandoFoto(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(form);
+    setErro('');
+    if (!categoria) return setErro('Escolha a categoria.');
+    if (!tipo.trim()) return setErro('Escolha ou digite o tipo do equipamento.');
+    const pot = potencia.trim() === '' ? undefined : Number(potencia.replace(',', '.'));
+    if (pot !== undefined && !Number.isFinite(pot)) return setErro('Potência deve ser um número, ex.: 1,5');
+    await onSubmit({
+      categoria,
+      tipo: tipo.trim(),
+      identificacao,
+      modelo,
+      potencia_hp: pot,
+      ...(foto ? { foto } : {}),
+    });
   };
+
+  const fotoAtual = foto ?? inicial?.foto_url;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {catalogo.length > 0 && (
-        <Field label="Buscar no catálogo" hint="Selecione um equipamento já cadastrado em outro condomínio, ou preencha os campos abaixo manualmente">
-          <Input
-            list="equipamento-catalogo"
-            value={busca}
-            onChange={(e) => handleBuscaChange(e.target.value)}
-            placeholder="Digite para buscar..."
-            disabled={busy}
-          />
-          <datalist id="equipamento-catalogo">
-            {catalogo.map((item) => (
-              <option key={catalogoLabel(item)} value={catalogoLabel(item)} />
+      <Field label="Categoria" required>
+        <Select
+          value={categoria}
+          onChange={(e) => {
+            setCategoria(e.target.value);
+            setTipoEscolhido('');
+          }}
+          disabled={busy}
+        >
+          <option value="">Escolha…</option>
+          {CATEGORIAS_EQUIPAMENTO.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nome}
+            </option>
+          ))}
+          <option value={CATEGORIA_OUTRO}>Outro</option>
+        </Select>
+      </Field>
+
+      {categoria && categoria !== CATEGORIA_OUTRO && (
+        <Field label="Tipo" required>
+          <Select value={tipoEscolhido} onChange={(e) => setTipoEscolhido(e.target.value)} disabled={busy}>
+            <option value="">Escolha…</option>
+            {tiposDe(categoria).map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
-          </datalist>
+            <option value={OUTRO_TIPO}>Outro (digitar)</option>
+          </Select>
         </Field>
       )}
 
-      <Field label="Tipo" required>
+      {categoria && outro && (
+        <Field label="Qual equipamento?" required>
+          <Input
+            value={tipoLivre}
+            onChange={(e) => setTipoLivre(e.target.value)}
+            placeholder="ex.: Bomba de reaproveitamento da piscina"
+            disabled={busy}
+          />
+        </Field>
+      )}
+
+      <Field label="Identificação no local" hint="Como a equipe acha o equipamento: número, posição, casa de bombas.">
         <Input
-          value={form.tipo ?? ''}
-          onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-          placeholder="ex.: Bomba d'água, Pressurizador"
-          required
+          value={identificacao}
+          onChange={(e) => setIdentificacao(e.target.value)}
+          placeholder="ex.: Bomba 2 — barrilete, torre A"
           disabled={busy}
         />
       </Field>
 
-      <Field label="Modelo">
-        <Input
-          value={form.modelo ?? ''}
-          onChange={(e) => setForm({ ...form, modelo: e.target.value })}
-          placeholder="ex.: WEG 1050"
-          disabled={busy}
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_8rem] gap-4">
+        <Field label="Marca / modelo">
+          <Input
+            list="equipamento-modelos"
+            value={modelo}
+            onChange={(e) => escolherModelo(e.target.value)}
+            placeholder="ex.: WEG 1050"
+            disabled={busy}
+          />
+          <datalist id="equipamento-modelos">
+            {modelosSugeridos.map((c) => (
+              <option key={`${c.modelo}-${c.potencia_hp ?? ''}`} value={c.modelo} />
+            ))}
+          </datalist>
+        </Field>
+        <Field label="Potência (CV/HP)">
+          <Input
+            inputMode="decimal"
+            value={potencia}
+            onChange={(e) => setPotencia(e.target.value)}
+            placeholder="ex.: 2"
+            disabled={busy}
+          />
+        </Field>
+      </div>
+
+      <Field label="Foto" hint="Do equipamento inteiro, com a plaqueta legível se der.">
+        <div className="flex items-center gap-3">
+          {fotoAtual ? (
+            // eslint-disable-next-line @next/next/no-img-element -- foto autenticada servida por /uploads, sem otimização do Next
+            <img src={fotoAtual} alt="Foto do equipamento" className="h-20 w-20 object-cover rounded-[10px] border border-amx-line" />
+          ) : (
+            <div className="h-20 w-20 rounded-[10px] border border-dashed border-amx-line grid place-items-center text-[11px] text-amx-muted">
+              sem foto
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => fotoRef.current?.click()}
+            disabled={busy || preparandoFoto}
+          >
+            {preparandoFoto ? 'Preparando…' : fotoAtual ? 'Trocar foto' : 'Tirar foto'}
+          </Button>
+          <input
+            ref={fotoRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              escolherFoto(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </div>
       </Field>
 
-      <Field label="Potência (HP)">
-        <Input
-          type="number"
-          value={form.potencia_hp ?? ''}
-          onChange={(e) =>
-            setForm({
-              ...form,
-              potencia_hp: e.target.value ? parseFloat(e.target.value) : undefined,
-            })
-          }
-          placeholder="ex.: 2.0"
-          step="0.1"
-          min="0"
-          disabled={busy}
-        />
-      </Field>
+      {erro && <p className="text-xs font-semibold text-amx-red-hover">{erro}</p>}
 
       <div className="flex gap-3 pt-2">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={onCancel}
-          disabled={busy}
-        >
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>
           Cancelar
         </Button>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={busy}
-        >
+        <Button type="submit" variant="primary" disabled={busy || preparandoFoto}>
           {busy ? 'Salvando...' : 'Salvar'}
         </Button>
       </div>

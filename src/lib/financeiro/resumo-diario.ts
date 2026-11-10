@@ -10,9 +10,11 @@ import { montarRotaDoDia } from '../os-agenda';
 import { escaparMarkdown } from '../telegram-texto';
 
 export function resumoDiarioGestor({
-  hoje, agora, condominios, cobrancas, reajustes, oss,
+  hoje, agora, condominios, cobrancas, reajustes, oss, plantao = [],
 }: {
   hoje: string; agora: number; condominios: Condominio[]; cobrancas: Cobranca[]; reajustes: Reajuste[]; oss: OS[];
+  /** Nomes de quem está de plantão (informativo; não faz o resumo sair sozinho). */
+  plantao?: string[];
 }): { mensagem: string; temAlgo: boolean } {
   const linhas: string[] = [];
   const pend = reajustesPendentes(condominios, reajustes, hoje);
@@ -47,6 +49,11 @@ export function resumoDiarioGestor({
   const [a, m, d] = hoje.split('-');
   return {
     temAlgo,
-    mensagem: [`*Bom dia! Resumo Amotex — ${d}/${m}/${a}*`, '', ...(temAlgo ? linhas : ['Nada pendente hoje.'])].join('\n'),
+    mensagem: [
+      `*Bom dia! Resumo Amotex — ${d}/${m}/${a}*`,
+      plantao.length > 0 ? `👷 De plantão: ${plantao.map(escaparMarkdown).join(', ')}` : '👷 Ninguém marcado de plantão — aviso de corretiva vai a todos os técnicos.',
+      '',
+      ...(temAlgo ? linhas : ['Nada pendente hoje.']),
+    ].join('\n'),
   };
 }
