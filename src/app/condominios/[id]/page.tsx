@@ -11,6 +11,7 @@ import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { CondominioForm, type CondominioFormData } from '@/components/cadastro/CondominioForm';
 import { ContratoCondominio } from '@/components/financeiro/ContratoCondominio';
+import { AcessoSindico } from '@/components/cadastro/AcessoSindico';
 import { ReservatorioForm } from '@/components/cadastro/ReservatorioForm';
 import { ContatoForm } from '@/components/cadastro/ContatoForm';
 import { EquipamentoForm, type EquipamentoFormData } from '@/components/cadastro/EquipamentoForm';
@@ -467,6 +468,7 @@ function CondominioDetailContent() {
       </div>
 
       {user.role === 'admin' && <ContratoCondominio condominio={condominio} />}
+      {user.role === 'admin' && <AcessoSindico condominio={condominio} contatos={contatosData?.data ?? []} />}
 
       {/* Tab bar */}
       <div className="flex gap-2 mb-6 border-b border-amx-line pb-4">
