@@ -207,6 +207,10 @@ async function runSchemaMigration(): Promise<void> {
     ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS categoria TEXT;
     ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS identificacao TEXT;
     ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS foto_url TEXT;
+    -- Fila de envio offline (16/11): o reenvio de uma foto traz o mesmo
+    -- client_id, e a rota devolve a já gravada em vez de duplicar.
+    ALTER TABLE foto ADD COLUMN IF NOT EXISTS client_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_foto_client_id ON foto(client_id) WHERE client_id IS NOT NULL;
 
     -- Módulo financeiro (26/10): cadastro/contrato do condomínio, cobranças
     -- mensais, ajustes temporários de valor, reajuste anual, configuração.
@@ -567,10 +571,14 @@ export const pgBackend: DbBackend = {
     const { rows } = await q('SELECT * FROM foto WHERE os_id = $1', [osId]);
     return rows as Foto[];
   },
+  async getFotoByClientId(clientId) {
+    const { rows } = await q('SELECT * FROM foto WHERE client_id = $1', [clientId]);
+    return (rows[0] as Foto) || null;
+  },
   async insertFoto(f) {
     await q(
-      'INSERT INTO foto (id, os_id, momento, url, enviado_em) VALUES ($1,$2,$3,$4,$5)',
-      [f.id, f.os_id, f.momento, f.url, f.enviado_em]
+      'INSERT INTO foto (id, os_id, momento, url, enviado_em, client_id) VALUES ($1,$2,$3,$4,$5,$6)',
+      [f.id, f.os_id, f.momento, f.url, f.enviado_em, f.client_id ?? null]
     );
   },
 

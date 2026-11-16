@@ -1,0 +1,94 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { descartarItem, iniciarSincronizacao, ouvirFila, processarFila } from '@/lib/fila-envio';
+import { useFilaEnvio } from '@/lib/useFilaEnvio';
+
+function rotulo(n: number, tipo: 'foto' | 'assinatura'): string {
+  if (tipo === 'foto') return n === 1 ? '1 foto' : `${n} fotos`;
+  return n === 1 ? '1 assinatura' : `${n} assinaturas`;
+}
+
+// Faixa no topo de todas as telas enquanto houver envio guardado no aparelho
+// (fila offline — src/lib/fila-envio.ts). Também liga o reenvio automático.
+export function FilaEnvioAviso() {
+  const itens = useFilaEnvio();
+  const [online, setOnline] = useState(true);
+  const [sessaoExpirada, setSessaoExpirada] = useState(false);
+  const [tentando, setTentando] = useState(false);
+
+  useEffect(() => {
+    const parar = iniciarSincronizacao();
+    const atualizarRede = () => setOnline(navigator.onLine !== false);
+    atualizarRede();
+    window.addEventListener('online', atualizarRede);
+    window.addEventListener('offline', atualizarRede);
+    const sair = ouvirFila((e) => {
+      if (e.tipo === 'sessao_expirada') setSessaoExpirada(true);
+      if (e.tipo === 'foto_enviada' || e.tipo === 'assinatura_enviada') setSessaoExpirada(false);
+    });
+    return () => {
+      parar();
+      sair();
+      window.removeEventListener('online', atualizarRede);
+      window.removeEventListener('offline', atualizarRede);
+    };
+  }, []);
+
+  const aguardando = itens.filter((i) => !i.recusado);
+  const recusados = itens.filter((i) => i.recusado);
+  if (itens.length === 0 && online) return null;
+
+  const fotos = aguardando.filter((i) => i.tipo === 'foto').length;
+  const assinaturas = aguardando.length - fotos;
+  const partes = [fotos && rotulo(fotos, 'foto'), assinaturas && rotulo(assinaturas, 'assinatura')].filter(Boolean);
+
+  const tentarAgora = async () => {
+    setTentando(true);
+    try {
+      await processarFila();
+    } finally {
+      setTentando(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 px-4 py-2.5 border-b border-amx-amber/40 bg-amx-amber/10 text-amx-amber text-xs font-semibold">
+      {aguardando.length > 0 ? (
+        <div className="flex items-center gap-3 flex-wrap">
+          <span>
+            ⏳ {partes.join(' e ')} aguardando envio.{' '}
+            {sessaoExpirada
+              ? 'Sua sessão expirou: entre de novo para enviar.'
+              : online
+                ? 'Enviando…'
+                : 'Sem sinal — vai sozinho quando a rede voltar. Não precisa tirar de novo.'}
+          </span>
+          {online && !sessaoExpirada && (
+            <button
+              type="button"
+              onClick={tentarAgora}
+              disabled={tentando}
+              className="underline underline-offset-2 hover:text-white disabled:opacity-50"
+            >
+              Tentar agora
+            </button>
+          )}
+        </div>
+      ) : (
+        !online && <span>📶 Sem sinal. Fotos e assinaturas ficam guardadas no aparelho até a rede voltar.</span>
+      )}
+      {recusados.map((i) => (
+        <div key={i.id} className="flex items-center gap-3 flex-wrap text-amx-red-hover">
+          <span>
+            ✕ {i.tipo === 'foto' ? 'Foto' : 'Assinatura'} da OS #{i.os_id.slice(0, 6).toUpperCase()} não foi aceita:{' '}
+            {i.erro}
+          </span>
+          <button type="button" onClick={() => descartarItem(i.id)} className="underline underline-offset-2 hover:text-white">
+            Descartar
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}

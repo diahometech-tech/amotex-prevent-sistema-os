@@ -278,6 +278,11 @@ export interface Foto {
   momento: 'antes' | 'depois';
   url: string;
   enviado_em: string;
+  // Id gerado no celular quando a foto entra na fila de envio
+  // (src/lib/fila-envio.ts). Se a resposta do servidor se perde no caminho
+  // (sinal caiu depois do upload), o reenvio traz o mesmo client_id e a rota
+  // devolve a foto já gravada em vez de duplicar.
+  client_id?: string;
 }
 
 export interface AuditLog {
@@ -372,6 +377,7 @@ export interface DbBackend {
 
   // Foto
   getFotosByOS(osId: string): Promise<Foto[]>;
+  getFotoByClientId(clientId: string): Promise<Foto | null>;
   insertFoto(f: Foto): Promise<void>;
 
   // Financeiro
@@ -700,6 +706,9 @@ const jsonBackend: DbBackend = {
 
   async getFotosByOS(osId) {
     return readLocalDB().fotos.filter((f) => f.os_id === osId);
+  },
+  async getFotoByClientId(clientId) {
+    return readLocalDB().fotos.find((f) => f.client_id === clientId) || null;
   },
   async insertFoto(f) {
     const db = readLocalDB();
@@ -1108,6 +1117,7 @@ export class Database {
 
   // ----- Foto -----
   static getFotosByOS(osId: string) { return backend().getFotosByOS(osId); }
+  static getFotoByClientId(clientId: string) { return backend().getFotoByClientId(clientId); }
 
   static async createFoto(data: Partial<Foto>): Promise<Foto> {
     const foto: Foto = {
@@ -1116,6 +1126,7 @@ export class Database {
       momento: data.momento || 'antes',
       url: data.url || '',
       enviado_em: new Date().toISOString(),
+      client_id: data.client_id,
     };
     await backend().insertFoto(foto);
     return foto;

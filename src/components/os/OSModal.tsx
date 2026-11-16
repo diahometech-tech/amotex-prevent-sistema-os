@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -17,18 +17,12 @@ import { formatarDataCurta } from '@/lib/os-agenda';
 import { slaChegada } from '@/lib/os-sla';
 import { textoAviso } from '@/lib/aviso';
 import { useTick } from '@/lib/useTick';
+import { enfileirar, ouvirFila } from '@/lib/fila-envio';
+import { useFilaEnvio } from '@/lib/useFilaEnvio';
+import { fotoReduzidaDataUrl } from '@/lib/imagem-cliente';
 import type { AuditLog, ChecklistItem, Foto, OS } from '@/lib/db';
 
 type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico';
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
 
 export function OSModal({
   osId,
@@ -61,6 +55,31 @@ export function OSModal({
   const [uploadingMomento, setUploadingMomento] = useState<'antes' | 'depois' | null>(null);
   const [savingSignature, setSavingSignature] = useState<'tecnico' | 'zelador' | null>(null);
   const [busyAction, setBusyAction] = useState(false);
+
+  // Fila de envio offline (src/lib/fila-envio.ts): foto e assinatura entram
+  // primeiro no aparelho e sobem sozinhas quando houver rede. O que já subiu
+  // chega aqui pelo evento e entra na tela sem recarregar a OS.
+  const fila = useFilaEnvio(osId);
+  const fotosPendentes = fila.flatMap((i) => (i.tipo === 'foto' ? [i] : []));
+  const assinaturaPendente = (papel: 'tecnico' | 'zelador') =>
+    fila.find((i) => i.tipo === 'assinatura' && i.papel === papel && !i.recusado);
+  const aguardandoEnvio = fila.filter((i) => !i.recusado).length;
+  // Quem usa o modal passa onChanged inline; o ref evita reinscrever a cada render.
+  const onChangedRef = useRef(onChanged);
+  onChangedRef.current = onChanged;
+  useEffect(
+    () =>
+      ouvirFila((e) => {
+        if (e.tipo === 'foto_enviada' && e.foto.os_id === osId) {
+          setFotos((prev) => (prev.some((f) => f.id === e.foto.id) ? prev : [...prev, e.foto]));
+        }
+        if (e.tipo === 'assinatura_enviada' && e.os.id === osId) {
+          setOs(e.os);
+          onChangedRef.current(e.os);
+        }
+      }),
+    [osId]
+  );
 
   // GET /api/os/:id já retorna os, checklist, fotos e histórico (logs) num
   // único payload (ver src/app/api/os/[id]/route.ts) — não existem rotas
@@ -113,7 +132,13 @@ export function OSModal({
   const isClosed = os?.status === 'finalizada' || os?.status === 'cancelada';
   // Mesma função que o backend usa em Database.finalizarOS — o botão trava
   // exatamente pelo que o servidor recusaria.
-  const pendencias = os ? pendenciasFinalizacao({ os, checklist, fotos }) : [];
+  // Envio ainda no aparelho também trava: o PDF sairia sem aquela foto.
+  const pendencias = os
+    ? [
+        ...pendenciasFinalizacao({ os, checklist, fotos }),
+        ...(aguardandoEnvio > 0 ? [`${aguardandoEnvio} envio(s) aguardando rede — finalize depois que subirem`] : []),
+      ]
+    : [];
   const podeFinalizar = canFinalize && !isClosed && pendencias.length === 0;
 
   // Agendamento (data da visita / técnico) — PATCH simples de um campo.
@@ -229,52 +254,32 @@ export function OSModal({
     }
   };
 
-  // API espera um data URL base64 em JSON ({ momento, data }), não multipart
-  // — ver src/app/api/os/[id]/fotos/route.ts.
-  const uploadFoto = async (momento: 'antes' | 'depois', file: File) => {
+  // A foto é reduzida no aparelho (1600 px — foto de celular sai com 4–8 MB,
+  // pesada demais no 4G) e vai pra fila de envio, que guarda no aparelho
+  // antes de mandar (POST /api/os/:id/fotos). Sem sinal, ela aparece como
+  // "aguardando" e sobe sozinha.
+  const uploadFoto = async (momento: 'antes' | 'depois', file: File, equipamento_id?: string) => {
     setUploadingMomento(momento);
     setActionError('');
     try {
-      const data = await fileToDataUrl(file);
-      const res = await fetch(`/api/os/${osId}/fotos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ momento, data }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (res.ok && json.foto) {
-        setFotos((prev) => [...prev, json.foto]);
-      } else {
-        setActionError(json.error || 'Falha ao enviar foto.');
-      }
+      const data = await fotoReduzidaDataUrl(file);
+      await enfileirar({ tipo: 'foto', os_id: osId, momento, data, ...(equipamento_id ? { equipamento_id } : {}) });
     } catch {
-      setActionError('Erro de conexão ao enviar foto.');
+      setActionError('Não foi possível ler a foto. Tente tirar de novo.');
     } finally {
       setUploadingMomento(null);
     }
   };
 
-  // Assinatura não é uma rota própria — é PATCH /api/os/:id com
-  // assinatura_zelador ou assinatura_tecnico (data URL) no corpo — ver
-  // src/app/api/os/[id]/route.ts.
+  // Assinatura é PATCH /api/os/:id com assinatura_zelador/assinatura_tecnico
+  // (data URL) — também passa pela fila de envio.
   const saveAssinatura = async (papel: 'tecnico' | 'zelador', dataUrl: string) => {
     setSavingSignature(papel);
     setActionError('');
     try {
-      const res = await fetch(`/api/os/${osId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(papel === 'tecnico' ? { assinatura_tecnico: dataUrl } : { assinatura_zelador: dataUrl }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.os) {
-        setOs(data.os);
-        onChanged(data.os);
-      } else {
-        setActionError(data.error || 'Falha ao salvar assinatura.');
-      }
+      await enfileirar({ tipo: 'assinatura', os_id: osId, papel, data: dataUrl });
     } catch {
-      setActionError('Erro de conexão ao salvar assinatura.');
+      setActionError('Não foi possível guardar a assinatura. Tente de novo.');
     } finally {
       setSavingSignature(null);
     }
@@ -437,6 +442,7 @@ export function OSModal({
                 <FotoUpload
                   momento="antes"
                   fotos={fotos.filter((f) => f.momento === 'antes')}
+                  pendentes={fotosPendentes.filter((p) => p.momento === 'antes')}
                   onUpload={(file) => uploadFoto('antes', file)}
                   disabled={!canManage || isClosed}
                   busy={uploadingMomento === 'antes'}
@@ -444,6 +450,7 @@ export function OSModal({
                 <FotoUpload
                   momento="depois"
                   fotos={fotos.filter((f) => f.momento === 'depois')}
+                  pendentes={fotosPendentes.filter((p) => p.momento === 'depois')}
                   onUpload={(file) => uploadFoto('depois', file)}
                   disabled={!canManage || isClosed}
                   busy={uploadingMomento === 'depois'}
@@ -455,14 +462,16 @@ export function OSModal({
               <div className="flex flex-col gap-5">
                 <SignaturePad
                   label="Assinatura do técnico"
-                  value={os.assinatura_tecnico_url}
+                  value={assinaturaPendente('tecnico')?.data ?? os.assinatura_tecnico_url}
+                  pendente={!!assinaturaPendente('tecnico')}
                   onSave={(dataUrl) => saveAssinatura('tecnico', dataUrl)}
                   disabled={!canManage || isClosed}
                   busy={savingSignature === 'tecnico'}
                 />
                 <SignaturePad
                   label="Assinatura do zelador"
-                  value={os.assinatura_zelador_url}
+                  value={assinaturaPendente('zelador')?.data ?? os.assinatura_zelador_url}
+                  pendente={!!assinaturaPendente('zelador')}
                   onSave={(dataUrl) => saveAssinatura('zelador', dataUrl)}
                   disabled={!canManage || isClosed}
                   busy={savingSignature === 'zelador'}

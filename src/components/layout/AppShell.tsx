@@ -7,6 +7,7 @@ import type { UserRole } from '@/lib/db';
 import { ROLE_LABELS, canManageUsers, canManageOS, canSeeFinanceiro } from '@/lib/permissions';
 import { Spinner } from '@/components/ui/EmptyState';
 import { TrocarSenhaModal } from './TrocarSenhaModal';
+import { FilaEnvioAviso } from './FilaEnvioAviso';
 
 export interface AmxUser {
   id: string;
@@ -200,7 +201,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 flex flex-col">{children}</main>
+        <main className="flex-1 min-w-0 flex flex-col">
+          <FilaEnvioAviso />
+          {children}
+        </main>
       </div>
       <TrocarSenhaModal open={trocarSenha} onClose={() => setTrocarSenha(false)} nome={user.name} />
     </UserContext.Provider>

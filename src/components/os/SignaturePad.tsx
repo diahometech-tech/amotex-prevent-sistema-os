@@ -11,9 +11,11 @@ interface SignaturePadProps {
   onSave: (dataUrl: string) => void | Promise<void>;
   disabled?: boolean;
   busy?: boolean;
+  /** Assinatura guardada no aparelho, ainda não enviada (fila offline). */
+  pendente?: boolean;
 }
 
-export function SignaturePad({ label, value, onSave, disabled, busy }: SignaturePadProps) {
+export function SignaturePad({ label, value, onSave, disabled, busy, pendente }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -115,7 +117,7 @@ export function SignaturePad({ label, value, onSave, disabled, busy }: Signature
       <div>
         <div className="flex items-center gap-2 mb-3">
           <p className="text-sm font-semibold text-white">{label}</p>
-          <Badge tone="success">Assinado</Badge>
+          {pendente ? <Badge tone="warning">⏳ Aguardando envio</Badge> : <Badge tone="success">Assinado</Badge>}
         </div>
         <div className="border border-amx-line rounded-lg bg-white p-2 overflow-hidden" style={{ height: 120 }}>
           <img src={value} alt="Assinatura" className="w-full h-full object-contain" />
