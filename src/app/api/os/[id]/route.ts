@@ -6,6 +6,7 @@ import { saveAssinaturaDataUrl, saveOsPdfBuffer } from '@/lib/uploads';
 import { generateOsPdf } from '@/lib/os-pdf';
 import { notifyN8n } from '@/lib/notify';
 import { avisarCorretiva } from '@/lib/notificacao-corretiva';
+import { vinculosDaOS } from '@/lib/os-vinculos';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -20,13 +21,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Você não tem acesso a esta OS.' }, { status: 403 });
   }
 
-  const [checklist, fotos, condominio, logs] = await Promise.all([
+  const [checklist, fotos, condominio, logs, vinculos] = await Promise.all([
     Database.getChecklistByOS(id),
     Database.getFotosByOS(id),
     Database.getCondominioById(os.condominio_id),
     Database.getAuditLogsByEntidade('os', id),
+    vinculosDaOS(os),
   ]);
-  return NextResponse.json({ os, checklist, fotos, condominio, logs });
+  return NextResponse.json({ os, checklist, fotos, condominio, logs, vinculos });
 }
 
 // PATCH /api/os/[id] — atualiza campos, registra assinatura, e finaliza
@@ -102,14 +104,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       // pode desfazer a finalização, só fica sem o PDF pra tentar de novo.
       let pdfError: string | undefined;
       try {
-        const [checklist, fotos, condominio, tecnico] = await Promise.all([
+        const [checklist, fotos, condominio, tecnico, vinculos] = await Promise.all([
           Database.getChecklistByOS(id),
           Database.getFotosByOS(id),
           Database.getCondominioById(os.condominio_id),
           os.tecnico_id ? Database.getUserById(os.tecnico_id) : Promise.resolve(null),
+          vinculosDaOS(os),
         ]);
         if (condominio) {
-          const buffer = await generateOsPdf({ os, condominio, checklist, fotos, tecnico });
+          const buffer = await generateOsPdf({
+            os, condominio, checklist, fotos, tecnico,
+            origem: vinculos.origem, corretivas: vinculos.corretivas, equipamento: vinculos.equipamento,
+          });
           const pdf_url = saveOsPdfBuffer(buffer, id);
           os = (await Database.updateOS(id, { pdf_url })) ?? os;
         }

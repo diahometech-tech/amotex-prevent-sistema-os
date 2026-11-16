@@ -24,7 +24,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Você não tem acesso a esta OS.' }, { status: 403 });
   }
   try {
-    const { momento, data, client_id } = await request.json();
+    const { momento, data, client_id, equipamento_id } = await request.json();
+    // Foto de equipamento (pedido 8): o equipamento tem que estar no
+    // checklist DESTA OS — não aceita id solto de outro condomínio.
+    if (equipamento_id !== undefined) {
+      if (typeof equipamento_id !== 'string') {
+        return NextResponse.json({ error: 'Equipamento inválido.' }, { status: 400 });
+      }
+      const checklist = await Database.getChecklistByOS(id);
+      if (!checklist.some((i) => i.equipamento_id === equipamento_id)) {
+        return NextResponse.json({ error: 'Este equipamento não está no checklist desta OS.' }, { status: 400 });
+      }
+    }
     if (client_id !== undefined && (typeof client_id !== 'string' || !CLIENT_ID.test(client_id))) {
       return NextResponse.json({ error: 'Identificador do envio inválido.' }, { status: 400 });
     }
@@ -44,7 +55,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const url = saveOsFotoDataUrl(data, id);
     if (!url) return NextResponse.json({ error: 'Formato de arquivo inválido (esperado data URL base64).' }, { status: 400 });
 
-    const foto = await Database.createFoto({ os_id: id, momento, url, client_id: client_id || undefined });
+    const foto = await Database.createFoto({
+      os_id: id,
+      momento: equipamento_id ? 'depois' : momento,
+      url,
+      client_id: client_id || undefined,
+      equipamento_id: equipamento_id || undefined,
+    });
     return NextResponse.json({ success: true, foto });
   } catch (e) {
     console.error('Erro no upload de foto:', e);

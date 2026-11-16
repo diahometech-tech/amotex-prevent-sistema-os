@@ -5,7 +5,7 @@ import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
-import { Field, Input, Select } from '@/components/ui/Form';
+import { Field, Input, Select, Textarea } from '@/components/ui/Form';
 import { SignaturePad } from '@/components/os/SignaturePad';
 import { FotoUpload } from '@/components/os/FotoUpload';
 import { HistoricoPanel } from '@/components/os/HistoricoPanel';
@@ -15,12 +15,14 @@ import { computeOsPrioridade, OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-
 import { pendenciasFinalizacao } from '@/lib/os-finalizacao';
 import { formatarDataCurta } from '@/lib/os-agenda';
 import { slaChegada } from '@/lib/os-sla';
-import { textoAviso } from '@/lib/aviso';
+import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
 import { useTick } from '@/lib/useTick';
 import { enfileirar, ouvirFila } from '@/lib/fila-envio';
 import { useFilaEnvio } from '@/lib/useFilaEnvio';
 import { fotoReduzidaDataUrl } from '@/lib/imagem-cliente';
+import { itensComFotoObrigatoria, nomeEquipamentoDoItem } from '@/lib/os-finalizacao';
 import type { AuditLog, ChecklistItem, Foto, OS } from '@/lib/db';
+import type { VinculosOS } from '@/lib/os-vinculos';
 
 type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico';
 
@@ -50,6 +52,7 @@ export function OSModal({
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [fotos, setFotos] = useState<Foto[]>([]);
   const [historico, setHistorico] = useState<AuditLog[]>([]);
+  const [vinculos, setVinculos] = useState<VinculosOS | null>(null);
   const [tecnicos, setTecnicos] = useState<{ id: string; nome: string }[]>([]);
 
   const [uploadingMomento, setUploadingMomento] = useState<'antes' | 'depois' | null>(null);
@@ -66,7 +69,9 @@ export function OSModal({
   const aguardandoEnvio = fila.filter((i) => !i.recusado).length;
   // Quem usa o modal passa onChanged inline; o ref evita reinscrever a cada render.
   const onChangedRef = useRef(onChanged);
-  onChangedRef.current = onChanged;
+  useEffect(() => {
+    onChangedRef.current = onChanged;
+  });
   useEffect(
     () =>
       ouvirFila((e) => {
@@ -95,6 +100,7 @@ export function OSModal({
           setChecklist(data.checklist || []);
           setFotos(data.fotos || []);
           setHistorico(data.logs || []);
+          setVinculos(data.vinculos || null);
         } else {
           const data = await res.json().catch(() => ({}));
           setLoadError(data.error || 'Não foi possível carregar esta OS.');
@@ -367,6 +373,42 @@ export function OSModal({
               )
             )}
 
+            {vinculos?.origem && (
+              <a
+                href={`/?os=${vinculos.origem.id}`}
+                className="text-xs font-semibold text-amx-blue-light hover:text-white transition-colors w-fit"
+              >
+                ↩ Aberta durante a preventiva #{vinculos.origem.id.slice(0, 6).toUpperCase()}
+              </a>
+            )}
+            {vinculos?.equipamento && (
+              <p className="text-xs text-amx-muted">
+                Equipamento:{' '}
+                <span className="text-white">
+                  {[vinculos.equipamento.tipo, vinculos.equipamento.identificacao, vinculos.equipamento.modelo]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </p>
+            )}
+            {os.tipo === 'preventiva' && (
+              <CorretivasDaPreventiva
+                os={os}
+                checklist={checklist}
+                corretivas={vinculos?.corretivas ?? []}
+                podeAbrir={canManage && os.status !== 'cancelada'}
+                tecnicoId={user?.role === 'tecnico' ? user.id : undefined}
+                onAberta={(nova, aviso) => {
+                  setVinculos((v) => ({
+                    origem: v?.origem ?? null,
+                    equipamento: v?.equipamento ?? null,
+                    corretivas: [...(v?.corretivas ?? []), nova],
+                  }));
+                  setAvisoMsg(aviso ? textoAviso(aviso) : null);
+                }}
+              />
+            )}
+
             {os.pdf_url && (
               <a
                 href={os.pdf_url}
@@ -434,6 +476,10 @@ export function OSModal({
                 readOnly={!canManage || isClosed}
                 onConcluir={concluirChecklistItem}
                 onAdd={addChecklistItem}
+                fotoObrigatoria={new Set(itensComFotoObrigatoria(os, checklist).map((i) => i.equipamento_id))}
+                fotosEquip={fotos.filter((f) => f.equipamento_id)}
+                pendentesEquip={fotosPendentes.filter((p) => p.equipamento_id)}
+                onFotoEquip={(equipamentoId, file) => uploadFoto('depois', file, equipamentoId)}
               />
             )}
 
@@ -441,16 +487,16 @@ export function OSModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FotoUpload
                   momento="antes"
-                  fotos={fotos.filter((f) => f.momento === 'antes')}
-                  pendentes={fotosPendentes.filter((p) => p.momento === 'antes')}
+                  fotos={fotos.filter((f) => f.momento === 'antes' && !f.equipamento_id)}
+                  pendentes={fotosPendentes.filter((p) => p.momento === 'antes' && !p.equipamento_id)}
                   onUpload={(file) => uploadFoto('antes', file)}
                   disabled={!canManage || isClosed}
                   busy={uploadingMomento === 'antes'}
                 />
                 <FotoUpload
                   momento="depois"
-                  fotos={fotos.filter((f) => f.momento === 'depois')}
-                  pendentes={fotosPendentes.filter((p) => p.momento === 'depois')}
+                  fotos={fotos.filter((f) => f.momento === 'depois' && !f.equipamento_id)}
+                  pendentes={fotosPendentes.filter((p) => p.momento === 'depois' && !p.equipamento_id)}
                   onUpload={(file) => uploadFoto('depois', file)}
                   disabled={!canManage || isClosed}
                   busy={uploadingMomento === 'depois'}
@@ -487,6 +533,146 @@ export function OSModal({
   );
 }
 
+// Pedido 10: durante a preventiva o técnico acha um defeito (ex.: bomba que
+// precisa ir pra oficina) e abre a corretiva ali mesmo, já ligada à
+// preventiva e ao equipamento. A corretiva segue o fluxo normal (prazo de 3h,
+// aviso no Telegram); "Eu mesmo vou atender" já atribui a quem abriu.
+function CorretivasDaPreventiva({
+  os,
+  checklist,
+  corretivas,
+  podeAbrir,
+  tecnicoId,
+  onAberta,
+}: {
+  os: OS;
+  checklist: ChecklistItem[];
+  corretivas: VinculosOS['corretivas'];
+  podeAbrir: boolean;
+  tecnicoId?: string;
+  onAberta: (nova: VinculosOS['corretivas'][number], aviso?: ResultadoAviso) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [equipamentoId, setEquipamentoId] = useState('');
+  const [problema, setProblema] = useState('');
+  const [euAtendo, setEuAtendo] = useState(!!tecnicoId);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  const equipamentos = checklist.filter((i, idx, arr) => i.equipamento_id && arr.findIndex((j) => j.equipamento_id === i.equipamento_id) === idx);
+
+  const abrir = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!problema.trim()) return;
+    setSalvando(true);
+    setErro('');
+    try {
+      const res = await fetch('/api/os', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          condominio_id: os.condominio_id,
+          tipo: 'corretiva',
+          os_origem_id: os.id,
+          equipamento_id: equipamentoId || undefined,
+          descricao_problema: problema.trim(),
+          observacao: `Aberta durante a preventiva #${os.id.slice(0, 6).toUpperCase()}`,
+          tecnico_id: euAtendo && tecnicoId ? tecnicoId : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.os) {
+        onAberta(
+          {
+            id: data.os.id,
+            status: data.os.status,
+            descricao_problema: data.os.descricao_problema,
+            equipamento_id: data.os.equipamento_id,
+            criado_em: data.os.criado_em,
+          },
+          data.aviso
+        );
+        setAberto(false);
+        setProblema('');
+        setEquipamentoId('');
+      } else {
+        setErro(data.error || 'Não foi possível abrir a corretiva.');
+      }
+    } catch {
+      setErro('Sem conexão: a corretiva precisa de rede para ser aberta. Tente de novo quando o sinal voltar.');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  if (!podeAbrir && corretivas.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-amx-line bg-amx-panel-2 px-3.5 py-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <p className="font-heading text-[11px] font-semibold tracking-wider text-amx-muted">
+          CORRETIVAS ABERTAS NESTA PREVENTIVA{corretivas.length ? ` (${corretivas.length})` : ''}
+        </p>
+        {podeAbrir && !aberto && (
+          <Button size="sm" variant="secondary" onClick={() => setAberto(true)}>
+            + Abrir corretiva
+          </Button>
+        )}
+      </div>
+      {corretivas.map((c) => (
+        <a
+          key={c.id}
+          href={`/?os=${c.id}`}
+          className="text-xs text-white hover:text-amx-blue-light transition-colors flex items-center gap-2"
+        >
+          <Badge tone={c.status === 'finalizada' ? 'success' : 'red'}>{OS_STATUS_LABELS[c.status]}</Badge>
+          <span>
+            #{c.id.slice(0, 6).toUpperCase()} — {c.descricao_problema || 'sem descrição'}
+            {c.equipamento_id && (() => {
+              const item = equipamentos.find((i) => i.equipamento_id === c.equipamento_id);
+              return item ? ` · ${nomeEquipamentoDoItem(item.descricao)}` : '';
+            })()}
+          </span>
+        </a>
+      ))}
+      {aberto && (
+        <form onSubmit={abrir} className="flex flex-col gap-2.5 pt-1">
+          {equipamentos.length > 0 && (
+            <Field label="Equipamento com defeito">
+              <Select value={equipamentoId} onChange={(e) => setEquipamentoId(e.target.value)}>
+                <option value="">Nenhum específico</option>
+                {equipamentos.map((i) => (
+                  <option key={i.equipamento_id} value={i.equipamento_id}>
+                    {nomeEquipamentoDoItem(i.descricao)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          <Field label="O que foi encontrado" hint="Ex.: bomba 2 com selo vazando, precisa ir para a oficina">
+            <Textarea value={problema} onChange={(e) => setProblema(e.target.value)} rows={2} required />
+          </Field>
+          {tecnicoId && (
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-white">
+              <input type="checkbox" checked={euAtendo} onChange={(e) => setEuAtendo(e.target.checked)} className="accent-amx-red" />
+              Eu mesmo vou atender
+            </label>
+          )}
+          {erro && <p className="text-xs font-semibold text-amx-red-hover">{erro}</p>}
+          <div className="flex items-center gap-2">
+            <Button type="submit" size="sm" disabled={salvando || !problema.trim()}>
+              {salvando ? 'Abrindo…' : 'Abrir corretiva'}
+            </Button>
+            <Button type="button" size="sm" variant="secondary" onClick={() => setAberto(false)} disabled={salvando}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 function SlaBox({ os }: { os: OS }) {
   const sla = slaChegada(os);
   if (!sla) return null;
@@ -515,16 +701,98 @@ function OsSummary({ os }: { os: OS }) {
   );
 }
 
+// Foto de um equipamento do checklist (pedido 8). Na preventiva é
+// obrigatória — sem ela a OS não finaliza (src/lib/os-finalizacao.ts).
+function FotoEquipamento({
+  obrigatoria,
+  fotos,
+  pendentes,
+  readOnly,
+  onFoto,
+}: {
+  obrigatoria: boolean;
+  fotos: Foto[];
+  pendentes: { id: string; data: string; recusado?: boolean; erro?: string }[];
+  readOnly: boolean;
+  onFoto: (file: File) => Promise<void>;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [lendo, setLendo] = useState(false);
+  const tem = fotos.length + pendentes.length > 0;
+  if (readOnly && !tem) return null;
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      {fotos.map((f) => (
+        <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer">
+          <img src={f.url} alt="Foto do equipamento" className="w-9 h-9 rounded-md object-cover border border-amx-line" />
+        </a>
+      ))}
+      {pendentes.map((p) => (
+        <img
+          key={p.id}
+          src={p.data}
+          alt="Foto aguardando envio"
+          title={p.recusado ? p.erro : 'Aguardando envio'}
+          className={`w-9 h-9 rounded-md object-cover border-2 border-dashed opacity-80 ${
+            p.recusado ? 'border-amx-red' : 'border-amx-amber'
+          }`}
+        />
+      ))}
+      {!readOnly && (
+        <button
+          type="button"
+          disabled={lendo}
+          onClick={() => inputRef.current?.click()}
+          className={`h-9 px-2 rounded-md border text-[10px] font-semibold flex items-center gap-1 transition-colors disabled:opacity-50 ${
+            !tem && obrigatoria
+              ? 'border-amx-red text-amx-red-hover hover:bg-amx-red/10'
+              : 'border-amx-line text-amx-muted hover:text-white'
+          }`}
+        >
+          {lendo ? <Spinner className="w-3.5 h-3.5" /> : '📷'}
+          {tem ? '+' : obrigatoria ? 'Foto obrig.' : 'Foto'}
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              setLendo(true);
+              try {
+                await onFoto(file);
+              } finally {
+                setLendo(false);
+              }
+            }}
+          />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ChecklistTab({
   items,
   readOnly,
   onConcluir,
   onAdd,
+  fotoObrigatoria,
+  fotosEquip,
+  pendentesEquip,
+  onFotoEquip,
 }: {
   items: ChecklistItem[];
   readOnly: boolean;
   onConcluir: (item: ChecklistItem) => void;
   onAdd: (descricao: string, obrigatorio: boolean) => void;
+  fotoObrigatoria: Set<string>;
+  fotosEquip: Foto[];
+  pendentesEquip: { id: string; data: string; equipamento_id?: string; recusado?: boolean; erro?: string }[];
+  onFotoEquip: (equipamentoId: string, file: File) => Promise<void>;
 }) {
   const [novaDescricao, setNovaDescricao] = useState('');
   const [novoObrigatorio, setNovoObrigatorio] = useState(true);
@@ -553,7 +821,7 @@ function ChecklistTab({
             return (
               <li
                 key={item.id}
-                className={`flex items-center gap-2.5 rounded-[9px] px-3.5 py-3 bg-amx-panel border ${
+                className={`flex flex-wrap items-center gap-2.5 rounded-[9px] px-3.5 py-3 bg-amx-panel border ${
                   bloqueando ? 'border-amx-red' : 'border-amx-line'
                 }`}
               >
@@ -584,6 +852,15 @@ function ChecklistTab({
                 </span>
                 {item.obrigatorio && !item.concluido && (
                   <span className="font-heading text-[9px] font-semibold text-amx-red tracking-wider shrink-0">OBRIG.</span>
+                )}
+                {item.equipamento_id && (
+                  <FotoEquipamento
+                    obrigatoria={fotoObrigatoria.has(item.equipamento_id)}
+                    fotos={fotosEquip.filter((f) => f.equipamento_id === item.equipamento_id)}
+                    pendentes={pendentesEquip.filter((p) => p.equipamento_id === item.equipamento_id)}
+                    readOnly={readOnly}
+                    onFoto={(file) => onFotoEquip(item.equipamento_id!, file)}
+                  />
                 )}
               </li>
             );
