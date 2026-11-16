@@ -169,7 +169,7 @@ function PainelDetailContent() {
             ) : (
               <>
                 <p className="text-3xl font-bold text-amx-muted">—</p>
-                <p className="text-xs text-amx-muted mt-1">Nenhuma visita agendada</p>
+                <p className="text-xs text-amx-muted mt-1">Sem visita agendada</p>
               </>
             )}
           </Card>
