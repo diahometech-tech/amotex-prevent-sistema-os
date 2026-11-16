@@ -18,6 +18,12 @@ export function useIdleLogout(minutes: number = 10) {
     const timeoutMs = minutes * 60 * 1000;
 
     const doLogout = () => {
+      // Sem sinal (casa de bombas, subsolo), sair levaria a uma página de erro
+      // do navegador e o técnico perderia a tela da OS. Adia até a rede voltar.
+      if (navigator.onLine === false) {
+        resetTimer();
+        return;
+      }
       fetch('/api/auth/logout', { method: 'POST' })
         .catch(() => {})
         .finally(() => {

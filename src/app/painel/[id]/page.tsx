@@ -8,7 +8,16 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
-import { manutencoesDoMes, tempoMedioRespostaMinutos, formatarMinutos, ordenarHistoricoRecente } from '@/lib/condominio-stats';
+import {
+  manutencoesDoMes,
+  tempoMedioRespostaMinutos,
+  formatarMinutos,
+  historicoPorMes,
+  proximaVisita,
+  diaDoAtendimento,
+} from '@/lib/condominio-stats';
+import { formatarDataCurta } from '@/lib/os-agenda';
+import { OSModal } from '@/components/os/OSModal';
 import type { Condominio, OS, Equipamento } from '@/lib/db';
 
 interface CondominioDetalheResponse {
@@ -75,15 +84,17 @@ function PainelDetailContent() {
 
   const manutencoes = useMemo(() => manutencoesDoMes(oss), [oss]);
   const tempoMedio = useMemo(() => tempoMedioRespostaMinutos(oss), [oss]);
-  const historicoRecente = useMemo(
-    () => ordenarHistoricoRecente(oss.filter((o) => o.status === 'finalizada')),
-    [oss]
-  );
+  const meses = useMemo(() => historicoPorMes(oss), [oss]);
+  const proxima = useMemo(() => proximaVisita(oss), [oss]);
+  // Mês aberto na "pasta"; começa no mais recente.
+  const [mesAberto, setMesAberto] = useState<string | null>(null);
+  const [osAberta, setOsAberta] = useState<string | null>(null);
 
   // Mês/ano atual pro badge
   const agora = new Date();
-  const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-  const relatorioMes = `Relatório — ${meses[agora.getMonth()]}`;
+  const nomesMeses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const relatorioMes = `Relatório — ${nomesMeses[agora.getMonth()]}`;
+  const mesSelecionado = mesAberto ?? meses[0]?.chave ?? null;
 
   if (loadingCondominio) {
     return (
@@ -147,11 +158,20 @@ function PainelDetailContent() {
             <p className="text-xs text-amx-muted mt-1">até chegada em campo</p>
           </Card>
 
-          {/* PRÓXIMA VISITA — placeholder com gap explicado */}
+          {/* PRÓXIMA VISITA — dia agendado (os.data_programada) */}
           <Card>
             <p className="font-heading text-[10px] text-amx-muted uppercase tracking-wider mb-2">Próxima Visita</p>
-            <p className="text-3xl font-bold text-amx-muted">—</p>
-            <p className="text-xs text-amx-muted mt-1">Agendamento de visitas ainda não existe no sistema</p>
+            {proxima ? (
+              <>
+                <p className="text-3xl font-bold text-white">{formatarDataCurta(proxima.data_programada!)}</p>
+                <p className="text-xs text-amx-muted mt-1">{proxima.tipo === 'preventiva' ? 'Preventiva' : 'Corretiva'} agendada</p>
+              </>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-amx-muted">—</p>
+                <p className="text-xs text-amx-muted mt-1">Sem visita agendada</p>
+              </>
+            )}
           </Card>
         </div>
 
@@ -159,38 +179,68 @@ function PainelDetailContent() {
         <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-5">
           {/* HISTÓRICO DE MANUTENÇÕES */}
           <Card>
-            <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider mb-4">Histórico de Manutenções</p>
-            {historicoRecente.length === 0 ? (
+            <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider mb-4">Histórico de Atendimentos</p>
+            {meses.length === 0 ? (
               <p className="text-xs text-amx-muted">Nenhuma OS finalizada ainda.</p>
             ) : (
-              <div className="space-y-2">
-                {historicoRecente.slice(0, 10).map((os) => {
-                  const tipo_bg = os.tipo === 'preventiva' ? 'bg-amx-blue' : 'bg-amx-red';
-                  const data = new Date(os.saida_em || os.criado_em).toLocaleString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
+              <div className="flex flex-col gap-2">
+                {meses.map((m) => {
+                  const aberto = m.chave === mesSelecionado;
+                  const partes = [
+                    m.preventivas && `${m.preventivas} preventiva${m.preventivas > 1 ? 's' : ''}`,
+                    m.corretivas && `${m.corretivas} corretiva${m.corretivas > 1 ? 's' : ''}`,
+                  ].filter(Boolean);
                   return (
-                    <div key={os.id} className="flex items-start gap-2.5">
-                      <span className={`${tipo_bg} w-2 h-2 rounded-full shrink-0 mt-1.5`} aria-hidden />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-white">
-                          {os.tipo === 'preventiva' ? 'Preventiva' : 'Corretiva'}
-                          {os.observacao && ` · ${os.observacao}`}
-                        </p>
-                        <p className="text-[11px] text-amx-muted">{data}</p>
-                      </div>
-                      {os.pdf_url && (
-                        <a
-                          href={os.pdf_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] font-semibold text-amx-muted hover:text-white transition-colors shrink-0 whitespace-nowrap"
-                        >
-                          📄 PDF
-                        </a>
+                    <div key={m.chave} className="rounded-lg border border-amx-line overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setMesAberto(aberto ? '' : m.chave)}
+                        aria-expanded={aberto}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-amx-panel-2 hover:bg-amx-panel transition-colors text-left"
+                      >
+                        <span className="text-xs font-semibold text-white">
+                          📁 {m.rotulo}
+                        </span>
+                        <span className="text-[11px] text-amx-muted">
+                          {m.oss.length} visita{m.oss.length > 1 ? 's' : ''} · {partes.join(' · ')} {aberto ? '▾' : '▸'}
+                        </span>
+                      </button>
+                      {aberto && (
+                        <div className="flex flex-col divide-y divide-amx-line">
+                          {m.oss.map((os) => {
+                            const tipo_bg = os.tipo === 'preventiva' ? 'bg-amx-blue' : 'bg-amx-red';
+                            return (
+                              <div key={os.id} className="flex items-start gap-2.5 px-3 py-2.5">
+                                <span className={`${tipo_bg} w-2 h-2 rounded-full shrink-0 mt-1.5`} aria-hidden />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-semibold text-white">
+                                    {formatarDataCurta(diaDoAtendimento(os))} · {os.tipo === 'preventiva' ? 'Preventiva' : 'Corretiva'}
+                                  </p>
+                                  {(os.descricao_problema || os.observacao) && (
+                                    <p className="text-[11px] text-amx-muted truncate">{os.descricao_problema || os.observacao}</p>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setOsAberta(os.id)}
+                                  className="text-[11px] font-semibold text-amx-blue-light hover:text-white transition-colors shrink-0 whitespace-nowrap"
+                                >
+                                  📷 Fotos
+                                </button>
+                                {os.pdf_url && (
+                                  <a
+                                    href={os.pdf_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] font-semibold text-amx-muted hover:text-white transition-colors shrink-0 whitespace-nowrap"
+                                  >
+                                    📄 PDF
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   );
@@ -210,6 +260,14 @@ function PainelDetailContent() {
           </Card>
         </div>
       </div>
+      {osAberta && (
+        <OSModal
+          osId={osAberta}
+          condominioNome={condominio.nome}
+          onClose={() => setOsAberta(null)}
+          onChanged={(atualizada) => setOss((prev) => prev.map((o) => (o.id === atualizada.id ? atualizada : o)))}
+        />
+      )}
     </div>
   );
 }

@@ -207,6 +207,16 @@ async function runSchemaMigration(): Promise<void> {
     ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS categoria TEXT;
     ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS identificacao TEXT;
     ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS foto_url TEXT;
+    -- Fila de envio offline (16/11): o reenvio de uma foto traz o mesmo
+    -- client_id, e a rota devolve a já gravada em vez de duplicar.
+    ALTER TABLE foto ADD COLUMN IF NOT EXISTS client_id TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_foto_client_id ON foto(client_id) WHERE client_id IS NOT NULL;
+    -- Foto por equipamento na preventiva (16/11) e corretiva aberta de dentro
+    -- da preventiva (16/11). Só colunas novas, nulas nas linhas antigas.
+    ALTER TABLE foto ADD COLUMN IF NOT EXISTS equipamento_id UUID REFERENCES equipamento(id) ON DELETE SET NULL;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS os_origem_id UUID REFERENCES os(id) ON DELETE SET NULL;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS equipamento_id UUID REFERENCES equipamento(id) ON DELETE SET NULL;
+    CREATE INDEX IF NOT EXISTS idx_os_origem ON os(os_origem_id);
 
     -- Módulo financeiro (26/10): cadastro/contrato do condomínio, cobranças
     -- mensais, ajustes temporários de valor, reajuste anual, configuração.
@@ -521,12 +531,13 @@ export const pgBackend: DbBackend = {
   },
   async insertOS(os) {
     await q(
-      `INSERT INTO os (id, condominio_id, tipo, origem, alerta_id, status, prioridade, tecnico_id, entrada_em, saida_em, observacao, assinatura_zelador_url, assinatura_tecnico_url, pdf_url, criado_em, data_programada, solicitante_nome, solicitante_telefone, descricao_problema)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+      `INSERT INTO os (id, condominio_id, tipo, origem, alerta_id, status, prioridade, tecnico_id, entrada_em, saida_em, observacao, assinatura_zelador_url, assinatura_tecnico_url, pdf_url, criado_em, data_programada, solicitante_nome, solicitante_telefone, descricao_problema, os_origem_id, equipamento_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
       [os.id, os.condominio_id, os.tipo, os.origem, os.alerta_id ?? null, os.status, os.prioridade, os.tecnico_id ?? null,
        os.entrada_em ?? null, os.saida_em ?? null, os.observacao ?? null,
        os.assinatura_zelador_url ?? null, os.assinatura_tecnico_url ?? null, os.pdf_url ?? null, os.criado_em,
-       os.data_programada ?? null, os.solicitante_nome ?? null, os.solicitante_telefone ?? null, os.descricao_problema ?? null]
+       os.data_programada ?? null, os.solicitante_nome ?? null, os.solicitante_telefone ?? null, os.descricao_problema ?? null,
+       os.os_origem_id ?? null, os.equipamento_id ?? null]
     );
   },
   async updateOS(id, updates) {
@@ -567,10 +578,14 @@ export const pgBackend: DbBackend = {
     const { rows } = await q('SELECT * FROM foto WHERE os_id = $1', [osId]);
     return rows as Foto[];
   },
+  async getFotoByClientId(clientId) {
+    const { rows } = await q('SELECT * FROM foto WHERE client_id = $1', [clientId]);
+    return (rows[0] as Foto) || null;
+  },
   async insertFoto(f) {
     await q(
-      'INSERT INTO foto (id, os_id, momento, url, enviado_em) VALUES ($1,$2,$3,$4,$5)',
-      [f.id, f.os_id, f.momento, f.url, f.enviado_em]
+      'INSERT INTO foto (id, os_id, momento, url, enviado_em, client_id, equipamento_id) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [f.id, f.os_id, f.momento, f.url, f.enviado_em, f.client_id ?? null, f.equipamento_id ?? null]
     );
   },
 

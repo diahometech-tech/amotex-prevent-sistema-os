@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const plano = planejarPreventivasMes({
       mes, hoje, oss,
-      condominios: condominios.filter((c) => c.ativo !== false).map((c) => ({ id: c.id, nome: c.nome })),
+      condominios: condominios.filter((c) => c.ativo !== false).map((c) => ({ id: c.id, nome: c.nome, preventivas_por_mes: c.preventivas_por_mes })),
       tecnicos: tecnicos.map((t) => t.id),
     });
     const nomeCondominio = new Map(condominios.map((c) => [c.id, c.nome]));

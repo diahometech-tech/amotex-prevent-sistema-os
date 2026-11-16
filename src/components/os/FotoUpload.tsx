@@ -11,14 +11,16 @@ interface FotoUploadProps {
   onUpload: (file: File) => void | Promise<void>;
   disabled?: boolean;
   busy?: boolean;
+  /** Fotos guardadas no aparelho, ainda não enviadas (fila offline). */
+  pendentes?: { id: string; data: string; recusado?: boolean; erro?: string }[];
 }
 
-export function FotoUpload({ momento, fotos, onUpload, disabled, busy }: FotoUploadProps) {
+export function FotoUpload({ momento, fotos, onUpload, disabled, busy, pendentes = [] }: FotoUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const titulo = momento === 'antes' ? 'ANTES' : 'DEPOIS';
-  const totalFotos = fotos.length;
+  const totalFotos = fotos.length + pendentes.length;
 
   const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -43,7 +45,10 @@ export function FotoUpload({ momento, fotos, onUpload, disabled, busy }: FotoUpl
     <div>
       <div className="flex items-center justify-between mb-2.5">
         <p className="font-heading text-[10px] font-semibold text-amx-muted uppercase tracking-wider">{titulo}</p>
-        {totalFotos > 0 && <Badge tone="neutral">{totalFotos} foto(s)</Badge>}
+        <div className="flex items-center gap-1.5">
+          {pendentes.length > 0 && <Badge tone="warning">⏳ {pendentes.length} aguardando envio</Badge>}
+          {totalFotos > 0 && <Badge tone="neutral">{totalFotos} foto(s)</Badge>}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
@@ -54,6 +59,24 @@ export function FotoUpload({ momento, fotos, onUpload, disabled, busy }: FotoUpl
             alt={`Foto ${foto.momento}`}
             className="w-full aspect-square object-cover rounded-[10px] border border-amx-line"
           />
+        ))}
+        {pendentes.map((p) => (
+          <div key={p.id} className="relative" title={p.erro}>
+            <img
+              src={p.data}
+              alt={`Foto ${momento} aguardando envio`}
+              className={`w-full aspect-square object-cover rounded-[10px] border-2 border-dashed opacity-80 ${
+                p.recusado ? 'border-amx-red' : 'border-amx-amber'
+              }`}
+            />
+            <span
+              className={`absolute bottom-1 left-1 right-1 text-center rounded-md text-[9px] font-semibold px-1 py-0.5 bg-amx-bg/85 ${
+                p.recusado ? 'text-amx-red-hover' : 'text-amx-amber'
+              }`}
+            >
+              {p.recusado ? 'Não aceita' : '⏳ Aguardando'}
+            </span>
+          </div>
         ))}
 
         {/* Slot tracejado — sempre visível pra convidar a próxima foto,

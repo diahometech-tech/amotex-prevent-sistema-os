@@ -4,6 +4,7 @@
 // ainda — ver comentário no topo de src/app/painel/[id]/page.tsx sobre o
 // que falta no backend pra isso deixar de ser calculado no cliente).
 import type { OS } from './db';
+import { hojeISO } from './os-agenda';
 
 export interface ManutencoesDoMes {
   total: number;
@@ -56,4 +57,59 @@ export function ordenarHistoricoRecente(oss: OS[]): OS[] {
     const db = new Date(b.saida_em || b.criado_em).getTime();
     return db - da;
   });
+}
+
+// ----- Histórico por mês (pedido 14: "na pasta do mês: o técnico veio 4 vezes") -----
+
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+/** Dia do atendimento (YYYY-MM-DD, fuso da operação): saída, senão dia agendado, senão abertura. */
+export function diaDoAtendimento(os: Pick<OS, 'saida_em' | 'data_programada' | 'criado_em'>): string {
+  if (os.saida_em) return hojeISO(new Date(os.saida_em));
+  if (os.data_programada) return os.data_programada;
+  return hojeISO(new Date(os.criado_em));
+}
+
+/** "2026-11" → "Novembro de 2026". */
+export function rotuloMes(chave: string): string {
+  const [a, m] = chave.split('-').map(Number);
+  return `${MESES[m - 1]} de ${a}`;
+}
+
+export interface MesHistorico {
+  chave: string; // YYYY-MM
+  rotulo: string;
+  oss: OS[]; // mais recente primeiro
+  preventivas: number;
+  corretivas: number;
+}
+
+/** OS finalizadas agrupadas por mês do atendimento, do mês mais recente pro mais antigo. */
+export function historicoPorMes(oss: OS[]): MesHistorico[] {
+  const porMes = new Map<string, OS[]>();
+  for (const os of oss) {
+    if (os.status !== 'finalizada') continue;
+    const chave = diaDoAtendimento(os).slice(0, 7);
+    porMes.set(chave, [...(porMes.get(chave) ?? []), os]);
+  }
+  return [...porMes.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([chave, lista]) => {
+      const ordenadas = ordenarHistoricoRecente(lista);
+      return {
+        chave,
+        rotulo: rotuloMes(chave),
+        oss: ordenadas,
+        preventivas: ordenadas.filter((o) => o.tipo === 'preventiva').length,
+        corretivas: ordenadas.filter((o) => o.tipo === 'corretiva').length,
+      };
+    });
+}
+
+/** Próxima visita agendada (OS aberta ou em andamento, de hoje em diante). */
+export function proximaVisita(oss: OS[], hoje: string = hojeISO()): OS | null {
+  const futuras = oss
+    .filter((o) => (o.status === 'aberta' || o.status === 'em_andamento') && o.data_programada && o.data_programada >= hoje)
+    .sort((a, b) => a.data_programada!.localeCompare(b.data_programada!));
+  return futuras[0] ?? null;
 }

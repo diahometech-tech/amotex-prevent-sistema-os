@@ -11,8 +11,9 @@ import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
 import { resolveUploadFile } from './storage';
-import type { Condominio, OS, ChecklistItem, Foto, User } from './db';
+import type { Condominio, OS, ChecklistItem, Foto, User, Equipamento } from './db';
 import { OS_TIPO_LABELS, OS_STATUS_LABELS } from './os-priority';
+import { itensComFotoObrigatoria, nomeEquipamentoDoItem } from './os-finalizacao';
 
 // pdfkit só embute JPEG/PNG nativamente — uma foto em outro formato (ex.:
 // webp, dependendo do navegador/câmera) entra como texto indicando o
@@ -30,6 +31,16 @@ export interface OsPdfData {
   checklist: ChecklistItem[];
   fotos: Foto[];
   tecnico: User | null;
+  /** Corretiva aberta de dentro de uma preventiva: a preventiva de origem. */
+  origem?: Pick<OS, 'id' | 'data_programada' | 'criado_em'> | null;
+  /** Preventiva: corretivas abertas a partir dela. */
+  corretivas?: Pick<OS, 'id' | 'descricao_problema' | 'status'>[];
+  /** Equipamento com defeito (corretiva aberta da preventiva). */
+  equipamento?: Pick<Equipamento, 'tipo' | 'identificacao' | 'modelo'> | null;
+}
+
+function curto(id: string): string {
+  return id.slice(0, 6).toUpperCase();
 }
 
 function fmtData(iso?: string): string {
@@ -63,7 +74,7 @@ async function loadEmbeddableImage(url: string | undefined | null): Promise<Buff
 }
 
 export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
-  const { os, condominio, checklist, fotos, tecnico } = data;
+  const { os, condominio, checklist, fotos, tecnico, origem, corretivas = [], equipamento } = data;
 
   // Pré-carrega TODAS as imagens do documento (logo, fotos, assinaturas) em
   // paralelo e de forma assíncrona, antes de montar o PDF. pdfkit implementa
@@ -117,6 +128,13 @@ export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
     const solicitante = [os.solicitante_nome, os.solicitante_telefone].filter(Boolean).join(' · ');
     if (solicitante) doc.text(`Solicitante: ${solicitante}`);
   }
+  if (origem) {
+    doc.moveDown(0.3);
+    doc.text(`Aberta durante a preventiva #${curto(origem.id)} (${fmtData(origem.criado_em)})`);
+  }
+  if (equipamento) {
+    doc.text(`Equipamento: ${[equipamento.tipo, equipamento.identificacao, equipamento.modelo].filter(Boolean).join(' · ')}`);
+  }
   if (os.observacao) {
     doc.moveDown(0.3);
     doc.font('Helvetica-Bold').text('Observação:', { continued: false });
@@ -138,9 +156,50 @@ export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
   }
   doc.moveDown();
 
-  // Fotos antes/depois
-  const antes = fotos.filter((f) => f.momento === 'antes');
-  const depois = fotos.filter((f) => f.momento === 'depois');
+  if (corretivas.length > 0) {
+    doc.font('Helvetica-Bold').fontSize(12).text('Corretivas abertas nesta visita');
+    doc.font('Helvetica').fontSize(10);
+    for (const c of corretivas) {
+      doc.text(`#${curto(c.id)} — ${c.descricao_problema || 'sem descrição'} (${OS_STATUS_LABELS[c.status]})`);
+    }
+    doc.moveDown();
+  }
+
+  // Foto de cada equipamento (preventiva — pedido 8). Uma por item; se houver
+  // mais de uma do mesmo equipamento, entram todas.
+  const itensEquip = itensComFotoObrigatoria(os, checklist);
+  const comFotoEquip = itensEquip.filter((i) => fotos.some((f) => f.equipamento_id === i.equipamento_id));
+  if (comFotoEquip.length > 0) {
+    doc.font('Helvetica-Bold').fontSize(12).text('Fotos dos equipamentos');
+    doc.moveDown(0.2);
+    for (const item of comFotoEquip) {
+      const doItem = fotos.filter((f) => f.equipamento_id === item.equipamento_id);
+      // Nome e 1ª foto na mesma página (senão o nome fica órfão no rodapé).
+      const primeira = fotoBufferByFoto.get(doItem[0]) ?? null;
+      if (primeira) {
+        try {
+          const img = (doc as PDFDocumentComOpenImage).openImage(primeira);
+          const altura = 180 * (img.height / img.width) + 20;
+          if (altura > doc.page.height - doc.page.margins.bottom - doc.y) doc.addPage();
+        } catch {
+          // imagem ilegível: embedImageOrNote mostra o aviso
+        }
+      }
+      doc.font('Helvetica').fontSize(10).fillColor('#000').text(nomeEquipamentoDoItem(item.descricao));
+      for (const foto of doItem) {
+        embedImageOrNote(doc, foto.url, fotoBufferByFoto.get(foto) ?? null, 180);
+        doc.moveDown(0.3);
+      }
+    }
+    doc.moveDown(0.3);
+  }
+
+  // Fotos antes/depois (gerais; as de equipamento ficam na seção acima, ou
+  // nesta lista quando a OS não é preventiva)
+  const naSecaoEquip = new Set(comFotoEquip.map((i) => i.equipamento_id));
+  const gerais = fotos.filter((f) => !f.equipamento_id || !naSecaoEquip.has(f.equipamento_id));
+  const antes = gerais.filter((f) => f.momento === 'antes');
+  const depois = gerais.filter((f) => f.momento === 'depois');
   for (const [label, lista] of [['Fotos — antes', antes], ['Fotos — depois', depois]] as const) {
     if (lista.length === 0) continue;
     doc.font('Helvetica-Bold').fontSize(12).text(label);

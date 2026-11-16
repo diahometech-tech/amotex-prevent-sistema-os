@@ -256,6 +256,10 @@ export interface OS {
   solicitante_nome?: string;
   solicitante_telefone?: string;
   descricao_problema?: string;
+  // Corretiva aberta de dentro de uma preventiva (pedido 10 da Amotex): a
+  // preventiva de origem e o equipamento com defeito. Ausentes nas demais.
+  os_origem_id?: string;
+  equipamento_id?: string;
   assinatura_zelador_url?: string;
   assinatura_tecnico_url?: string;
   pdf_url?: string;
@@ -278,6 +282,16 @@ export interface Foto {
   momento: 'antes' | 'depois';
   url: string;
   enviado_em: string;
+  // Id gerado no celular quando a foto entra na fila de envio
+  // (src/lib/fila-envio.ts). Se a resposta do servidor se perde no caminho
+  // (sinal caiu depois do upload), o reenvio traz o mesmo client_id e a rota
+  // devolve a foto já gravada em vez de duplicar.
+  client_id?: string;
+  // Foto de um equipamento do checklist (pedido 8: na preventiva, cada
+  // equipamento tem a própria foto, cobrada na finalização). Fica com
+  // momento 'depois' — é o estado do equipamento ao fim da visita. Ausente =
+  // foto geral de antes/depois.
+  equipamento_id?: string;
 }
 
 export interface AuditLog {
@@ -372,6 +386,7 @@ export interface DbBackend {
 
   // Foto
   getFotosByOS(osId: string): Promise<Foto[]>;
+  getFotoByClientId(clientId: string): Promise<Foto | null>;
   insertFoto(f: Foto): Promise<void>;
 
   // Financeiro
@@ -701,6 +716,9 @@ const jsonBackend: DbBackend = {
   async getFotosByOS(osId) {
     return readLocalDB().fotos.filter((f) => f.os_id === osId);
   },
+  async getFotoByClientId(clientId) {
+    return readLocalDB().fotos.find((f) => f.client_id === clientId) || null;
+  },
   async insertFoto(f) {
     const db = readLocalDB();
     db.fotos.push(f);
@@ -1028,12 +1046,14 @@ export class Database {
       solicitante_nome: data.solicitante_nome,
       solicitante_telefone: data.solicitante_telefone,
       descricao_problema: data.descricao_problema,
+      os_origem_id: data.os_origem_id,
+      equipamento_id: data.equipamento_id,
       criado_em: new Date().toISOString(),
     };
     await backend().insertOS(os);
     await this.createAuditLog({
       entidade: 'os', entidade_id: os.id, acao: 'CRIADA', ator: data.origem === 'hermes_automatica' ? 'hermes' : 'usuario',
-      detalhe: { tipo: os.tipo, origem: os.origem },
+      detalhe: { tipo: os.tipo, origem: os.origem, ...(os.os_origem_id ? { os_origem_id: os.os_origem_id } : {}) },
     });
     return os;
   }
@@ -1108,6 +1128,7 @@ export class Database {
 
   // ----- Foto -----
   static getFotosByOS(osId: string) { return backend().getFotosByOS(osId); }
+  static getFotoByClientId(clientId: string) { return backend().getFotoByClientId(clientId); }
 
   static async createFoto(data: Partial<Foto>): Promise<Foto> {
     const foto: Foto = {
@@ -1116,6 +1137,8 @@ export class Database {
       momento: data.momento || 'antes',
       url: data.url || '',
       enviado_em: new Date().toISOString(),
+      client_id: data.client_id,
+      equipamento_id: data.equipamento_id,
     };
     await backend().insertFoto(foto);
     return foto;
