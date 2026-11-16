@@ -139,9 +139,19 @@ export function OSModal({
   // Mesma função que o backend usa em Database.finalizarOS — o botão trava
   // exatamente pelo que o servidor recusaria.
   // Envio ainda no aparelho também trava: o PDF sairia sem aquela foto.
+  // O que está na fila conta como feito na lista (o técnico não precisa
+  // refazer); a linha "aguardando rede" é que segura o botão.
   const pendencias = os
     ? [
-        ...pendenciasFinalizacao({ os, checklist, fotos }),
+        ...pendenciasFinalizacao({
+          os: {
+            ...os,
+            assinatura_tecnico_url: os.assinatura_tecnico_url || assinaturaPendente('tecnico')?.data,
+            assinatura_zelador_url: os.assinatura_zelador_url || assinaturaPendente('zelador')?.data,
+          },
+          checklist,
+          fotos: [...fotos, ...fotosPendentes.filter((p) => !p.recusado)],
+        }),
         ...(aguardandoEnvio > 0 ? [`${aguardandoEnvio} envio(s) aguardando rede — finalize depois que subirem`] : []),
       ]
     : [];

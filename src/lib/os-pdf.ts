@@ -173,8 +173,20 @@ export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
     doc.font('Helvetica-Bold').fontSize(12).text('Fotos dos equipamentos');
     doc.moveDown(0.2);
     for (const item of comFotoEquip) {
+      const doItem = fotos.filter((f) => f.equipamento_id === item.equipamento_id);
+      // Nome e 1ª foto na mesma página (senão o nome fica órfão no rodapé).
+      const primeira = fotoBufferByFoto.get(doItem[0]) ?? null;
+      if (primeira) {
+        try {
+          const img = (doc as PDFDocumentComOpenImage).openImage(primeira);
+          const altura = 180 * (img.height / img.width) + 20;
+          if (altura > doc.page.height - doc.page.margins.bottom - doc.y) doc.addPage();
+        } catch {
+          // imagem ilegível: embedImageOrNote mostra o aviso
+        }
+      }
       doc.font('Helvetica').fontSize(10).fillColor('#000').text(nomeEquipamentoDoItem(item.descricao));
-      for (const foto of fotos.filter((f) => f.equipamento_id === item.equipamento_id)) {
+      for (const foto of doItem) {
         embedImageOrNote(doc, foto.url, fotoBufferByFoto.get(foto) ?? null, 180);
         doc.moveDown(0.3);
       }

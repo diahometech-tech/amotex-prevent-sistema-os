@@ -244,24 +244,28 @@ let processando: Promise<void> | null = null;
 /** Manda o que estiver na fila, um por vez. Chamadas simultâneas se juntam. */
 export function processarFila(): Promise<void> {
   if (processando) return processando;
-  processando = (async () => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-      const itens = (await listarFila()).filter((i) => !i.recusado);
-      for (const item of itens) {
-        const r = await enviar(item);
-        emitir({ tipo: 'mudou' });
-        if (r === 'sessao') {
-          emitir({ tipo: 'sessao_expirada' });
-          return;
-        }
-        if (r === 'tentar_depois') return; // rede caiu: espera a próxima rodada
+  const rodada = (async () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const itens = (await listarFila()).filter((i) => !i.recusado);
+    for (const item of itens) {
+      const r = await enviar(item);
+      emitir({ tipo: 'mudou' });
+      if (r === 'sessao') {
+        emitir({ tipo: 'sessao_expirada' });
+        return;
       }
-    } finally {
-      processando = null;
+      if (r === 'tentar_depois') return; // rede caiu: espera a próxima rodada
     }
   })();
-  return processando;
+  processando = rodada;
+  // Libera DEPOIS de atribuir: sem rede a rodada termina na hora, e um
+  // `finally` dentro dela rodaria antes da atribuição — a fila ficava presa
+  // numa rodada já encerrada e nunca mais tentava.
+  const liberar = () => {
+    if (processando === rodada) processando = null;
+  };
+  rodada.then(liberar, liberar);
+  return rodada;
 }
 
 /** Liga o reenvio automático. Chamado uma vez pelo AppShell. */
