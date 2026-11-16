@@ -1,87 +1,61 @@
-name: Deploy NexusFlow
+name: Deploy na VPS
+
+# A cada merge no main: confere o TypeScript aqui no GitHub e, se passar,
+# entra na VPS da Amotex e roda ~/amotex-prevent/scripts/deploy-sistema-os.sh
+# (backup -> git pull -> rebuild -> health check -> rollback se falhar).
+#
+# A chave em VPS_SSH_KEY só consegue rodar esse script: ela está presa a ele
+# por "command=" no ~/.ssh/authorized_keys do usuário deploy.
+# Também dá pra disparar à mão em Actions -> Deploy na VPS -> Run workflow.
 
 on:
   push:
-    branches: [master]
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Em PR só roda o "verificar" (o check aparece antes do merge).
+# Um deploy por vez; o seguinte espera o anterior terminar.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'deploy-producao' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  # Etapa 1: verifica TypeScript no runner do GitHub (sem tocar a VPS)
-  typecheck:
+  verificar:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
-      - name: TypeScript check
+          cache: npm
+      # Mesmo comando do Dockerfile (o lockfile não está 100% em sincronia
+      # com o npm 10, e npm ci recusa).
+      - run: npm install --no-audit --no-fund
+      - name: TypeScript
         run: npx tsc --noEmit
 
-  # Etapa 2: só faz deploy se o typecheck passou
   deploy:
-    needs: typecheck
+    needs: verificar
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Deploy via SSH com rollback automático
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          port: ${{ secrets.VPS_PORT }}
-          username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASS }}
-          script: |
-            set -e
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            export PATH="$NVM_DIR/versions/node/v20.20.2/bin:$PATH"
-
-            cd /var/nexusflow/app
-            BEFORE=$(git rev-parse HEAD)
-            git remote set-url origin https://${{ secrets.GH_TOKEN }}@github.com/Dmc9494/nexusflow.git
-            git checkout -- .
-            git pull origin master
-            AFTER=$(git rev-parse HEAD)
-            EXPECTED=$(git rev-parse origin/master)
-            if [ "$AFTER" != "$EXPECTED" ]; then
-              echo "❌ git pull não atualizou o repo. Abortando."
-              exit 1
-            fi
-            echo "✅ Repo atualizado: $BEFORE -> $AFTER"
-
-            # Build — se falhar, repositório não é alterado (pm2 continua na versão anterior)
-            npm install
-            npm run build
-
-            # Reinicia o app
-            pm2 restart nexusflow
-            pm2 save
-
-            # Health check: tenta por até 30s (a cada 3s) antes de desistir — um
-            # único curl 10s depois do restart já gerou falso-positivo aqui (app
-            # ainda subindo), disparando rollback desnecessário 2x na mesma noite.
-            HTTP="000"
-            for i in $(seq 1 10); do
-              sleep 3
-              HTTP=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health 2>/dev/null || echo "000")
-              if [ "$HTTP" = "200" ]; then
-                break
-              fi
-            done
-            if [ "$HTTP" != "200" ]; then
-              echo "⚠️  Health check falhou (HTTP $HTTP) após 30s — iniciando rollback para $BEFORE"
-              git checkout -- .
-              git checkout "$BEFORE"
-              # Limpa o cache de build ANTES de reconstruir: o build anterior
-              # (o que acabou de rodar, com sucesso) deixa o cache/lock do
-              # Turbopack em estado que faz o rebuild do rollback falhar com
-              # "Another next build process is already running" — foi
-              # exatamente isso que aconteceu 2x hoje, deixando o rollback pela
-              # metade (git na versão antiga, PM2 ainda servindo a build nova).
-              rm -rf .next
-              npm run build
-              pm2 restart nexusflow
-              pm2 save
-              echo "🔁 Rollback concluído. App restaurado para commit $BEFORE."
-              exit 1
-            fi
-            echo "✅ Deploy concluído e app saudável (HTTP $HTTP)."
+      - name: Deploy pela VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 \
+              "$VPS_USER@$VPS_HOST"
