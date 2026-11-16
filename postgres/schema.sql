@@ -113,6 +113,8 @@ CREATE TABLE IF NOT EXISTS os (
   solicitante_nome TEXT, -- chamado de corretiva sem sensor: quem pediu
   solicitante_telefone TEXT,
   descricao_problema TEXT,
+  os_origem_id UUID REFERENCES os(id) ON DELETE SET NULL, -- corretiva aberta de dentro da preventiva
+  equipamento_id UUID REFERENCES equipamento(id) ON DELETE SET NULL, -- equipamento com defeito
   assinatura_zelador_url TEXT,
   assinatura_tecnico_url TEXT,
   pdf_url TEXT,
@@ -134,7 +136,9 @@ CREATE TABLE IF NOT EXISTS foto (
   os_id UUID NOT NULL REFERENCES os(id) ON DELETE CASCADE,
   momento TEXT NOT NULL CHECK (momento IN ('antes', 'depois')),
   url TEXT NOT NULL,
-  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  client_id TEXT, -- id da fila offline do celular (reenvio não duplica)
+  equipamento_id UUID REFERENCES equipamento(id) ON DELETE SET NULL -- foto do equipamento na preventiva
 );
 
 CREATE TABLE IF NOT EXISTS session_log (
@@ -164,4 +168,6 @@ CREATE INDEX IF NOT EXISTS idx_os_condominio ON os(condominio_id);
 CREATE INDEX IF NOT EXISTS idx_os_data_programada ON os(data_programada);
 CREATE INDEX IF NOT EXISTS idx_checklist_os ON checklist_item(os_id);
 CREATE INDEX IF NOT EXISTS idx_foto_os ON foto(os_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_foto_client_id ON foto(client_id) WHERE client_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_os_origem ON os(os_origem_id);
 CREATE INDEX IF NOT EXISTS idx_escalonamento_alerta ON escalonamento(alerta_id);
