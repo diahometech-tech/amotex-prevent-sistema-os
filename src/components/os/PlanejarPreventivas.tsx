@@ -45,7 +45,7 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
       if (!res.ok) {
         setError(data.error || 'Falha ao planejar.');
       } else if (confirmar) {
-        setFeito(`${data.criadas} OS preventivas criadas${data.jaAgendados ? ` (${data.jaAgendados} condomínios já tinham preventiva no mês)` : ''}.`);
+        setFeito(`${data.criadas} OS preventivas criadas${data.jaAgendados ? ` (${data.jaAgendados} já existiam no mês)` : ''}.`);
         onCriado();
       } else {
         setPrevia(data);
@@ -65,7 +65,7 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
 
   return (
     <>
-      <ModalHeader title="Planejar preventivas do mês" subtitle="Uma preventiva por condomínio, de segunda a domingo" onClose={onClose} />
+      <ModalHeader title="Planejar preventivas do mês" subtitle="Na frequência de cada condomínio (mensal, quinzenal ou semanal), de segunda a domingo" onClose={onClose} />
       <div className="p-5 flex flex-col gap-4">
         {feito ? (
           <>
@@ -101,10 +101,15 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
             {previa && (
               <>
                 <p className="text-sm text-white">
-                  <b>{previa.itens.length}</b> condomínio{previa.itens.length !== 1 ? 's' : ''} a agendar em{' '}
+                  <b>{previa.itens.length}</b> visita{previa.itens.length !== 1 ? 's' : ''} a agendar
+                  {(() => {
+                    const n = new Set(previa.itens.map((i) => i.condominio_id)).size;
+                    return n !== previa.itens.length ? ` (${n} condomínios)` : '';
+                  })()}{' '}
+                  em{' '}
                   {previa.dias.length} dias · até {previa.capacidadeDia} visita{previa.capacidadeDia > 1 ? 's' : ''} por
                   técnico por dia
-                  {previa.jaAgendados > 0 ? ` · ${previa.jaAgendados} já agendados no mês` : ''}
+                  {previa.jaAgendados > 0 ? ` · ${previa.jaAgendados} já agendada${previa.jaAgendados !== 1 ? 's' : ''} no mês` : ''}
                 </p>
 
                 {previa.itens.length > 0 && (
@@ -135,7 +140,7 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
                         </thead>
                         <tbody>
                           {previa.itens.map((i) => (
-                            <tr key={i.condominio_id} className="border-t border-amx-line text-white">
+                            <tr key={`${i.condominio_id}-${i.data}`} className="border-t border-amx-line text-white">
                               <td className="px-2 py-1.5 text-amx-muted whitespace-nowrap">{formatarDataCurta(i.data)}</td>
                               <td className="px-2 py-1.5 font-semibold">{i.condominio_nome}</td>
                               <td className="px-2 py-1.5">{i.tecnico_nome}</td>
