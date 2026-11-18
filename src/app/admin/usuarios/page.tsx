@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Input, Select } from '@/components/ui/Form';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { ROLE_LABELS } from '@/lib/permissions';
@@ -214,17 +215,19 @@ function UsuariosContent() {
     }
   };
 
-  const handleDelete = async (u: UserRow) => {
-    if (!window.confirm(`Excluir definitivamente o acesso de "${u.nome}" (${u.login})?\n\nEsta ação não pode ser desfeita.`)) return;
+  // Confirmação dentro do sistema (ConfirmDialog), não window.confirm.
+  const [excluindo, setExcluindo] = useState<UserRow | null>(null);
+  const handleDelete = (u: UserRow) => setExcluindo(u);
+  const confirmarExclusao = async (): Promise<string | void> => {
+    const u = excluindo;
+    if (!u) return;
     setMsg('');
-    const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE' });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) {
-      setMsg(`Acesso de "${u.login}" excluído.`);
-      load();
-    } else {
-      setMsg(data.error || 'Falha ao excluir usuário.');
-    }
+    const res = await fetch(`/api/users/${u.id}`, { method: 'DELETE' }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok) return data.error || 'Falha ao excluir usuário.';
+    setExcluindo(null);
+    setMsg(`Acesso de "${u.login}" excluído.`);
+    load();
   };
 
   if (loading) {
@@ -448,6 +451,22 @@ function UsuariosContent() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!excluindo}
+        titulo="Excluir este acesso?"
+        confirmarLabel="Excluir acesso"
+        perigo
+        onConfirm={confirmarExclusao}
+        onClose={() => setExcluindo(null)}
+      >
+        {excluindo && (
+          <p>
+            <b className="text-white">{excluindo.nome}</b> ({excluindo.login}) perde o acesso de vez. Não tem como desfazer.
+          </p>
+        )}
+        <p>Se a pessoa só saiu da equipe, prefira &quot;Desativar&quot;: o nome continua nas OS que ela atendeu.</p>
+      </ConfirmDialog>
 
       <Modal open={!!resetTarget} onClose={() => setResetTarget(null)} maxWidth="max-w-sm">
         <ModalHeader title={`Redefinir senha — ${resetTarget?.login ?? ''}`} onClose={() => setResetTarget(null)} />

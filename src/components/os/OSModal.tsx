@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { Field, Input, Select, Textarea } from '@/components/ui/Form';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SignaturePad } from '@/components/os/SignaturePad';
 import { FotoUpload } from '@/components/os/FotoUpload';
 import { HistoricoPanel } from '@/components/os/HistoricoPanel';
@@ -31,13 +32,19 @@ export function OSModal({
   condominioNome,
   onClose,
   onChanged,
+  onDeleted,
 }: {
   osId: string;
   condominioNome: string;
   onClose: () => void;
   onChanged: (os: OS) => void;
+  /** Chamado depois que a OS foi apagada de vez (a lista tira a linha). */
+  onDeleted?: (osId: string) => void;
 }) {
   const user = useAmxUser();
+  const isAdmin = user?.role === 'admin';
+  const [dialogo, setDialogo] = useState<'cancelar' | 'apagar' | null>(null);
+  const [fotoParaRemover, setFotoParaRemover] = useState<Foto | null>(null);
   useTick();
   const canManage = !!user && canManageOS(user.role);
   const [avisoMsg, setAvisoMsg] = useState<{ texto: string; ok: boolean } | null>(null);
@@ -301,6 +308,39 @@ export function OSModal({
     }
   };
 
+  const cancelarOS = async (motivo: string) => {
+    const res = await fetch(`/api/os/${osId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cancelar: true, motivo }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.os) return data.error || 'Não foi possível cancelar a OS.';
+    setOs(data.os);
+    onChanged(data.os);
+    setDialogo(null);
+  };
+
+  const apagarOS = async () => {
+    const res = await fetch(`/api/os/${osId}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return data.error || 'Não foi possível apagar a OS.';
+    setDialogo(null);
+    onDeleted?.(osId);
+    onClose();
+  };
+
+  const removerFoto = async () => {
+    if (!fotoParaRemover) return;
+    const res = await fetch(`/api/os/${osId}/fotos/${fotoParaRemover.id}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return data.error || 'Não foi possível remover a foto.';
+    setFotos((prev) => prev.filter((f) => f.id !== fotoParaRemover.id));
+    setFotoParaRemover(null);
+  };
+
+  const podeRemoverFoto = canManage && !isClosed;
+
   return (
     <Modal open onClose={onClose} maxWidth="max-w-2xl">
       {loading ? (
@@ -458,6 +498,20 @@ export function OSModal({
               </div>
             )}
 
+            {isAdmin && (
+              <div className="flex items-center gap-2 flex-wrap border-t border-amx-line pt-3">
+                <span className="text-[11px] text-amx-muted mr-1">Gestão:</span>
+                {!isClosed && (
+                  <Button size="sm" variant="secondary" onClick={() => setDialogo('cancelar')}>
+                    Cancelar OS
+                  </Button>
+                )}
+                <Button size="sm" variant="danger" onClick={() => setDialogo('apagar')}>
+                  Apagar OS
+                </Button>
+              </div>
+            )}
+
             <div className="flex items-center gap-1 bg-amx-panel-2 border border-amx-line rounded-full p-1 w-fit">
               {(
                 [
@@ -490,6 +544,7 @@ export function OSModal({
                 fotosEquip={fotos.filter((f) => f.equipamento_id)}
                 pendentesEquip={fotosPendentes.filter((p) => p.equipamento_id)}
                 onFotoEquip={(equipamentoId, file) => uploadFoto('depois', file, equipamentoId)}
+                onRemoverFoto={podeRemoverFoto ? setFotoParaRemover : undefined}
               />
             )}
 
@@ -502,6 +557,7 @@ export function OSModal({
                   onUpload={(file) => uploadFoto('antes', file)}
                   disabled={!canManage || isClosed}
                   busy={uploadingMomento === 'antes'}
+                  onRemover={podeRemoverFoto ? setFotoParaRemover : undefined}
                 />
                 <FotoUpload
                   momento="depois"
@@ -510,6 +566,7 @@ export function OSModal({
                   onUpload={(file) => uploadFoto('depois', file)}
                   disabled={!canManage || isClosed}
                   busy={uploadingMomento === 'depois'}
+                  onRemover={podeRemoverFoto ? setFotoParaRemover : undefined}
                 />
               </div>
             )}
@@ -537,6 +594,44 @@ export function OSModal({
 
             {tab === 'historico' && <HistoricoPanel logs={historico} />}
           </div>
+
+          <ConfirmDialog
+            open={dialogo === 'cancelar'}
+            titulo="Cancelar esta OS?"
+            confirmarLabel="Cancelar OS"
+            motivoLabel="Motivo do cancelamento"
+            onConfirm={cancelarOS}
+            onClose={() => setDialogo(null)}
+          >
+            <p>A OS sai da lista de abertas e do Dashboard, mas continua no histórico com o motivo.</p>
+            <p>Use para OS aberta por engano, em duplicidade ou que o condomínio desmarcou.</p>
+          </ConfirmDialog>
+          <ConfirmDialog
+            open={dialogo === 'apagar'}
+            titulo="Apagar esta OS de vez?"
+            confirmarLabel="Apagar OS"
+            perigo
+            onConfirm={apagarOS}
+            onClose={() => setDialogo(null)}
+          >
+            <p>
+              Apaga a OS com checklist, fotos, assinaturas e PDF. <b className="text-white">Não tem como desfazer.</b>
+            </p>
+            <p>Para tirar da fila sem perder o histórico, use &quot;Cancelar OS&quot;.</p>
+          </ConfirmDialog>
+          <ConfirmDialog
+            open={!!fotoParaRemover}
+            titulo="Remover esta foto?"
+            confirmarLabel="Remover foto"
+            perigo
+            onConfirm={removerFoto}
+            onClose={() => setFotoParaRemover(null)}
+          >
+            {fotoParaRemover && (
+              <img src={fotoParaRemover.url} alt="Foto a remover" className="w-32 h-32 object-cover rounded-lg border border-amx-line" />
+            )}
+            <p>Depois é só tirar a foto certa de novo.</p>
+          </ConfirmDialog>
         </>
       )}
     </Modal>
@@ -719,12 +814,14 @@ function FotoEquipamento({
   pendentes,
   readOnly,
   onFoto,
+  onRemover,
 }: {
   obrigatoria: boolean;
   fotos: Foto[];
   pendentes: { id: string; data: string; recusado?: boolean; erro?: string }[];
   readOnly: boolean;
   onFoto: (file: File) => Promise<void>;
+  onRemover?: (foto: Foto) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [lendo, setLendo] = useState(false);
@@ -733,9 +830,21 @@ function FotoEquipamento({
   return (
     <div className="flex items-center gap-1.5 shrink-0">
       {fotos.map((f) => (
-        <a key={f.id} href={f.url} target="_blank" rel="noopener noreferrer">
-          <img src={f.url} alt="Foto do equipamento" className="w-9 h-9 rounded-md object-cover border border-amx-line" />
-        </a>
+        <span key={f.id} className="relative">
+          <a href={f.url} target="_blank" rel="noopener noreferrer">
+            <img src={f.url} alt="Foto do equipamento" className="w-9 h-9 rounded-md object-cover border border-amx-line" />
+          </a>
+          {onRemover && (
+            <button
+              type="button"
+              onClick={() => onRemover(f)}
+              aria-label="Remover foto do equipamento"
+              className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amx-bg border border-amx-line text-[10px] leading-none text-amx-muted hover:text-white hover:border-amx-red"
+            >
+              ×
+            </button>
+          )}
+        </span>
       ))}
       {pendentes.map((p) => (
         <img
@@ -794,6 +903,7 @@ function ChecklistTab({
   fotosEquip,
   pendentesEquip,
   onFotoEquip,
+  onRemoverFoto,
 }: {
   items: ChecklistItem[];
   readOnly: boolean;
@@ -803,6 +913,7 @@ function ChecklistTab({
   fotosEquip: Foto[];
   pendentesEquip: { id: string; data: string; equipamento_id?: string; recusado?: boolean; erro?: string }[];
   onFotoEquip: (equipamentoId: string, file: File) => Promise<void>;
+  onRemoverFoto?: (foto: Foto) => void;
 }) {
   const [novaDescricao, setNovaDescricao] = useState('');
   const [novoObrigatorio, setNovoObrigatorio] = useState(true);
@@ -870,6 +981,7 @@ function ChecklistTab({
                     pendentes={pendentesEquip.filter((p) => p.equipamento_id === item.equipamento_id)}
                     readOnly={readOnly}
                     onFoto={(file) => onFotoEquip(item.equipamento_id!, file)}
+                    onRemover={onRemoverFoto}
                   />
                 )}
               </li>

@@ -13,9 +13,11 @@ interface FotoUploadProps {
   busy?: boolean;
   /** Fotos guardadas no aparelho, ainda não enviadas (fila offline). */
   pendentes?: { id: string; data: string; recusado?: boolean; erro?: string }[];
+  /** Com a OS em aberto, mostra o "×" pra tirar uma foto errada. */
+  onRemover?: (foto: Foto) => void;
 }
 
-export function FotoUpload({ momento, fotos, onUpload, disabled, busy, pendentes = [] }: FotoUploadProps) {
+export function FotoUpload({ momento, fotos, onUpload, disabled, busy, pendentes = [], onRemover }: FotoUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -53,12 +55,22 @@ export function FotoUpload({ momento, fotos, onUpload, disabled, busy, pendentes
 
       <div className="grid grid-cols-3 gap-2">
         {fotos.map((foto) => (
-          <img
-            key={foto.id}
-            src={foto.url}
-            alt={`Foto ${foto.momento}`}
-            className="w-full aspect-square object-cover rounded-[10px] border border-amx-line"
-          />
+          <div key={foto.id} className="relative">
+            <img
+              src={foto.url}
+              alt={`Foto ${foto.momento}`}
+              className="w-full aspect-square object-cover rounded-[10px] border border-amx-line"
+            />
+            {onRemover && (
+              <button
+                type="button"
+                onClick={() => onRemover(foto)}
+                className="absolute top-1 right-1 rounded-md bg-amx-bg/85 border border-amx-line px-1.5 py-0.5 text-[10px] font-semibold text-amx-muted hover:text-white hover:border-amx-red"
+              >
+                Remover
+              </button>
+            )}
+          </div>
         ))}
         {pendentes.map((p) => (
           <div key={p.id} className="relative" title={p.erro}>

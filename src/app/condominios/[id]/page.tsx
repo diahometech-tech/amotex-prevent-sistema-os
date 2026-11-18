@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { CondominioForm, type CondominioFormData } from '@/components/cadastro/CondominioForm';
 import { ContratoCondominio } from '@/components/financeiro/ContratoCondominio';
@@ -45,7 +46,10 @@ export default function CondominioDetailPage() {
 function CondominioDetailContent() {
   const user = useAmxUser();
   const params = useParams();
+  const router = useRouter();
   const id = params?.id as string;
+  const [equipamentoParaRemover, setEquipamentoParaRemover] = useState<Equipamento | null>(null);
+  const [apagandoCondominio, setApagandoCondominio] = useState(false);
 
   const [condominio, setCondominio] = useState<Condominio | null>(null);
   const [loadingCondominio, setLoadingCondominio] = useState(true);
@@ -367,18 +371,31 @@ function CondominioDetailContent() {
     }
   };
 
-  const handleDeleteEquipamento = async (equipamento: Equipamento) => {
-    if (!window.confirm(`Remover "${equipamento.tipo}"${equipamento.identificacao ? ` (${equipamento.identificacao})` : ''} do parque de máquinas?`)) return;
+  // Confirmação dentro do sistema (ConfirmDialog), não window.confirm.
+  // Devolve a mensagem de erro pra o diálogo mostrar, ou nada se deu certo.
+  const removerEquipamento = async (): Promise<string | void> => {
+    const equipamento = equipamentoParaRemover;
+    if (!equipamento) return;
     const response = await fetch(`/api/equipamentos/${equipamento.id}`, { method: 'DELETE' }).catch(() => null);
     const result = response ? await response.json().catch(() => ({})) : {};
-    if (!response?.ok) {
-      window.alert(result.error || 'Não foi possível remover o equipamento.');
-      return;
-    }
+    if (!response?.ok) return result.error || 'Não foi possível remover o equipamento.';
     setTabData((prev: TabState) => ({
       ...prev,
       equipamentos: { data: (prev.equipamentos?.data ?? []).filter((e) => e.id !== equipamento.id), loaded: true },
     }));
+    setEquipamentoParaRemover(null);
+  };
+
+  const apagarCondominio = async (): Promise<string | void> => {
+    if (!condominio) return;
+    const response = await fetch(`/api/condominios/${condominio.id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmar_nome: condominio.nome }),
+    }).catch(() => null);
+    const result = response ? await response.json().catch(() => ({})) : {};
+    if (!response?.ok) return result.error || 'Não foi possível apagar o condomínio.';
+    router.push('/condominios');
   };
 
   const handleTabClick = (tab: TabType) => {
@@ -548,9 +565,54 @@ function CondominioDetailContent() {
             setEditingEquipamento(item);
             setSubmitError(null);
           }}
-          onDeleteClick={handleDeleteEquipamento}
+          onDeleteClick={setEquipamentoParaRemover}
         />
       )}
+
+      {user.role === 'admin' && (
+        <div className="mt-10 rounded-lg border border-amx-red/40 bg-amx-red/5 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-[13px] font-semibold text-white">Apagar condomínio</p>
+            <p className="text-xs text-amx-muted">
+              Só para cadastro de teste ou feito por engano. Cliente que saiu: use Editar › &quot;Contrato ativo&quot;, que mantém o histórico.
+            </p>
+          </div>
+          <Button size="sm" variant="danger" onClick={() => setApagandoCondominio(true)}>
+            Apagar condomínio
+          </Button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={!!equipamentoParaRemover}
+        titulo="Remover equipamento?"
+        confirmarLabel="Remover"
+        perigo
+        onConfirm={removerEquipamento}
+        onClose={() => setEquipamentoParaRemover(null)}
+      >
+        {equipamentoParaRemover && (
+          <p>
+            <b className="text-white">{equipamentoParaRemover.tipo}</b>
+            {equipamentoParaRemover.identificacao ? ` (${equipamentoParaRemover.identificacao})` : ''} sai do parque de máquinas.
+          </p>
+        )}
+        <p>Equipamento que já aparece em alguma OS não pode ser removido.</p>
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={apagandoCondominio}
+        titulo="Apagar este condomínio de vez?"
+        confirmarLabel="Apagar condomínio"
+        perigo
+        digitarParaConfirmar={condominio.nome}
+        onConfirm={apagarCondominio}
+        onClose={() => setApagandoCondominio(false)}
+      >
+        <p>
+          Apaga o condomínio com todas as OS, fotos, PDFs, equipamentos, cobranças e o acesso do síndico.{' '}
+          <b className="text-white">Não tem como desfazer.</b>
+        </p>
+      </ConfirmDialog>
 
       {/* Modals */}
       <Modal

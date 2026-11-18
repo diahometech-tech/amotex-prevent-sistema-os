@@ -338,6 +338,7 @@ function RotasContent() {
           onChanged={(updated) => {
             setOss((prev) => prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)));
           }}
+          onDeleted={(id) => setOss((prev) => prev.filter((o) => o.id !== id))}
         />
       )}
     </div>

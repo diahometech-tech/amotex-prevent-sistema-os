@@ -3,6 +3,7 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { hashPassword } from './auth';
 import { pendenciasFinalizacao } from './os-finalizacao';
+import { removeUploadDir, removeUploadFile } from './storage';
 
 // Lançado por Database.finalizarOS quando a trava de qualidade bloqueia.
 // As pendências são texto pronto pro usuário (a rota devolve verbatim).
@@ -324,6 +325,8 @@ export interface DbBackend {
   getCondominioById(id: string): Promise<Condominio | null>;
   insertCondominio(c: Condominio): Promise<void>;
   updateCondominio(id: string, updates: Partial<Condominio>): Promise<Condominio | null>;
+  // Apaga o condomínio e tudo dele (OS, equipamentos, cobranças, acessos de síndico).
+  deleteCondominio(id: string): Promise<boolean>;
 
   // Reservatório
   getReservatoriosByCondominio(condominioId: string): Promise<Reservatorio[]>;
@@ -378,6 +381,8 @@ export interface DbBackend {
   getOSsByCondominio(condominioId: string): Promise<OS[]>;
   insertOS(os: OS): Promise<void>;
   updateOS(id: string, updates: Partial<OS>): Promise<OS | null>;
+  // Apaga a OS com checklist e fotos; corretivas filhas perdem o vínculo.
+  deleteOS(id: string): Promise<boolean>;
 
   // Checklist
   getChecklistByOS(osId: string): Promise<ChecklistItem[]>;
@@ -388,6 +393,7 @@ export interface DbBackend {
   getFotosByOS(osId: string): Promise<Foto[]>;
   getFotoByClientId(clientId: string): Promise<Foto | null>;
   insertFoto(f: Foto): Promise<void>;
+  deleteFoto(id: string): Promise<boolean>;
 
   // Financeiro
   getCobrancas(competencia?: string): Promise<Cobranca[]>;
@@ -597,6 +603,29 @@ const jsonBackend: DbBackend = {
     writeLocalDB(db);
     return db.equipamentos[i];
   },
+  async deleteCondominio(id) {
+    const db = readLocalDB();
+    const antes = db.condominios.length;
+    db.condominios = db.condominios.filter((c) => c.id !== id);
+    if (db.condominios.length === antes) return false;
+    const osIds = new Set(db.oss.filter((o) => o.condominio_id === id).map((o) => o.id));
+    const resIds = new Set(db.reservatorios.filter((r) => r.condominio_id === id).map((r) => r.id));
+    const alertaIds = new Set(db.alertas.filter((a) => resIds.has(a.reservatorio_id)).map((a) => a.id));
+    db.oss = db.oss.filter((o) => !osIds.has(o.id));
+    db.checklist_items = db.checklist_items.filter((c) => !osIds.has(c.os_id));
+    db.fotos = db.fotos.filter((f) => !osIds.has(f.os_id));
+    db.escalonamentos = db.escalonamentos.filter((e) => !alertaIds.has(e.alerta_id));
+    db.alertas = db.alertas.filter((a) => !alertaIds.has(a.id));
+    db.reservatorios = db.reservatorios.filter((r) => r.condominio_id !== id);
+    db.contatos = db.contatos.filter((c) => c.condominio_id !== id);
+    db.equipamentos = db.equipamentos.filter((e) => e.condominio_id !== id);
+    db.cobrancas = db.cobrancas.filter((c) => c.condominio_id !== id);
+    db.ajustes = db.ajustes.filter((a) => a.condominio_id !== id);
+    db.reajustes = db.reajustes.filter((r) => r.condominio_id !== id);
+    db.users = db.users.filter((u) => !(u.papel === 'sindico' && u.condominio_id === id));
+    writeLocalDB(db);
+    return true;
+  },
   async deleteEquipamento(id) {
     const db = readLocalDB();
     const antes = db.equipamentos.length;
@@ -696,6 +725,18 @@ const jsonBackend: DbBackend = {
     return db.oss[i];
   },
 
+  async deleteOS(id) {
+    const db = readLocalDB();
+    const antes = db.oss.length;
+    db.oss = db.oss.filter((o) => o.id !== id);
+    if (db.oss.length === antes) return false;
+    db.checklist_items = db.checklist_items.filter((c) => c.os_id !== id);
+    db.fotos = db.fotos.filter((f) => f.os_id !== id);
+    db.oss = db.oss.map((o) => (o.os_origem_id === id ? { ...o, os_origem_id: undefined } : o));
+    writeLocalDB(db);
+    return true;
+  },
+
   async getChecklistByOS(osId) {
     return readLocalDB().checklist_items.filter((c) => c.os_id === osId);
   },
@@ -723,6 +764,14 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     db.fotos.push(f);
     writeLocalDB(db);
+  },
+  async deleteFoto(id) {
+    const db = readLocalDB();
+    const antes = db.fotos.length;
+    db.fotos = db.fotos.filter((f) => f.id !== id);
+    if (db.fotos.length === antes) return false;
+    writeLocalDB(db);
+    return true;
   },
 
   async getCobrancas(competencia) {
@@ -860,6 +909,28 @@ export class Database {
   }
 
   static updateCondominio(id: string, updates: Partial<Condominio>) { return backend().updateCondominio(id, updates); }
+
+  // Apagar de vez (cadastro de teste ou feito por engano). Cliente que saiu
+  // não se apaga: desmarca "Contrato ativo" e o histórico continua.
+  // Os arquivos (fotos, assinaturas, PDFs, comprovantes) saem junto.
+  static async apagarCondominio(id: string, ator: string): Promise<boolean> {
+    const condominio = await backend().getCondominioById(id);
+    if (!condominio) return false;
+    const [oss, cobrancas] = await Promise.all([
+      backend().getOSsByCondominio(id),
+      backend().getCobrancasByCondominio(id),
+    ]);
+    const ok = await backend().deleteCondominio(id);
+    if (!ok) return false;
+    for (const os of oss) removeUploadDir(path.join('os', os.id));
+    for (const c of cobrancas) removeUploadDir(path.join('financeiro', c.id));
+    removeUploadDir(path.join('equipamentos', id));
+    await this.createAuditLog({
+      entidade: 'condominio', entidade_id: id, acao: 'APAGADO', ator,
+      detalhe: { nome: condominio.nome, oss: oss.length, cobrancas: cobrancas.length },
+    });
+    return true;
+  }
 
   // ----- Reservatório -----
   static getReservatoriosByCondominio(condominioId: string) { return backend().getReservatoriosByCondominio(condominioId); }
@@ -1060,6 +1131,38 @@ export class Database {
 
   static updateOS(id: string, updates: Partial<OS>) { return backend().updateOS(id, updates); }
 
+  // Cancelar mantém a OS (sai das abertas, fica no histórico com o motivo).
+  // Só OS em aberto/andamento; finalizada tem PDF e assinatura, não se cancela.
+  static async cancelarOS(id: string, motivo: string, ator: string): Promise<OS | null> {
+    const os = await backend().getOSById(id);
+    if (!os || os.status === 'finalizada' || os.status === 'cancelada') return null;
+    const nota = `Cancelada por ${ator}: ${motivo}`;
+    const atualizada = await backend().updateOS(id, {
+      status: 'cancelada',
+      saida_em: new Date().toISOString(),
+      observacao: os.observacao ? `${os.observacao} · ${nota}` : nota,
+    });
+    await this.createAuditLog({
+      entidade: 'os', entidade_id: id, acao: 'CANCELADA', ator,
+      detalhe: { de: os.status, motivo },
+    });
+    return atualizada;
+  }
+
+  // Apagar de vez: OS de teste ou aberta em duplicidade. Some do histórico.
+  static async apagarOS(id: string, ator: string): Promise<boolean> {
+    const os = await backend().getOSById(id);
+    if (!os) return false;
+    const ok = await backend().deleteOS(id);
+    if (!ok) return false;
+    removeUploadDir(path.join('os', id));
+    await this.createAuditLog({
+      entidade: 'os', entidade_id: id, acao: 'APAGADA', ator,
+      detalhe: { condominio_id: os.condominio_id, tipo: os.tipo, status: os.status },
+    });
+    return true;
+  }
+
   // Finaliza a OS só se a trava de qualidade do PRD estiver satisfeita:
   // checklist obrigatório concluído, foto antes, foto depois e as duas
   // assinaturas. A regra mora em pendenciasFinalizacao (src/lib/os-finalizacao.ts),
@@ -1129,6 +1232,17 @@ export class Database {
   // ----- Foto -----
   static getFotosByOS(osId: string) { return backend().getFotosByOS(osId); }
   static getFotoByClientId(clientId: string) { return backend().getFotoByClientId(clientId); }
+
+  static async apagarFoto(foto: Foto, ator: string): Promise<boolean> {
+    const ok = await backend().deleteFoto(foto.id);
+    if (!ok) return false;
+    removeUploadFile(foto.url);
+    await this.createAuditLog({
+      entidade: 'os', entidade_id: foto.os_id, acao: 'FOTO_REMOVIDA', ator,
+      detalhe: { momento: foto.momento, equipamento_id: foto.equipamento_id ?? null },
+    });
+    return true;
+  }
 
   static async createFoto(data: Partial<Foto>): Promise<Foto> {
     const foto: Foto = {

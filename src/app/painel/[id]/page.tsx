@@ -266,6 +266,7 @@ function PainelDetailContent() {
           condominioNome={condominio.nome}
           onClose={() => setOsAberta(null)}
           onChanged={(atualizada) => setOss((prev) => prev.map((o) => (o.id === atualizada.id ? atualizada : o)))}
+          onDeleted={(id) => setOss((prev) => prev.filter((o) => o.id !== id))}
         />
       )}
     </div>
