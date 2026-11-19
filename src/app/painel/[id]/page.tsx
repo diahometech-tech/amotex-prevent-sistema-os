@@ -19,6 +19,7 @@ import {
 import { formatarDataCurta } from '@/lib/os-agenda';
 import { OSModal } from '@/components/os/OSModal';
 import type { Condominio, OS, Equipamento } from '@/lib/db';
+import { Icon } from '@/components/ui/Icon';
 
 interface CondominioDetalheResponse {
   condominio?: Condominio;
@@ -176,8 +177,8 @@ function PainelDetailContent() {
           </Card>
         </div>
 
-        {/* 2-column grid: Histórico + Nível de Reservatório */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-5">
+        {/* Histórico de atendimentos, na largura toda */}
+        <div>
           {/* HISTÓRICO DE MANUTENÇÕES */}
           <Card>
             <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider mb-4">Histórico de Atendimentos</p>
@@ -200,10 +201,11 @@ function PainelDetailContent() {
                         className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-amx-panel-2 hover:bg-amx-panel transition-colors text-left"
                       >
                         <span className="text-xs font-semibold text-white">
-                          📁 {m.rotulo}
+                          <span className="inline-flex items-center gap-1"><Icon name="pasta" size={14} />{m.rotulo}</span>
                         </span>
                         <span className="text-[11px] text-amx-muted">
-                          {m.oss.length} visita{m.oss.length > 1 ? 's' : ''} · {partes.join(' · ')} {aberto ? '▾' : '▸'}
+                          {m.oss.length} visita{m.oss.length > 1 ? 's' : ''} · {partes.join(' · ')}{' '}
+                          <Icon name={aberto ? 'chevronBaixo' : 'chevronDireita'} size={14} className="inline align-text-bottom" />
                         </span>
                       </button>
                       {aberto && (
@@ -224,18 +226,18 @@ function PainelDetailContent() {
                                 <button
                                   type="button"
                                   onClick={() => setOsAberta(os.id)}
-                                  className="text-[11px] font-semibold text-amx-blue-light hover:text-white transition-colors shrink-0 whitespace-nowrap"
+                                  className="text-[11px] font-semibold text-amx-blue-light hover:text-white transition-colors shrink-0 whitespace-nowrap min-h-[44px] px-2 inline-flex items-center"
                                 >
-                                  📷 Fotos
+                                  <span className="inline-flex items-center gap-1"><Icon name="camera" size={14} />Fotos</span>
                                 </button>
                                 {os.pdf_url && (
                                   <a
                                     href={os.pdf_url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[11px] font-semibold text-amx-muted hover:text-white transition-colors shrink-0 whitespace-nowrap"
+                                    className="text-[11px] font-semibold text-amx-muted hover:text-white transition-colors shrink-0 whitespace-nowrap min-h-[44px] px-2 inline-flex items-center"
                                   >
-                                    📄 PDF
+                                    <span className="inline-flex items-center gap-1"><Icon name="documento" size={14} />PDF</span>
                                   </a>
                                 )}
                               </div>
@@ -248,16 +250,6 @@ function PainelDetailContent() {
                 })}
               </div>
             )}
-          </Card>
-
-          {/* NÍVEL — Placeholder com gap de backend */}
-          <Card>
-            <EmptyState
-              title="Histórico de nível indisponível"
-              description="Depende de um endpoint novo que exponha as leituras de nível por dia do reservatório (hoje só existem eventos de alerta pontuais, não uma série histórica)."
-            />
-            {/* TODO(merge): Implementar gráfico de nível de reservatório aqui quando
-                houver endpoint de série histórica de leituras de sensores. */}
           </Card>
         </div>
       </div>

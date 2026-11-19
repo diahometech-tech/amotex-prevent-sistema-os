@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 
 // Botão "Copiar" com confirmação. Clipboard pode falhar (http, permissão):
 // aí seleciona o texto do <textarea> irmão pra o usuário copiar na mão.
@@ -19,7 +20,14 @@ export function CopiarTexto({ texto, rotulo = 'Copiar', alvoId }: { texto: strin
   };
   return (
     <Button type="button" size="sm" variant="secondary" onClick={copiar}>
-      {copiado ? 'Copiado ✓' : rotulo}
+      {copiado ? (
+        <span className="inline-flex items-center gap-1">
+          <Icon name="check" size={14} />
+          Copiado
+        </span>
+      ) : (
+        rotulo
+      )}
     </Button>
   );
 }

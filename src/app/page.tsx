@@ -16,6 +16,7 @@ import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
 import { useTick } from '@/lib/useTick';
 import { enderecoCompleto, enderecoCurto } from '@/lib/endereco';
 import type { Condominio, OS, OsStatus, OsTipo } from '@/lib/db';
+import { Icon } from '@/components/ui/Icon';
 
 // Os 3 níveis do campo manual os.prioridade (distinto de OsPrioridade, a
 // escala visual de 4 níveis calculada em src/lib/os-priority.ts).
@@ -398,7 +399,7 @@ function OsRow({
       <div className="min-w-0 flex-1 basis-[calc(100%-48px)] md:basis-auto">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-semibold text-white truncate">{condominioNome}</p>
-          {os.origem === 'hermes_automatica' && <Badge tone="navy">🤖 Hermes</Badge>}
+          {os.origem === 'hermes_automatica' && <Badge tone="navy"><span className="inline-flex items-center gap-1"><Icon name="sensor" size={12} />Automática</span></Badge>}
         </div>
         {endereco && <p className="text-xs text-amx-muted truncate mt-0.5">{endereco}</p>}
         {(os.descricao_problema || os.observacao) && (
@@ -406,7 +407,7 @@ function OsRow({
         )}
         {sla && sla.situacao !== 'cumprido' && (
           <p className={`text-[11px] mt-0.5 font-semibold ${sla.tone === 'red' ? 'text-amx-red-hover' : 'text-amx-amber'}`}>
-            ⏱ {sla.label}
+            <span className="inline-flex items-center gap-1"><Icon name="relogio" size={12} />{sla.label}</span>
           </p>
         )}
         {os.data_programada && !encerrada && os.tipo === 'preventiva' && (

@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Form';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 
-// A própria pessoa troca a senha (POST /api/auth/senha). Aberto pelas
-// iniciais no menu lateral.
+// A própria pessoa troca a senha (POST /api/auth/senha). Aberto por "Trocar senha"
+// no fim do menu (barra lateral ou gaveta do celular).
 export function TrocarSenhaModal({ open, onClose, nome }: { open: boolean; onClose: () => void; nome: string }) {
   const [atual, setAtual] = useState('');
   const [nova, setNova] = useState('');

@@ -1,5 +1,5 @@
 {
-  "atualizado": "2026-11-19",
+  "atualizado": "2026-11-20",
   "papeis": [
     {
       "papel": "admin",
@@ -10,15 +10,15 @@
           "titulo": "Entrar, trocar a senha e sair",
           "passos": [
             "Acesse os.amotexprevent.com.br e entre com seu usuário e senha.",
-            "Para trocar a senha, clique no círculo com as suas iniciais, no canto inferior esquerdo.",
-            "Para sair, use o botão logo abaixo das iniciais.",
+            "Para trocar a senha, abra o menu (no computador, a barra à esquerda com os nomes; no celular, o botão Menu no topo) e toque em Trocar senha, no fim do menu. Se o menu estiver só com ícones, clique na seta no fim dele para mostrar os nomes.",
+            "Para sair, toque em Sair, logo abaixo de Trocar senha.",
             "Depois de alguns minutos sem uso o sistema sai sozinho por segurança. É só entrar de novo."
           ]
         },
         {
           "titulo": "Dashboard e plantão",
           "passos": [
-            "Abra Dashboard no menu lateral.",
+            "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
             "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
             "Com alguém de plantão, o aviso de corretiva vai só para ele, para os gestores e para a secretária. Sem ninguém marcado, vai para todos os técnicos de corretiva.",
             "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Cadastre o ID do Telegram dela em Usuários.",
@@ -97,7 +97,7 @@
           "passos": [
             "Cada pessoa só vê o que é do seu perfil. O que não é dela nem aparece no menu.",
             "Gestor: vê e faz tudo.",
-            "Secretária: vê Dashboard, Ordens de Serviço, Rotas, Condomínios, Painel do Síndico, Cobranças e Ajuda. Abre OS, atribui técnico, reagenda, cancela, marca o plantão e planeja as preventivas. Edita contatos dos condomínios e vê o contrato só para leitura.",
+            "Secretária: vê Dashboard, Ordens de Serviço, Rotas, Condomínios, Painel do Síndico, Financeiro (só a aba Cobranças) e Ajuda. Abre OS, atribui técnico, reagenda, cancela, marca o plantão e planeja as preventivas. Edita contatos dos condomínios e vê o contrato só para leitura.",
             "A secretária não vai a campo (iniciar atendimento, checklist, fotos, assinaturas e finalizar são do técnico). Também não apaga OS, não cadastra nem edita condomínio, não cria acesso de síndico, não vê Usuários e só usa a aba Cobranças do Financeiro.",
             "Na Cobranças, a secretária gera o mês, marca como enviada, registra pagamento e anexa comprovante. Isentar, reabrir e editar valor são só do gestor.",
             "Técnico: vê só as OS dele e as corretivas sem técnico, só a rota dele e só os condomínios das OS que vê.",
@@ -137,8 +137,8 @@
           "titulo": "Entrar e trocar a senha",
           "passos": [
             "Acesse os.amotexprevent.com.br e entre com o usuário e a senha que o gestor passou.",
-            "No primeiro acesso, troque a senha clicando no círculo com as suas iniciais, no canto inferior esquerdo.",
-            "Para sair, use o botão logo abaixo das iniciais. Depois de alguns minutos sem uso o sistema sai sozinho. É só entrar de novo."
+            "No primeiro acesso, troque a senha: abra o menu (no computador, a barra à esquerda com os nomes; no celular, o botão Menu no topo) e toque em Trocar senha, no fim do menu.",
+            "Para sair, toque em Sair, logo abaixo de Trocar senha. Depois de alguns minutos sem uso o sistema sai sozinho. É só entrar de novo."
           ]
         },
         {
@@ -179,7 +179,7 @@
         {
           "titulo": "Plantão",
           "passos": [
-            "Abra Dashboard no menu lateral.",
+            "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
             "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
             "Com alguém de plantão, o aviso de corretiva vai só para ele, para os gestores e para você. Sem ninguém marcado, vai para todos os técnicos de corretiva.",
             "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Avise o gestor para cadastrar o ID dela."
@@ -208,7 +208,7 @@
         {
           "titulo": "Atender o síndico pelo Painel",
           "passos": [
-            "Abra Painel do Síndico no menu lateral e escolha o condomínio que ligou.",
+            "Abra Painel do Síndico no menu e escolha o condomínio que ligou.",
             "Você vê o mesmo que o síndico vê: próxima visita, histórico de atendimentos, fotos e PDF de cada visita.",
             "Use a tela para responder ao telefone. Para mandar um relatório, abra a visita e baixe o PDF."
           ]
@@ -253,7 +253,7 @@
           "titulo": "Entrar e trocar a senha",
           "passos": [
             "Acesse os.amotexprevent.com.br no celular e entre com o usuário e a senha que o gestor passou.",
-            "No primeiro acesso, troque a senha clicando no círculo com as suas iniciais, no canto inferior esquerdo.",
+            "No primeiro acesso, troque a senha: toque no botão Menu, no topo da tela, e depois em Trocar senha, no fim do menu. Para sair, toque em Sair, logo abaixo.",
             "Sem sinal (casa de bombas, subsolo), o sistema não sai sozinho: ele espera a internet voltar."
           ]
         },
@@ -356,7 +356,7 @@
           "titulo": "Entrar e trocar a senha",
           "passos": [
             "Acesse os.amotexprevent.com.br/login com o usuário e a senha que a Amotex enviou.",
-            "No primeiro acesso, troque a senha clicando no círculo com as suas iniciais, no canto inferior esquerdo."
+            "No primeiro acesso, troque a senha: no computador, use Trocar senha no fim do menu à esquerda; no celular, toque no botão Menu, no topo, e depois em Trocar senha. Para sair, use Sair, logo abaixo."
           ]
         },
         {

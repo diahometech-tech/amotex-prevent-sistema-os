@@ -59,7 +59,7 @@ export function mensagemLevantamento(pendencias: PendenciaCondominio[]): string 
     '',
   ];
   for (const p of pendencias) {
-    linhas.push(`• *${p.nome}*${p.cnpj ? ` (${formatarCnpj(p.cnpj)})` : ''}`);
+    linhas.push(`- *${p.nome}*${p.cnpj ? ` (${formatarCnpj(p.cnpj)})` : ''}`);
     linhas.push(`  Falta: ${p.faltando.map((k) => LABEL[k]).join('; ')}`);
   }
   linhas.push('', 'Pode responder por aqui ou preencher a planilha de levantamento e devolver.');

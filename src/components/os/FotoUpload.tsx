@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/EmptyState';
 import type { Foto } from '@/lib/db';
+import { Icon } from '@/components/ui/Icon';
 
 interface FotoUploadProps {
   momento: 'antes' | 'depois';
@@ -13,7 +14,7 @@ interface FotoUploadProps {
   busy?: boolean;
   /** Fotos guardadas no aparelho, ainda não enviadas (fila offline). */
   pendentes?: { id: string; data: string; recusado?: boolean; erro?: string }[];
-  /** Com a OS em aberto, mostra o "×" pra tirar uma foto errada. */
+  /** Com a OS em aberto, mostra o botão de remover pra tirar uma foto errada. */
   onRemover?: (foto: Foto) => void;
 }
 
@@ -48,7 +49,7 @@ export function FotoUpload({ momento, fotos, onUpload, disabled, busy, pendentes
       <div className="flex items-center justify-between mb-2.5">
         <p className="font-heading text-[10px] font-semibold text-amx-muted uppercase tracking-wider">{titulo}</p>
         <div className="flex items-center gap-1.5">
-          {pendentes.length > 0 && <Badge tone="warning">⏳ {pendentes.length} aguardando envio</Badge>}
+          {pendentes.length > 0 && <Badge tone="warning"><span className="inline-flex items-center gap-1"><Icon name="nuvemEnvio" size={12} />{pendentes.length} aguardando envio</span></Badge>}
           {totalFotos > 0 && <Badge tone="neutral">{totalFotos} foto(s)</Badge>}
         </div>
       </div>
@@ -86,7 +87,7 @@ export function FotoUpload({ momento, fotos, onUpload, disabled, busy, pendentes
                 p.recusado ? 'text-amx-red-hover' : 'text-amx-amber'
               }`}
             >
-              {p.recusado ? 'Não aceita' : '⏳ Aguardando'}
+              {p.recusado ? 'Não aceita' : 'Aguardando'}
             </span>
           </div>
         ))}

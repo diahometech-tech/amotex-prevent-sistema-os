@@ -46,31 +46,33 @@ function linkOs(osId: string): string | undefined {
 export function mensagemCorretivaAberta(os: OS, condominio: Condominio, tecnico?: User | null, plantao: string[] = []): string {
   const sla = slaChegada(os);
   const linhas = [
-    `🚨 CORRETIVA URGENTE — ${condominio.nome}`,
-    enderecoCompleto(condominio),
-    os.descricao_problema && `Problema: ${os.descricao_problema}`,
+    `*CORRETIVA URGENTE* — ${escaparMarkdown(condominio.nome)}`,
+    escaparMarkdown(enderecoCompleto(condominio)),
+    os.descricao_problema && `Problema: ${escaparMarkdown(os.descricao_problema)}`,
     (os.solicitante_nome || os.solicitante_telefone) &&
-      `Solicitante: ${[os.solicitante_nome, os.solicitante_telefone].filter(Boolean).join(' · ')}`,
+      `Solicitante: ${escaparMarkdown([os.solicitante_nome, os.solicitante_telefone].filter(Boolean).join(' · '))}`,
     tecnico
-      ? `Técnico: ${tecnico.nome}`
+      ? `Técnico: ${escaparMarkdown(tecnico.nome)}`
       : plantao.length > 0
-        ? `De plantão: ${plantao.join(', ')} — assuma a OS no sistema`
+        ? `De plantão: ${escaparMarkdown(plantao.join(', '))} — assuma a OS no sistema`
         : 'Técnico: ninguém ainda — quem for, assuma a OS no sistema',
-    sla && `⏱ Chegar até ${fmtHora(sla.prazo)} (prazo de 3h)`,
+    sla && `Chegar até ${fmtHora(sla.prazo)} (prazo de 3h)`,
     linkOs(os.id),
   ];
-  return escaparMarkdown(linhas.filter(Boolean).join('\n'));
+  // Só o que vem de cadastro é escapado (acima); os '*' do título são do template.
+  // A URL também não é escapada: o '_' escapado quebraria o link.
+  return linhas.filter(Boolean).join('\n');
 }
 
 export function mensagemCorretivaAssumida(os: OS, condominio: Condominio, tecnico: User): string {
   const sla = slaChegada(os);
-  return escaparMarkdown([
-    `✅ ${tecnico.nome} assumiu a corretiva — ${condominio.nome}`,
-    sla && `⏱ Chegar até ${fmtHora(sla.prazo)}`,
+  return [
+    `*Corretiva assumida* — ${escaparMarkdown(tecnico.nome)} — ${escaparMarkdown(condominio.nome)}`,
+    sla && `Chegar até ${fmtHora(sla.prazo)}`,
     linkOs(os.id),
   ]
     .filter(Boolean)
-    .join('\n'));
+    .join('\n');
 }
 
 export async function avisarCorretiva(

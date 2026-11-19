@@ -26,6 +26,7 @@ import { LocalDoCondominio } from '@/components/os/LocalDoCondominio';
 import { EquipamentoForm, type EquipamentoFormData } from '@/components/cadastro/EquipamentoForm';
 import type { AuditLog, ChecklistItem, Condominio, Contato, Equipamento, Foto, OS } from '@/lib/db';
 import type { VinculosOS } from '@/lib/os-vinculos';
+import { Icon } from '@/components/ui/Icon';
 
 type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico';
 
@@ -545,7 +546,7 @@ export function OSModal({
                   href={`/?os=${vinculos.origem.id}`}
                   className="text-xs font-semibold text-amx-blue-light hover:text-white transition-colors w-fit"
                 >
-                  ↩ Aberta durante a preventiva #{vinculos.origem.id.slice(0, 6).toUpperCase()}
+                  <span className="inline-flex items-center gap-1"><Icon name="voltar" size={14} />Aberta durante a preventiva #{vinculos.origem.id.slice(0, 6).toUpperCase()}</span>
                 </a>
               ) : (
                 <p className="text-xs text-amx-muted">
@@ -589,7 +590,8 @@ export function OSModal({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-amx-muted hover:text-white transition-colors w-fit"
               >
-                📄 Baixar PDF da OS
+                <Icon name="documento" size={14} />
+                Baixar PDF da OS
               </a>
             )}
 
@@ -965,7 +967,10 @@ function SlaBox({ os }: { os: OS }) {
         : 'border-amx-amber/50 bg-amx-amber/10 text-amx-amber';
   return (
     <div className={`rounded-lg border px-3.5 py-2.5 text-[13px] font-semibold ${cor}`}>
-      ⏱ Prazo de chegada (3h): {sla.label}
+      <span className="inline-flex items-center gap-1.5">
+        <Icon name="relogio" size={16} />
+        Prazo de chegada (3h): {sla.label}
+      </span>
     </div>
   );
 }
@@ -977,7 +982,7 @@ function OsSummary({ os }: { os: OS }) {
       <Badge tone={os.tipo === 'corretiva' ? 'red' : 'info'}>{OS_TIPO_LABELS[os.tipo]}</Badge>
       <Badge tone={prioridade.tone}>{prioridade.label}</Badge>
       <Badge tone={os.status === 'finalizada' ? 'success' : 'neutral'}>{OS_STATUS_LABELS[os.status]}</Badge>
-      {os.origem === 'hermes_automatica' && <Badge tone="navy">🤖 Aberta automaticamente pelo Hermes</Badge>}
+      {os.origem === 'hermes_automatica' && <Badge tone="navy"><span className="inline-flex items-center gap-1"><Icon name="sensor" size={12} />Aberta automaticamente pelo Hermes</span></Badge>}
     </div>
   );
 }

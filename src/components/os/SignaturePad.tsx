@@ -4,6 +4,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
+import { Icon } from '@/components/ui/Icon';
 
 interface SignaturePadProps {
   label: string;
@@ -117,7 +118,7 @@ export function SignaturePad({ label, value, onSave, disabled, busy, pendente }:
       <div>
         <div className="flex items-center gap-2 mb-3">
           <p className="text-sm font-semibold text-white">{label}</p>
-          {pendente ? <Badge tone="warning">⏳ Aguardando envio</Badge> : <Badge tone="success">Assinado</Badge>}
+          {pendente ? <Badge tone="warning"><span className="inline-flex items-center gap-1"><Icon name="nuvemEnvio" size={12} />Aguardando envio</span></Badge> : <Badge tone="success">Assinado</Badge>}
         </div>
         <div className="border border-amx-line rounded-lg bg-white p-2 overflow-hidden" style={{ height: 120 }}>
           <img src={value} alt="Assinatura" className="w-full h-full object-contain" />

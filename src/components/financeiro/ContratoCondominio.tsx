@@ -12,6 +12,7 @@ import { formatarReais } from '@/lib/financeiro/dinheiro';
 import { rotuloCompetencia, statusEfetivo, STATUS_LABEL, type StatusEfetivo } from '@/lib/financeiro/cobranca';
 import { INDICE_LABEL, proximoAniversario } from '@/lib/financeiro/reajuste';
 import { hojeISO } from '@/lib/os-agenda';
+import { Icon } from '@/components/ui/Icon';
 
 export const STATUS_TONE: Record<StatusEfetivo, BadgeTone> = {
   pendente: 'neutral',
@@ -101,7 +102,7 @@ export function ContratoCondominio({
         <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider">Contrato e cobrança</p>
         <div className="flex items-center gap-2">
           {c.ativo === false && <Badge tone="neutral">Contrato encerrado</Badge>}
-          <Link href="/financeiro" className="text-xs font-semibold text-amx-blue-light hover:text-white">Abrir financeiro →</Link>
+          <Link href="/financeiro" className="text-xs font-semibold text-amx-blue-light hover:text-white"><span className="inline-flex items-center gap-1">Abrir financeiro<Icon name="chevronDireita" size={12} /></span></Link>
         </div>
       </div>
       <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2">
@@ -134,7 +135,7 @@ export function ContratoCondominio({
             <span className={`whitespace-nowrap font-semibold ${a.valor_centavos < 0 ? 'text-amx-green' : 'text-white'}`}>
               {a.valor_centavos < 0 ? '−' : '+'}{formatarReais(Math.abs(a.valor_centavos))}
             </span>
-            <button type="button" onClick={() => removerAjuste(a.id)} className="text-amx-muted hover:text-amx-red-hover" aria-label="Remover ajuste">×</button>
+            <button type="button" onClick={() => removerAjuste(a.id)} className="text-amx-muted hover:text-amx-red-hover w-11 h-11 inline-flex items-center justify-center -my-3" aria-label="Remover ajuste"><Icon name="fechar" size={14} /></button>
           </div>
         ))}
         {novo && (

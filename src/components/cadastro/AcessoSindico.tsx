@@ -45,7 +45,7 @@ function mensagemAcesso(nome: string, login: string, senha: string, condominio: 
     `Senha: ${senha}`,
     '',
     'No painel você vê as visitas de cada mês, com fotos e o relatório (PDF) de cada atendimento.',
-    'No primeiro acesso, troque a senha clicando nas suas iniciais, no canto esquerdo da tela.',
+    'No primeiro acesso, troque a senha: no computador, use Trocar senha no fim do menu à esquerda; no celular, toque em Menu, no topo, e depois em Trocar senha.',
   ].join('\n');
 }
 
