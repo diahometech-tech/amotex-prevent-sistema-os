@@ -47,8 +47,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 // (aplicando a trava de qualidade: não finaliza com checklist obrigatório
 // pendente — ver Database.finalizarOS). Cada campo é checado por papel:
 // campo (chegada, status, assinaturas, finalizar) = gestor e técnico; agenda
-// (técnico, data, prioridade, chamado) = escritório e técnico; cancelar =
-// escritório. Sempre só nas OS que a sessão vê.
+// (técnico, prioridade, chamado) = escritório e técnico; data da visita = só
+// escritório; cancelar = escritório. Sempre só nas OS que a sessão vê.
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
@@ -64,7 +64,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const body = await request.json();
-    const { finalizar, cancelar, motivo, assinatura_zelador, assinatura_tecnico, ...rest } = body;
+    const {
+      finalizar, cancelar, motivo, assinatura_zelador, assinatura_tecnico,
+      assinatura_zelador_nome, assinatura_zelador_documento, ...rest
+    } = body;
 
     // Cancelar: gestor e secretária, com motivo. Passa por Database.cancelarOS (nota na
     // observação + auditoria), nunca por um PATCH solto de status.
@@ -85,7 +88,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     // Permissão por campo: se o corpo mistura campo e agenda, cada um é
     // checado — qualquer campo não permitido recusa o pedido inteiro.
     const camposDeCampo = ['status', 'entrada_em', 'saida_em'].filter((f) => rest[f] !== undefined);
-    if (finalizar || typeof assinatura_zelador === 'string' || typeof assinatura_tecnico === 'string') camposDeCampo.push('finalizar/assinatura');
+    const mandouNomeZelador = assinatura_zelador_nome !== undefined || assinatura_zelador_documento !== undefined;
+    if (finalizar || mandouNomeZelador || typeof assinatura_zelador === 'string' || typeof assinatura_tecnico === 'string') {
+      camposDeCampo.push('finalizar/assinatura');
+    }
     if (camposDeCampo.length > 0 && !podeOperarCampo(session.role)) {
       return NextResponse.json(
         { error: 'O trabalho de campo (chegada, andamento, assinaturas e finalizar) é do técnico ou do gestor.' },
@@ -96,11 +102,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     // ainda é só "visível" pra ele — sem assumir, a OS ficaria sem responsável
     // e sumiria do acesso dele ao finalizar.
     if (camposDeCampo.length > 0 && session.role === 'tecnico' && original.tecnico_id !== session.id) {
-      return NextResponse.json({ error: 'Assuma a OS antes de iniciar o atendimento.' }, { status: 403 });
+      return NextResponse.json({ error: 'Assuma a OS antes de registrar a chegada ou mexer nela.' }, { status: 403 });
     }
     // Técnico só atribui a si mesmo (assumir); passar a OS adiante é do escritório.
     if (session.role === 'tecnico' && rest.tecnico_id !== undefined && rest.tecnico_id !== session.id) {
       return NextResponse.json({ error: 'Só o escritório pode trocar o técnico da OS.' }, { status: 403 });
+    }
+    // Mudar o dia da visita é do escritório; o técnico só assume a OS (tecnico_id = ele).
+    if (session.role === 'tecnico' && rest.data_programada !== undefined) {
+      return NextResponse.json({ error: 'Só o escritório reagenda a visita.' }, { status: 403 });
     }
     const camposDeAgenda = [
       'tecnico_id', 'data_programada', 'prioridade', 'observacao', 'solicitante_nome', 'solicitante_telefone', 'descricao_problema',
@@ -117,9 +127,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
     // tecnico_id vazio = desatribuir (o <select> manda ''; a coluna é UUID).
     if (updates.tecnico_id === '') updates.tecnico_id = null;
-    // Chegada no condomínio = início do atendimento. "Iniciar atendimento"
-    // (OSModal) só mandava o status; sem isto o prazo de 3h da corretiva
-    // (src/lib/os-sla.ts) nunca via a chegada por esse caminho.
+    // A chegada já registrada não muda: a hora que o cliente manda só vale
+    // na primeira vez (e só vem do aparelho sem sinal, via fila offline — o
+    // envio normal deixa o servidor gravar a hora). Hora no futuro vira agora.
+    if (updates.entrada_em !== undefined) {
+      const t = typeof updates.entrada_em === 'string' ? Date.parse(updates.entrada_em) : NaN;
+      if (original.entrada_em || Number.isNaN(t)) delete updates.entrada_em;
+      else if (t > Date.now()) updates.entrada_em = new Date().toISOString();
+    }
+    // Chegada no condomínio = "Cheguei no local" (OSModal e Rota do dia). Se só o
+    // status mudou, o servidor grava a hora: o prazo de 3h da corretiva
+    // (src/lib/os-sla.ts) conta dela.
     if (updates.status === 'em_andamento' && !original.entrada_em && updates.entrada_em === undefined) {
       updates.entrada_em = new Date().toISOString();
     }
@@ -129,6 +147,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       updates.data_programada = data;
     }
 
+    // Nome (obrigatório para finalizar) e documento (opcional) de quem assinou
+    // pelo condomínio. Podem vir junto com a assinatura ou depois, num PATCH só
+    // com o nome (assinatura que subiu sem nome). OS encerrada não muda mais.
+    if (mandouNomeZelador) {
+      if (original.status === 'finalizada' || original.status === 'cancelada') {
+        return NextResponse.json({ error: 'Esta OS já foi encerrada.' }, { status: 409 });
+      }
+      if (assinatura_zelador_nome !== undefined) {
+        const nome = typeof assinatura_zelador_nome === 'string' ? assinatura_zelador_nome.trim().slice(0, 120) : '';
+        if (nome.length < 2) return NextResponse.json({ error: 'Informe o nome de quem assinou.' }, { status: 400 });
+        updates.assinatura_zelador_nome = nome;
+      }
+      if (assinatura_zelador_documento !== undefined) {
+        updates.assinatura_zelador_documento =
+          typeof assinatura_zelador_documento === 'string' ? assinatura_zelador_documento.trim().slice(0, 40) : '';
+      }
+    }
     if (typeof assinatura_zelador === 'string') {
       const url = saveAssinaturaDataUrl(assinatura_zelador, id, 'zelador');
       if (!url) return NextResponse.json({ error: 'Assinatura do zelador em formato inválido.' }, { status: 400 });
@@ -151,8 +186,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         // de driver do Postgres, violação de constraint) não pode vazar pro
         // cliente: registra e troca por uma mensagem genérica.
         if (e instanceof FinalizacaoBloqueadaError) {
+          // Aba aberta antes do campo "nome" existir não tem onde digitá-lo: avisa o que fazer.
+          const dicaNome = e.pendencias.some((p) => p.startsWith('Falta o nome'))
+            ? ' Se a tela não mostra o campo do nome, atualize a página e preencha na aba Assinaturas.'
+            : '';
           return NextResponse.json(
-            { error: `${e.message} ${e.pendencias.join('; ')}.`, pendencias: e.pendencias },
+            { error: `${e.message} ${e.pendencias.join('; ')}.${dicaNome}`, pendencias: e.pendencias },
             { status: 422 }
           );
         }

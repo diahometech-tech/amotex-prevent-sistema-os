@@ -238,6 +238,10 @@ export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
     if (os.assinatura_zelador_url) {
       doc.font('Helvetica').fontSize(10).text('Zelador/Síndico:');
       embedImageOrNote(doc, os.assinatura_zelador_url, assinaturaZeladorBuffer, 150);
+      if (os.assinatura_zelador_nome) {
+        const docTxt = os.assinatura_zelador_documento ? ` (${os.assinatura_zelador_documento})` : '';
+        doc.font('Helvetica').fontSize(10).text(`Assinado por: ${os.assinatura_zelador_nome}${docTxt}`);
+      }
       doc.moveDown(0.3);
     }
     if (os.assinatura_tecnico_url) {

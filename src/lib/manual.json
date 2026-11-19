@@ -1,5 +1,5 @@
 {
-  "atualizado": "2026-11-20",
+  "atualizado": "2026-11-19",
   "papeis": [
     {
       "papel": "admin",
@@ -98,7 +98,7 @@
             "Cada pessoa só vê o que é do seu perfil. O que não é dela nem aparece no menu.",
             "Gestor: vê e faz tudo.",
             "Secretária: vê Dashboard, Ordens de Serviço, Rotas, Condomínios, Painel do Síndico, Financeiro (só a aba Cobranças) e Ajuda. Abre OS, atribui técnico, reagenda, cancela, marca o plantão e planeja as preventivas. Edita contatos dos condomínios e vê o contrato só para leitura.",
-            "A secretária não vai a campo (iniciar atendimento, checklist, fotos, assinaturas e finalizar são do técnico). Também não apaga OS, não cadastra nem edita condomínio, não cria acesso de síndico, não vê Usuários e só usa a aba Cobranças do Financeiro.",
+            "A secretária não vai a campo (chegada no local, checklist, fotos, assinaturas e finalizar são do técnico). Também não apaga OS, não cadastra nem edita condomínio, não cria acesso de síndico, não vê Usuários e só usa a aba Cobranças do Financeiro.",
             "Na Cobranças, a secretária gera o mês, marca como enviada, registra pagamento e anexa comprovante. Isentar, reabrir e editar valor são só do gestor.",
             "Técnico: vê só as OS dele e as corretivas sem técnico, só a rota dele e só os condomínios das OS que vê.",
             "Síndico: vê só o Painel do Condomínio dele e a Ajuda."
@@ -182,7 +182,8 @@
             "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
             "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
             "Com alguém de plantão, o aviso de corretiva vai só para ele, para os gestores e para você. Sem ninguém marcado, vai para todos os técnicos de corretiva.",
-            "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Avise o gestor para cadastrar o ID dela."
+            "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Avise o gestor para cadastrar o ID dela.",
+            "Reagendar a visita é com você e com o gestor: o técnico não muda a data e liga para o escritório. Se aparecer o recado de aviso não enviado ou plantonista sem Telegram, ligue para a pessoa."
           ]
         },
         {
@@ -271,7 +272,7 @@
           "passos": [
             "Abra Rotas no menu. A tela mostra só as suas visitas, sob o título Minha rota.",
             "Use as setas para ver os próximos dias.",
-            "Ao chegar no condomínio, clique em Marcar Visitado (ou abra a OS e use Iniciar atendimento)."
+            "Ao chegar no condomínio, clique em Cheguei no local (na rota ou dentro da OS). Fica registrado \"Chegou às\" com a hora. Sem sinal, a chegada fica guardada no aparelho com a hora do toque e sobe sozinha quando a internet voltar."
           ]
         },
         {
@@ -297,18 +298,19 @@
           "passos": [
             "Você recebe o aviso de corretiva no Telegram com o condomínio, o problema e o horário limite de chegada.",
             "Abra a OS em Ordens de Serviço e clique em Assumir esta OS. Assim os outros técnicos sabem que você vai.",
-            "Ao chegar no local, clique em Iniciar atendimento. Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
+            "Ao chegar, clique em Cheguei no local. Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
             "Para chegar, use Abrir no mapa e Ligar no bloco Local da OS."
           ]
         },
         {
           "titulo": "Durante o atendimento",
           "passos": [
-            "Aba Checklist: marque cada item conforme faz. Itens com OBRIG. são obrigatórios para finalizar.",
+            "Aba Checklist: marque cada item conforme faz. Itens com OBRIG. são obrigatórios para finalizar. Marcou sem querer? Toque de novo no item para desmarcar (enquanto a OS não for finalizada).",
             "Cada equipamento do checklist tem duas faixas: Antes e Depois. Toque na câmera de cada uma e tire a foto do equipamento antes e depois do serviço.",
             "Aba Fotos: são as fotos gerais do serviço. Quando a OS pede foto de equipamento (preventiva, ou corretiva de um equipamento), elas são opcionais. Nos outros casos, tire pelo menos uma foto antes e uma depois, geral ou de qualquer equipamento.",
             "Se tirar uma foto errada, no Checklist toque no X da miniatura; na aba Fotos, toque em Remover. Depois tire de novo.",
-            "Aba Assinaturas: assine no quadro e toque em Confirmar assinatura. Depois peça ao zelador para assinar no quadro dele."
+            "Aba Assinaturas: assine no quadro e toque em Confirmar assinatura. Para o condomínio, escreva o nome de quem vai assinar (documento é opcional), peça para a pessoa assinar no quadro e toque em Confirmar. O nome vem preenchido com o zelador cadastrado: se quem assinou foi outra pessoa, troque o nome. Errou? Toque em Corrigir nome. Sem o nome, a OS não finaliza.",
+            "Precisa mudar o dia da visita? Ligue para o escritório. Só o gestor e a secretária reagendam."
           ]
         },
         {
@@ -336,6 +338,10 @@
         {
           "pergunta": "Cheguei e outro técnico já tinha assumido.",
           "resposta": "A OS some da sua lista e o link do aviso mostra que ela já foi assumida. Combine com o gestor se precisar de ajuda no local."
+        },
+        {
+          "pergunta": "Preciso mudar o dia da visita.",
+          "resposta": "Ligue para o escritório. Só o gestor e a secretária mudam a data; na sua OS você vê o dia agendado, sem poder alterar."
         },
         {
           "pergunta": "Não recebi o aviso no Telegram.",

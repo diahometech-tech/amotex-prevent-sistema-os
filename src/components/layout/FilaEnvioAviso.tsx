@@ -5,8 +5,9 @@ import { descartarItem, iniciarSincronizacao, ouvirFila, processarFila } from '@
 import { useFilaEnvio } from '@/lib/useFilaEnvio';
 import { Icon } from '@/components/ui/Icon';
 
-function rotulo(n: number, tipo: 'foto' | 'assinatura'): string {
+function rotulo(n: number, tipo: 'foto' | 'assinatura' | 'chegada'): string {
   if (tipo === 'foto') return n === 1 ? '1 foto' : `${n} fotos`;
+  if (tipo === 'chegada') return n === 1 ? '1 chegada' : `${n} chegadas`;
   return n === 1 ? '1 assinatura' : `${n} assinaturas`;
 }
 
@@ -26,7 +27,7 @@ export function FilaEnvioAviso() {
     window.addEventListener('offline', atualizarRede);
     const sair = ouvirFila((e) => {
       if (e.tipo === 'sessao_expirada') setSessaoExpirada(true);
-      if (e.tipo === 'foto_enviada' || e.tipo === 'assinatura_enviada') setSessaoExpirada(false);
+      if (e.tipo === 'foto_enviada' || e.tipo === 'assinatura_enviada' || e.tipo === 'chegada_enviada') setSessaoExpirada(false);
     });
     return () => {
       parar();
@@ -41,8 +42,13 @@ export function FilaEnvioAviso() {
   if (itens.length === 0 && online) return null;
 
   const fotos = aguardando.filter((i) => i.tipo === 'foto').length;
-  const assinaturas = aguardando.length - fotos;
-  const partes = [fotos && rotulo(fotos, 'foto'), assinaturas && rotulo(assinaturas, 'assinatura')].filter(Boolean);
+  const chegadas = aguardando.filter((i) => i.tipo === 'chegada').length;
+  const assinaturas = aguardando.length - fotos - chegadas;
+  const partes = [
+    fotos && rotulo(fotos, 'foto'),
+    assinaturas && rotulo(assinaturas, 'assinatura'),
+    chegadas && rotulo(chegadas, 'chegada'),
+  ].filter(Boolean);
 
   const tentarAgora = async () => {
     setTentando(true);
@@ -83,7 +89,7 @@ export function FilaEnvioAviso() {
         !online && (
           <span className="inline-flex items-center gap-1.5">
             <Icon name="semSinal" size={16} />
-            Sem sinal. Fotos e assinaturas ficam guardadas no aparelho até a rede voltar.
+            Sem sinal. Fotos, assinaturas e chegadas ficam guardadas no aparelho até a rede voltar.
           </span>
         )
       )}
@@ -92,7 +98,7 @@ export function FilaEnvioAviso() {
           <span className="inline-flex items-start gap-1.5">
             <Icon name="alerta" size={16} className="shrink-0 mt-px" />
             <span>
-            {i.tipo === 'foto' ? 'Foto' : 'Assinatura'} da OS #{i.os_id.slice(0, 6).toUpperCase()} não foi aceita:{' '}
+            {i.tipo === 'foto' ? 'Foto' : i.tipo === 'chegada' ? 'Chegada' : 'Assinatura'} da OS #{i.os_id.slice(0, 6).toUpperCase()} não foi aceita:{' '}
             {i.erro}
             </span>
           </span>

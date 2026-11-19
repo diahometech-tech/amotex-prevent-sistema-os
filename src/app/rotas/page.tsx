@@ -13,7 +13,9 @@ import { Modal } from '@/components/ui/Modal';
 import { podeOperarCampo, podePlanejarPreventivas, podeVerRotaDeTodos } from '@/lib/roles';
 import { computeOsPrioridade, resumoRotasPorCondominio, OS_STATUS_LABELS, type RotaCondominio } from '@/lib/os-priority';
 import { formatarDataCurta, hojeISO, montarRotaDoDia, somarDias } from '@/lib/os-agenda';
-import { slaChegada } from '@/lib/os-sla';
+import { slaChegada, textoChegada } from '@/lib/os-sla';
+import { enfileirar, ouvirFila } from '@/lib/fila-envio';
+import { useFilaEnvio } from '@/lib/useFilaEnvio';
 import { useTick } from '@/lib/useTick';
 import { BotaoLigar, BotaoMapa } from '@/components/os/LocalDoCondominio';
 import { enderecoCompleto, linkMapa, type TelefoneLocal } from '@/lib/endereco';
@@ -43,6 +45,9 @@ function RotasContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [visitando, setVisitando] = useState<string | null>(null);
+  // Chegadas registradas sem sinal, ainda na fila do aparelho.
+  const fila = useFilaEnvio();
+  const chegadaPendente = (osId: string) => fila.flatMap((i) => (i.tipo === 'chegada' && i.os_id === osId && !i.recusado ? [i] : []))[0];
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
   const [showPlanejar, setShowPlanejar] = useState(false);
 
@@ -102,6 +107,15 @@ function RotasContent() {
     load();
   }, []);
 
+  // Chegada que subiu da fila entra na lista sem recarregar.
+  useEffect(
+    () =>
+      ouvirFila((e) => {
+        if (e.tipo === 'chegada_enviada') setOss((prev) => prev.map((o) => (o.id === e.os.id ? e.os : o)));
+      }),
+    []
+  );
+
   const verTodos = podeVerRotaDeTodos(user?.role);
 
   const doTecnico = useMemo(() => {
@@ -132,20 +146,26 @@ function RotasContent() {
     // Limpa o erro da tentativa anterior: sem isso o banner de "Falha ao
     // marcar visita" continuava na tela mesmo depois de um retry que deu certo.
     setError('');
+    // O servidor grava a hora da chegada; só sem sinal vai a hora do aparelho, pela fila.
+    const horaDoToque = new Date().toISOString();
     try {
       const res = await fetch(`/api/os/${os.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entrada_em: new Date().toISOString(), status: 'em_andamento' }),
+        body: JSON.stringify({ status: 'em_andamento' }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.os) {
         setOss((prev) => prev.map((o) => (o.id === data.os.id ? data.os : o)));
       } else {
-        setError(data.error || 'Falha ao marcar visita.');
+        setError(data.error || 'Falha ao registrar a chegada.');
       }
     } catch {
-      setError('Erro de conexão ao marcar visita.');
+      try {
+        await enfileirar({ tipo: 'chegada', os_id: os.id, entrada_em: horaDoToque });
+      } catch {
+        setError('Não foi possível registrar a chegada. Tente de novo.');
+      }
     } finally {
       setVisitando(null);
     }
@@ -235,7 +255,15 @@ function RotasContent() {
                 </Badge>
               </button>
               {os.entrada_em ? (
-                <Badge tone="success">Visitado</Badge>
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amx-green">
+                  <Icon name="check" size={14} />
+                  {textoChegada(os.entrada_em)}
+                </span>
+              ) : chegadaPendente(os.id) ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amx-amber">
+                  <Icon name="nuvemEnvio" size={14} />
+                  {textoChegada(chegadaPendente(os.id)!.entrada_em)} (aguardando envio)
+                </span>
               ) : podeOperarCampo(user?.role) ? (
                 <Button
                   variant="secondary"
@@ -246,7 +274,8 @@ function RotasContent() {
                     marcarVisitado(os);
                   }}
                 >
-                  {visitando === os.id ? 'Marcando...' : 'Marcar Visitado'}
+                  <Icon name="mapa" size={14} />
+                  {visitando === os.id ? 'Registrando...' : 'Cheguei no local'}
                 </Button>
               ) : null}
             </div>

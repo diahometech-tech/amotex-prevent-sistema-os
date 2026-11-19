@@ -1,7 +1,16 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Icon } from '@/components/ui/Icon';
+
+// Pilha de modais abertos (o último é o de cima) e um único ouvinte de Esc.
+const pilhaModais: Array<() => void> = [];
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || pilhaModais.length === 0) return;
+    pilhaModais[pilhaModais.length - 1]();
+  });
+}
 
 // Wrapper padrão pra todo modal do sistema: fundo escurecido, fecha ao
 // clicar fora ou apertar Esc, nunca encosta na borda em tela estreita
@@ -17,14 +26,21 @@ export function Modal({
   children: React.ReactNode;
   maxWidth?: string;
 }) {
+  // O Esc fecha só a janela de cima: cada modal aberto entra na pilha global
+  // e só o último ouve a tecla (ConfirmDialog também usa este Modal).
+  const fecharRef = useRef(onClose);
+  useEffect(() => {
+    fecharRef.current = onClose;
+  });
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    const entrada = () => fecharRef.current();
+    pilhaModais.push(entrada);
+    return () => {
+      const i = pilhaModais.indexOf(entrada);
+      if (i >= 0) pilhaModais.splice(i, 1);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

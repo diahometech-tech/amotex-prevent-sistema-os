@@ -8,7 +8,7 @@ import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { Field, Input, Select, Textarea } from '@/components/ui/Form';
 import { OSModal } from '@/components/os/OSModal';
-import { podeAbrirOS } from '@/lib/roles';
+import { isEscritorio, podeAbrirOS } from '@/lib/roles';
 import { computeOsPrioridade, OS_STATUS_LABELS, type OsPrioridade } from '@/lib/os-priority';
 import { formatarDataCurta, hojeISO } from '@/lib/os-agenda';
 import { slaChegada } from '@/lib/os-sla';
@@ -258,7 +258,7 @@ function OsListContent() {
       {error && (
         <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 mx-8 mt-4 rounded-lg px-3 py-2">{error}</p>
       )}
-      {avisoCriacao && (
+      {avisoCriacao && isEscritorio(user?.role) && (
         <p
           className={`text-xs font-semibold mx-8 mt-4 rounded-lg px-3 py-2 ${
             avisoCriacao.ok ? 'text-amx-green bg-amx-green/10' : 'text-amx-amber bg-amx-amber/10'
@@ -500,7 +500,8 @@ function NovaOsForm({
           tipo,
           prioridade: prioridade || undefined,
           tecnico_id: tecnicoId || undefined,
-          data_programada: dataProgramada || null,
+          // Técnico não agenda: a visita é de hoje (o servidor também ignora a data dele).
+          ...(ehTecnico ? {} : { data_programada: dataProgramada || null }),
           observacao: observacao || undefined,
           ...(tipo === 'corretiva'
             ? {
@@ -594,9 +595,11 @@ function NovaOsForm({
             </div>
           </div>
         )}
-        <Field label="Data da visita" hint="Define em qual dia a OS aparece na rota do técnico">
-          <Input id="nova-os-data" type="date" value={dataProgramada} onChange={(e) => setDataProgramada(e.target.value)} />
-        </Field>
+        {!ehTecnico && (
+          <Field label="Data da visita" hint="Define em qual dia a OS aparece na rota do técnico">
+            <Input id="nova-os-data" type="date" value={dataProgramada} onChange={(e) => setDataProgramada(e.target.value)} />
+          </Field>
+        )}
         {/* Técnico abre a OS já como responsável (tecnicoId inicial): se escolhesse
             outro colega, ou ninguém, a OS sumiria da lista dele. */}
         {!ehTecnico && (

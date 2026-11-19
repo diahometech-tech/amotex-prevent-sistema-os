@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest, podeVerOS } from '@/lib/auth';
-import { podeOperarCampo } from '@/lib/roles';
+import { podeOperarCampo, osEncerrada } from '@/lib/roles';
 
 type RouteContext = { params: Promise<{ id: string; itemId: string }> };
 
-// PATCH /api/os/[id]/checklist/[itemId] — marca item como concluído. Gestor ou técnico (campo), só nas OS que vê.
+// PATCH /api/os/[id]/checklist/[itemId] — marca ou desmarca o item. Corpo { concluido: boolean };
+// sem corpo = marcar (compatível com a fila e chamadas antigas). Gestor ou técnico (campo), só nas OS que vê.
+// Marcar e desmarcar só enquanto a OS não está finalizada/cancelada e, para o técnico, só na OS dele.
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id, itemId } = await context.params;
   const session = getSessionFromRequest(request);
@@ -22,7 +24,31 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!doChecklist.some((i) => i.id === itemId)) {
     return NextResponse.json({ error: 'Item não encontrado.' }, { status: 404 });
   }
-  const item = await Database.concluirChecklistItem(itemId);
+  let concluido = true;
+  try {
+    const corpo = await request.json();
+    if (corpo && typeof corpo.concluido === 'boolean') concluido = corpo.concluido;
+  } catch {
+    // sem corpo (ou corpo inválido) = marcar, como sempre foi
+  }
+  // Mesma regra nos dois sentidos: OS encerrada não muda, e o técnico só mexe na OS dele.
+  if (osEncerrada(os)) return NextResponse.json({ error: 'OS encerrada.' }, { status: 409 });
+  if (session.role === 'tecnico' && os.tecnico_id !== session.id) {
+    return NextResponse.json({ error: 'Assuma a OS antes de mexer no checklist.' }, { status: 403 });
+  }
+  const atual = doChecklist.find((i) => i.id === itemId);
+  const item = concluido
+    ? await Database.concluirChecklistItem(itemId)
+    : await Database.setChecklistItemConcluido(itemId, false);
   if (!item) return NextResponse.json({ error: 'Item não encontrado.' }, { status: 404 });
+  if (!concluido && atual?.concluido) {
+    await Database.createAuditLog({
+      entidade: 'os',
+      entidade_id: id,
+      acao: 'CHECKLIST_DESMARCADO',
+      ator: session.name,
+      detalhe: { item_id: itemId, descricao: item.descricao },
+    });
+  }
   return NextResponse.json({ success: true, item });
 }

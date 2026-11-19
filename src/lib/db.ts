@@ -262,6 +262,10 @@ export interface OS {
   os_origem_id?: string;
   equipamento_id?: string;
   assinatura_zelador_url?: string;
+  // Quem assinou pelo condomínio (nome obrigatório para finalizar; documento
+  // RG/CPF livre, opcional). OS assinadas antes deste campo ficam sem nome.
+  assinatura_zelador_nome?: string;
+  assinatura_zelador_documento?: string;
   assinatura_tecnico_url?: string;
   pdf_url?: string;
   criado_em: string;
@@ -274,7 +278,7 @@ export interface ChecklistItem {
   descricao: string;
   obrigatorio: boolean;
   concluido: boolean;
-  concluido_em?: string;
+  concluido_em?: string | null;
 }
 
 export interface Foto {
@@ -1227,6 +1231,14 @@ export class Database {
 
   static async concluirChecklistItem(id: string): Promise<ChecklistItem | null> {
     return backend().updateChecklistItem(id, { concluido: true, concluido_em: new Date().toISOString() });
+  }
+
+  // Marca ou desmarca (item marcado por engano). Desmarcar zera a hora de conclusão.
+  static async setChecklistItemConcluido(id: string, concluido: boolean): Promise<ChecklistItem | null> {
+    return backend().updateChecklistItem(id, {
+      concluido,
+      concluido_em: concluido ? new Date().toISOString() : null,
+    });
   }
 
   // ----- Financeiro -----

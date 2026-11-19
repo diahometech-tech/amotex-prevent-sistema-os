@@ -11,11 +11,11 @@ import { SignaturePad } from '@/components/os/SignaturePad';
 import { FotoUpload } from '@/components/os/FotoUpload';
 import { HistoricoPanel } from '@/components/os/HistoricoPanel';
 import { useAmxUser } from '@/components/layout/AppShell';
-import { podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeEditarEquipamento, podeOperarCampo, podeVerModulo } from '@/lib/roles';
+import { isEscritorio, podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeEditarEquipamento, podeOperarCampo, podeVerModulo } from '@/lib/roles';
 import { computeOsPrioridade, OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-priority';
 import { pendenciasFinalizacao } from '@/lib/os-finalizacao';
 import { formatarDataCurta } from '@/lib/os-agenda';
-import { slaChegada } from '@/lib/os-sla';
+import { textoChegada, slaChegada } from '@/lib/os-sla';
 import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
 import { useTick } from '@/lib/useTick';
 import { enfileirar, ouvirFila } from '@/lib/fila-envio';
@@ -80,7 +80,13 @@ export function OSModal({
 
   const [uploadingMomento, setUploadingMomento] = useState<'antes' | 'depois' | null>(null);
   const [savingSignature, setSavingSignature] = useState<'tecnico' | 'zelador' | null>(null);
+  // Quem assinou pelo condomínio: null = ainda não digitado (usa o zelador dos contatos).
+  const [nomeZeladorEdit, setNomeZeladorEdit] = useState<string | null>(null);
+  const [docZeladorEdit, setDocZeladorEdit] = useState('');
+  const [salvandoNome, setSalvandoNome] = useState(false);
   const [busyAction, setBusyAction] = useState(false);
+  const [registrandoChegada, setRegistrandoChegada] = useState(false);
+  const [corrigindoNome, setCorrigindoNome] = useState(false);
 
   // Fila de envio offline (src/lib/fila-envio.ts): foto e assinatura entram
   // primeiro no aparelho e sobem sozinhas quando houver rede. O que já subiu
@@ -88,8 +94,13 @@ export function OSModal({
   const fila = useFilaEnvio(osId);
   const fotosPendentes = fila.flatMap((i) => (i.tipo === 'foto' ? [i] : []));
   const assinaturaPendente = (papel: 'tecnico' | 'zelador') =>
-    fila.find((i) => i.tipo === 'assinatura' && i.papel === papel && !i.recusado);
+    fila.flatMap((i) => (i.tipo === 'assinatura' && i.papel === papel && !i.recusado ? [i] : []))[0];
+  // Chegada registrada sem sinal: guarda a hora do toque e sobe sozinha.
+  const chegadaPendente = fila.find((i) => i.tipo === 'chegada' && !i.recusado);
   const aguardandoEnvio = fila.filter((i) => !i.recusado).length;
+  const zeladorPendente = assinaturaPendente('zelador');
+  const nomeZeladorPadrao = contatos.find((c) => c.papel === 'zelador' && c.ativo)?.nome ?? '';
+  const nomeZelador = nomeZeladorEdit ?? nomeZeladorPadrao;
   // Quem usa o modal passa onChanged inline; o ref evita reinscrever a cada render.
   const onChangedRef = useRef(onChanged);
   useEffect(() => {
@@ -101,7 +112,7 @@ export function OSModal({
         if (e.tipo === 'foto_enviada' && e.foto.os_id === osId) {
           setFotos((prev) => (prev.some((f) => f.id === e.foto.id) ? prev : [...prev, e.foto]));
         }
-        if (e.tipo === 'assinatura_enviada' && e.os.id === osId) {
+        if ((e.tipo === 'assinatura_enviada' || e.tipo === 'chegada_enviada') && e.os.id === osId) {
           setOs(e.os);
           onChangedRef.current(e.os);
         }
@@ -179,6 +190,8 @@ export function OSModal({
             ...os,
             assinatura_tecnico_url: os.assinatura_tecnico_url || assinaturaPendente('tecnico')?.data,
             assinatura_zelador_url: os.assinatura_zelador_url || assinaturaPendente('zelador')?.data,
+            assinatura_zelador_nome:
+              os.assinatura_zelador_nome || (zeladorPendente?.tipo === 'assinatura' ? zeladorPendente.nome : undefined),
           },
           checklist,
           fotos: [...fotos, ...fotosPendentes.filter((p) => !p.recusado)],
@@ -276,24 +289,29 @@ export function OSModal({
     }
   };
 
-  // API só marca item como concluído (Database.concluirChecklistItem é uma
-  // via só de ida — ver src/lib/db.ts) — não existe "desmarcar" no backend.
-  const concluirChecklistItem = async (item: ChecklistItem) => {
-    if (item.concluido) return;
+  // Alterna o item do checklist. Desmarcar (item marcado por engano) é permitido
+  // enquanto a OS está aberta para o campo; não pede confirmação (é reversível).
+  const alternarChecklistItem = async (item: ChecklistItem) => {
+    const marcar = !item.concluido;
     setActionError('');
-    setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: true } : i)));
+    setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: marcar } : i)));
+    const voltar = () => setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: item.concluido } : i)));
     try {
-      const res = await fetch(`/api/os/${osId}/checklist/${item.id}`, { method: 'PATCH' });
+      const res = await fetch(`/api/os/${osId}/checklist/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ concluido: marcar }),
+      });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.item) {
         setChecklist((prev) => prev.map((i) => (i.id === item.id ? data.item : i)));
       } else {
-        setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: false } : i)));
-        setActionError(data.error || 'Falha ao concluir item do checklist.');
+        voltar();
+        setActionError(data.error || 'Falha ao atualizar o item do checklist.');
       }
     } catch {
-      setChecklist((prev) => prev.map((i) => (i.id === item.id ? { ...i, concluido: false } : i)));
-      setActionError('Erro de conexão ao concluir item.');
+      voltar();
+      setActionError('Erro de conexão ao atualizar o item.');
     }
   };
 
@@ -316,10 +334,13 @@ export function OSModal({
     }
   };
 
-  const iniciarAtendimento = async () => {
+  const registrarChegada = async () => {
     if (!os) return;
-    setBusyAction(true);
+    setRegistrandoChegada(true);
     setActionError('');
+    // Hora da chegada: o servidor grava a dele (relógio do celular errado não
+    // burla o prazo). Só sem sinal vai a hora do aparelho, pela fila.
+    const horaDoToque = new Date().toISOString();
     try {
       const res = await fetch(`/api/os/${osId}`, {
         method: 'PATCH',
@@ -331,12 +352,16 @@ export function OSModal({
         setOs(data.os);
         onChanged(data.os);
       } else {
-        setActionError(data.error || 'Falha ao iniciar atendimento.');
+        setActionError(data.error || 'Falha ao registrar a chegada.');
       }
     } catch {
-      setActionError('Erro de conexão.');
+      try {
+        await enfileirar({ tipo: 'chegada', os_id: osId, entrada_em: horaDoToque });
+      } catch {
+        setActionError('Não foi possível registrar a chegada. Tente de novo.');
+      }
     } finally {
-      setBusyAction(false);
+      setRegistrandoChegada(false);
     }
   };
 
@@ -390,11 +415,59 @@ export function OSModal({
     setSavingSignature(papel);
     setActionError('');
     try {
-      await enfileirar({ tipo: 'assinatura', os_id: osId, papel, data: dataUrl });
+      const extra =
+        papel === 'zelador'
+          ? { nome: nomeZelador.trim(), ...(docZeladorEdit.trim() ? { documento: docZeladorEdit.trim() } : {}) }
+          : {};
+      await enfileirar({ tipo: 'assinatura', os_id: osId, papel, data: dataUrl, ...extra });
     } catch {
       setActionError('Não foi possível guardar a assinatura. Tente de novo.');
     } finally {
       setSavingSignature(null);
+    }
+  };
+
+  // Assinatura do zelador que subiu sem nome (OS antiga ou envio sem o nome):
+  // completa só o nome (e o documento) num PATCH separado.
+  const salvarNomeZelador = async () => {
+    const nome = nomeZelador.trim();
+    if (nome.length < 2) {
+      setActionError('Informe o nome de quem assinou.');
+      return;
+    }
+    setSalvandoNome(true);
+    setActionError('');
+    try {
+      // Assinatura ainda na fila: regrava o item com o nome novo (mesmo id), senão
+      // o envio dela sobrescreveria a correção.
+      if (zeladorPendente) {
+        await enfileirar({
+          tipo: 'assinatura', os_id: osId, papel: 'zelador', data: zeladorPendente.data, nome,
+          ...(docZeladorEdit.trim() ? { documento: docZeladorEdit.trim() } : {}),
+        });
+        setCorrigindoNome(false);
+        return;
+      }
+      const res = await fetch(`/api/os/${osId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assinatura_zelador_nome: nome,
+          ...(docZeladorEdit.trim() ? { assinatura_zelador_documento: docZeladorEdit.trim() } : {}),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.os) {
+        setOs(data.os);
+        onChanged(data.os);
+        setCorrigindoNome(false);
+      } else {
+        setActionError(data.error || 'Não foi possível salvar o nome.');
+      }
+    } catch {
+      setActionError('Sem conexão. Tente de novo.');
+    } finally {
+      setSalvandoNome(false);
     }
   };
 
@@ -451,10 +524,7 @@ export function OSModal({
 
   return (
     <>
-    {/* Com o cadastro de equipamento ou um diálogo (cancelar, apagar, remover
-        foto) aberto por cima, o Esc é dele: o OSModal não pode fechar junto
-        (os dois ouvem a tecla na janela). */}
-    <Modal open onClose={cadastrandoEquip || dialogo || fotoParaRemover || equipParaRemover ? () => {} : onClose} maxWidth="max-w-2xl">
+    <Modal open onClose={onClose} maxWidth="max-w-2xl">
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Spinner className="h-6 w-6" />
@@ -500,7 +570,7 @@ export function OSModal({
               </Button>
             )}
 
-            {avisoMsg && (
+            {avisoMsg && isEscritorio(user?.role) && (
               <p
                 className={`text-xs font-semibold rounded-lg px-3 py-2 ${
                   avisoMsg.ok ? 'text-amx-green bg-amx-green/10' : 'text-amx-amber bg-amx-amber/10'
@@ -512,14 +582,21 @@ export function OSModal({
 
             {podeAgenda && !isClosed ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Data da visita">
-                  <Input
-                    id="os-data-programada"
-                    type="date"
-                    value={os.data_programada || ''}
-                    onChange={(e) => salvarAgendamento('data_programada', e.target.value)}
-                  />
-                </Field>
+                {/* Só o escritório muda o dia; o técnico vê a data para leitura. */}
+                {ehTecnico ? (
+                  os.data_programada && (
+                    <p className="text-xs text-amx-muted self-end">Visita agendada: {formatarDataCurta(os.data_programada)}</p>
+                  )
+                ) : (
+                  <Field label="Data da visita">
+                    <Input
+                      id="os-data-programada"
+                      type="date"
+                      value={os.data_programada || ''}
+                      onChange={(e) => salvarAgendamento('data_programada', e.target.value)}
+                    />
+                  </Field>
+                )}
                 {/* Técnico não passa a OS adiante: trocar o responsável tira a OS dele. */}
                 {!ehTecnico && (
                   <Field label="Técnico responsável">
@@ -601,9 +678,20 @@ export function OSModal({
 
             {campoLiberado && !isClosed && (
               <div className="flex items-center gap-2 flex-wrap">
-                {os.status === 'aberta' && (
-                  <Button size="sm" variant="secondary" onClick={iniciarAtendimento} disabled={busyAction}>
-                    Iniciar atendimento
+                {os.entrada_em ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amx-green">
+                    <Icon name="check" size={14} />
+                    {textoChegada(os.entrada_em)}
+                  </span>
+                ) : chegadaPendente && chegadaPendente.tipo === 'chegada' ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amx-amber">
+                    <Icon name="nuvemEnvio" size={14} />
+                    {textoChegada(chegadaPendente.entrada_em)} (aguardando envio)
+                  </span>
+                ) : (
+                  <Button size="sm" variant="secondary" onClick={registrarChegada} disabled={registrandoChegada || busyAction}>
+                    <Icon name="mapa" size={14} />
+                    {registrandoChegada ? 'Registrando...' : 'Cheguei no local'}
                   </Button>
                 )}
                 <div className="flex flex-col gap-1">
@@ -663,7 +751,7 @@ export function OSModal({
               <ChecklistTab
                 items={checklist}
                 readOnly={!campoLiberado || isClosed}
-                onConcluir={concluirChecklistItem}
+                onAlternar={alternarChecklistItem}
                 onAdd={addChecklistItem}
                 fotoObrigatoria={new Set(equipamentosObrigatorios(os, checklist).map((i) => i.equipamento_id))}
                 fotosEquip={fotos.filter((f) => f.equipamento_id)}
@@ -718,14 +806,78 @@ export function OSModal({
                   disabled={!campoLiberado || isClosed}
                   busy={savingSignature === 'tecnico'}
                 />
-                <SignaturePad
-                  label="Assinatura do zelador"
-                  value={assinaturaPendente('zelador')?.data ?? os.assinatura_zelador_url}
-                  pendente={!!assinaturaPendente('zelador')}
-                  onSave={(dataUrl) => saveAssinatura('zelador', dataUrl)}
-                  disabled={!campoLiberado || isClosed}
-                  busy={savingSignature === 'zelador'}
-                />
+                {(() => {
+                  const zeladorAssinado = !!(zeladorPendente?.data ?? os.assinatura_zelador_url);
+                  const nomeGravado =
+                    os.assinatura_zelador_nome || (zeladorPendente?.tipo === 'assinatura' ? zeladorPendente.nome : '');
+                  const docGravado =
+                    os.assinatura_zelador_documento || (zeladorPendente?.tipo === 'assinatura' ? zeladorPendente.documento : '');
+                  const editavel = campoLiberado && !isClosed;
+                  return (
+                    <div className="flex flex-col gap-3">
+                      {(!nomeGravado || corrigindoNome) && editavel && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <Field label={zeladorAssinado ? 'Nome de quem assinou' : 'Nome de quem vai assinar'} required>
+                            <Input
+                              value={nomeZelador}
+                              onChange={(e) => setNomeZeladorEdit(e.target.value)}
+                              placeholder="Nome do zelador ou síndico"
+                              maxLength={120}
+                              autoComplete="off"
+                            />
+                          </Field>
+                          <Field label="Documento (opcional)" hint="RG ou CPF">
+                            <Input
+                              value={docZeladorEdit}
+                              onChange={(e) => setDocZeladorEdit(e.target.value)}
+                              maxLength={40}
+                              autoComplete="off"
+                            />
+                          </Field>
+                        </div>
+                      )}
+                      <SignaturePad
+                        label="Assinatura do zelador"
+                        value={zeladorPendente?.data ?? os.assinatura_zelador_url}
+                        pendente={!!zeladorPendente}
+                        onSave={(dataUrl) => saveAssinatura('zelador', dataUrl)}
+                        disabled={!editavel}
+                        bloqueioConfirmar={
+                          !zeladorAssinado && nomeZelador.trim().length < 2
+                            ? 'Escreva o nome de quem vai assinar, acima, para liberar o botão Confirmar.'
+                            : undefined
+                        }
+                        busy={savingSignature === 'zelador'}
+                      />
+                      {zeladorAssinado && nomeGravado && !corrigindoNome && (
+                        <p className="text-xs text-amx-muted flex items-center gap-2 flex-wrap">
+                          <span>
+                            Assinado por: <b className="text-white">{nomeGravado}</b>
+                            {docGravado ? ` (${docGravado})` : ''}
+                          </span>
+                          {editavel && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNomeZeladorEdit(nomeGravado);
+                                setDocZeladorEdit(docGravado ?? '');
+                                setCorrigindoNome(true);
+                              }}
+                              className="underline underline-offset-2 hover:text-white min-h-[44px] px-2 inline-flex items-center"
+                            >
+                              Corrigir nome
+                            </button>
+                          )}
+                        </p>
+                      )}
+                      {zeladorAssinado && editavel && (!nomeGravado || corrigindoNome) && (
+                        <Button size="sm" onClick={salvarNomeZelador} disabled={salvandoNome || nomeZelador.trim().length < 2} className="w-fit">
+                          {salvandoNome ? 'Salvando...' : 'Salvar nome'}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -1142,7 +1294,7 @@ function FaixaFotoEquipamento({
 function ChecklistTab({
   items,
   readOnly,
-  onConcluir,
+  onAlternar,
   onAdd,
   fotoObrigatoria,
   fotosEquip,
@@ -1156,7 +1308,7 @@ function ChecklistTab({
 }: {
   items: ChecklistItem[];
   readOnly: boolean;
-  onConcluir: (item: ChecklistItem) => void;
+  onAlternar: (item: ChecklistItem) => void;
   onAdd: (descricao: string, obrigatorio: boolean) => void;
   fotoObrigatoria: Set<string>;
   fotosEquip: Foto[];
@@ -1211,10 +1363,10 @@ function ChecklistTab({
               >
                 <button
                   type="button"
-                  disabled={readOnly || item.concluido}
-                  onClick={() => onConcluir(item)}
-                  aria-label="Marcar como concluído"
-                  title={item.concluido ? 'Concluído — não é possível desmarcar' : undefined}
+                  disabled={readOnly}
+                  onClick={() => onAlternar(item)}
+                  aria-label={item.concluido ? 'Desmarcar item' : 'Marcar como concluído'}
+                  aria-pressed={item.concluido}
                   className={`w-[22px] h-[22px] rounded-[6px] shrink-0 flex items-center justify-center transition-colors disabled:cursor-not-allowed ${
                     item.concluido
                       ? 'bg-amx-green'

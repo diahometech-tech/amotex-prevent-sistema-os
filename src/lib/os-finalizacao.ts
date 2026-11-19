@@ -47,7 +47,7 @@ export function pendenciasFinalizacao({
   checklist,
   fotos,
 }: {
-  os: Pick<OS, 'tipo' | 'assinatura_tecnico_url' | 'assinatura_zelador_url'> & { equipamento_id?: string };
+  os: Pick<OS, 'tipo' | 'assinatura_tecnico_url' | 'assinatura_zelador_url' | 'assinatura_zelador_nome'> & { equipamento_id?: string };
   checklist: Pick<ChecklistItem, 'obrigatorio' | 'concluido' | 'equipamento_id' | 'descricao'>[];
   fotos: Pick<Foto, 'momento' | 'equipamento_id'>[];
 }): string[] {
@@ -74,5 +74,7 @@ export function pendenciasFinalizacao({
   }
   if (!os.assinatura_tecnico_url) pendencias.push('Falta assinatura do técnico');
   if (!os.assinatura_zelador_url) pendencias.push('Falta assinatura do zelador');
+  // Só roda na finalização: OS já finalizadas antes do nome existir não são afetadas.
+  else if (!os.assinatura_zelador_nome?.trim()) pendencias.push('Falta o nome de quem assinou pelo condomínio');
   return pendencias;
 }
