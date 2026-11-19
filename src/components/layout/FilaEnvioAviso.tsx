@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { descartarItem, iniciarSincronizacao, ouvirFila, processarFila } from '@/lib/fila-envio';
 import { useFilaEnvio } from '@/lib/useFilaEnvio';
+import { Icon } from '@/components/ui/Icon';
 
 function rotulo(n: number, tipo: 'foto' | 'assinatura'): string {
   if (tipo === 'foto') return n === 1 ? '1 foto' : `${n} fotos`;
@@ -56,35 +57,46 @@ export function FilaEnvioAviso() {
     <div className="flex flex-col gap-1.5 px-4 py-2.5 border-b border-amx-amber/40 bg-amx-amber/10 text-amx-amber text-xs font-semibold">
       {aguardando.length > 0 ? (
         <div className="flex items-center gap-3 flex-wrap">
-          <span>
-            ⏳ {partes.join(' e ')} aguardando envio.{' '}
+          <span className="inline-flex items-start gap-1.5">
+            <Icon name="nuvemEnvio" size={16} className="shrink-0 mt-px" />
+            <span>
+            {partes.join(' e ')} aguardando envio.{' '}
             {sessaoExpirada
               ? 'Sua sessão expirou: entre de novo para enviar.'
               : online
                 ? 'Enviando…'
                 : 'Sem sinal — vai sozinho quando a rede voltar. Não precisa tirar de novo.'}
+            </span>
           </span>
           {online && !sessaoExpirada && (
             <button
               type="button"
               onClick={tentarAgora}
               disabled={tentando}
-              className="underline underline-offset-2 hover:text-white disabled:opacity-50"
+              className="underline underline-offset-2 hover:text-white disabled:opacity-50 min-h-[44px] px-2 inline-flex items-center"
             >
               Tentar agora
             </button>
           )}
         </div>
       ) : (
-        !online && <span>📶 Sem sinal. Fotos e assinaturas ficam guardadas no aparelho até a rede voltar.</span>
+        !online && (
+          <span className="inline-flex items-center gap-1.5">
+            <Icon name="semSinal" size={16} />
+            Sem sinal. Fotos e assinaturas ficam guardadas no aparelho até a rede voltar.
+          </span>
+        )
       )}
       {recusados.map((i) => (
         <div key={i.id} className="flex items-center gap-3 flex-wrap text-amx-red-hover">
-          <span>
-            ✕ {i.tipo === 'foto' ? 'Foto' : 'Assinatura'} da OS #{i.os_id.slice(0, 6).toUpperCase()} não foi aceita:{' '}
+          <span className="inline-flex items-start gap-1.5">
+            <Icon name="alerta" size={16} className="shrink-0 mt-px" />
+            <span>
+            {i.tipo === 'foto' ? 'Foto' : 'Assinatura'} da OS #{i.os_id.slice(0, 6).toUpperCase()} não foi aceita:{' '}
             {i.erro}
+            </span>
           </span>
-          <button type="button" onClick={() => descartarItem(i.id)} className="underline underline-offset-2 hover:text-white">
+          <button type="button" onClick={() => descartarItem(i.id)} className="underline underline-offset-2 hover:text-white min-h-[44px] px-2 inline-flex items-center">
             Descartar
           </button>
         </div>

@@ -7,24 +7,7 @@
 import React from 'react';
 import { enderecoCompleto, linkMapa, telefonesDoLocal, type TelefoneLocal } from '@/lib/endereco';
 import type { Condominio, Contato, OS } from '@/lib/db';
-
-const ICON_PIN = (
-  <>
-    <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" />
-    <circle cx="12" cy="9.5" r="2.5" />
-  </>
-);
-const ICON_PHONE = (
-  <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z" />
-);
-
-export function IconeTraco({ children, size = 18 }: { children: React.ReactNode; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {children}
-    </svg>
-  );
-}
+import { Icon } from '@/components/ui/Icon';
 
 const BASE =
   'inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors';
@@ -41,7 +24,7 @@ export function BotaoMapa({ href }: { href: string }) {
       onClick={(e) => e.stopPropagation()}
       className={`${BASE} ${GRANDE} ${MAPA}`}
     >
-      <IconeTraco size={18}>{ICON_PIN}</IconeTraco>
+      <Icon name="mapa" size={18} />
       Abrir no mapa
     </a>
   );
@@ -54,7 +37,7 @@ export function BotaoLigar({ item }: { item: TelefoneLocal }) {
       onClick={(e) => e.stopPropagation()}
       className={`${BASE} ${GRANDE} ${LIGAR}`}
     >
-      <IconeTraco size={18}>{ICON_PHONE}</IconeTraco>
+      <Icon name="telefone" size={18} />
       {`Ligar — ${item.rotulo}${item.nome ? ` (${item.nome})` : ''}`}
     </a>
   );

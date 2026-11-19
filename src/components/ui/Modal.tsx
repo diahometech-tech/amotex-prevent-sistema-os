@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import { Icon } from '@/components/ui/Icon';
 
 // Wrapper padrão pra todo modal do sistema: fundo escurecido, fecha ao
 // clicar fora ou apertar Esc, nunca encosta na borda em tela estreita
@@ -61,9 +62,9 @@ export function ModalHeader({
         type="button"
         onClick={onClose}
         aria-label="Fechar"
-        className="text-amx-muted hover:text-white text-lg leading-none px-1"
+        className="text-amx-muted hover:text-white min-w-[44px] min-h-[44px] inline-flex items-center justify-center -m-3"
       >
-        ×
+        <Icon name="fechar" size={18} />
       </button>
     </div>
   );

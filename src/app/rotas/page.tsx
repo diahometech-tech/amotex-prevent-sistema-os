@@ -18,6 +18,7 @@ import { useTick } from '@/lib/useTick';
 import { BotaoLigar, BotaoMapa } from '@/components/os/LocalDoCondominio';
 import { enderecoCompleto, linkMapa, type TelefoneLocal } from '@/lib/endereco';
 import type { Condominio, OS } from '@/lib/db';
+import { Icon } from '@/components/ui/Icon';
 
 // GET /api/condominios devolve também o telefone pra ligar ao chegar.
 type CondominioRota = Condominio & { contato_local?: TelefoneLocal | null };
@@ -220,7 +221,7 @@ function RotasContent() {
                   </p>
                   {sla && sla.situacao !== 'cumprido' && (
                     <p className={`text-[11px] font-semibold ${sla.tone === 'red' ? 'text-amx-red-hover' : 'text-amx-amber'}`}>
-                      ⏱ {sla.label}
+                      <span className="inline-flex items-center gap-1"><Icon name="relogio" size={12} />{sla.label}</span>
                     </p>
                   )}
                   {atrasada && (
