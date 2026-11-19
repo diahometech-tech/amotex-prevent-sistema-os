@@ -61,7 +61,11 @@ const ICON_FINANCEIRO = (
     <path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6.5V8m0 8v1.5" />
   </>
 );
-const ICON_LOGOUT = <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />;
+// Ajuda: livro aberto, mesmo traço dos demais.
+const ICON_AJUDA = (
+  <path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z" />
+);
+const ICON_LOGOUT =<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />;
 
 // gate ausente = visível pra qualquer papel autenticado. Cada gate espelha a
 // regra real (ver src/lib/permissions.ts) — não é a barreira de segurança,
@@ -74,6 +78,9 @@ const NAV_ITEMS: { href: string; label: string; icon: React.ReactNode; gate?: (r
   { href: '/condominios', label: 'Condomínios', icon: ICON_CONDOMINIO },
   { href: '/painel', label: 'Painel do Síndico', icon: ICON_PAINEL },
   { href: '/admin/usuarios', label: 'Usuários', icon: ICON_GEAR, gate: canManageUsers },
+  // Manual de uso: todo papel vê, mas só o conteúdo do próprio papel (ver
+  // manuaisVisiveis em src/lib/manual.ts).
+  { href: '/ajuda', label: 'Ajuda', icon: ICON_AJUDA },
 ];
 
 function initials(name: string): string {
@@ -138,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           original (ver comentário lá) — este componente é montado direto
           como filho de <body className="flex flex-col"> em layout.tsx. */}
       <div className="min-h-screen shrink-0 flex bg-amx-bg">
-        <aside className="w-[76px] shrink-0 bg-amx-panel-2 border-r border-amx-line flex flex-col items-center py-5 gap-7">
+        <aside className="w-[76px] shrink-0 print:hiddenbg-amx-panel-2 border-r border-amx-line flex flex-col items-center py-5 gap-7">
           <div
             className="w-10 h-10 rounded-lg bg-amx-red flex items-center justify-center font-heading font-bold text-[15px]"
             aria-hidden
