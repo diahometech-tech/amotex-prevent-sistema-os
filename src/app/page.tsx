@@ -229,6 +229,7 @@ function OsListContent() {
               [
                 ['ativas', 'Em aberto'],
                 ['finalizada', 'Finalizadas'],
+                ['cancelada', 'Canceladas'],
                 ['todas', 'Todas'],
               ] as [StatusFiltro, string][]
             ).map(([value, label]) => (
@@ -319,6 +320,7 @@ function OsListContent() {
           onChanged={(updated) => {
             setOss((prev) => prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)));
           }}
+          onDeleted={(id) => setOss((prev) => prev.filter((o) => o.id !== id))}
         />
       )}
     </div>

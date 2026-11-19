@@ -337,6 +337,32 @@ export const pgBackend: DbBackend = {
     return (rows[0] as Condominio) || null;
   },
 
+  // Numa transação e em ordem explícita: as OS saem antes do condomínio
+  // porque checklist_item.equipamento_id não tem ON DELETE — o cascade direto
+  // do condomínio tentaria apagar o equipamento ainda referenciado.
+  async deleteCondominio(id) {
+    await ensureSchema();
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("DELETE FROM usuario WHERE condominio_id = $1 AND papel = 'sindico'", [id]);
+      await client.query('DELETE FROM os WHERE condominio_id = $1', [id]);
+      await client.query(
+        `DELETE FROM escalonamento WHERE alerta_id IN (
+           SELECT a.id FROM alerta a JOIN reservatorio r ON r.id = a.reservatorio_id WHERE r.condominio_id = $1)`,
+        [id]
+      );
+      const res = await client.query('DELETE FROM condominio WHERE id = $1', [id]);
+      await client.query('COMMIT');
+      return (res.rowCount ?? 0) > 0;
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
+  },
+
   // ----- Reservatório -----
   async getReservatoriosByCondominio(condominioId) {
     const { rows } = await q('SELECT * FROM reservatorio WHERE condominio_id = $1', [condominioId]);
@@ -553,6 +579,13 @@ export const pgBackend: DbBackend = {
     return (rows[0] as OS) || null;
   },
 
+  async deleteOS(id) {
+    // checklist_item e foto saem por ON DELETE CASCADE; corretivas abertas
+    // a partir desta OS ficam com os_origem_id NULL (ON DELETE SET NULL).
+    const res = await q('DELETE FROM os WHERE id = $1', [id]);
+    return (res.rowCount ?? 0) > 0;
+  },
+
   // ----- Checklist -----
   async getChecklistByOS(osId) {
     const { rows } = await q('SELECT * FROM checklist_item WHERE os_id = $1', [osId]);
@@ -587,6 +620,10 @@ export const pgBackend: DbBackend = {
       'INSERT INTO foto (id, os_id, momento, url, enviado_em, client_id, equipamento_id) VALUES ($1,$2,$3,$4,$5,$6,$7)',
       [f.id, f.os_id, f.momento, f.url, f.enviado_em, f.client_id ?? null, f.equipamento_id ?? null]
     );
+  },
+  async deleteFoto(id) {
+    const res = await q('DELETE FROM foto WHERE id = $1', [id]);
+    return (res.rowCount ?? 0) > 0;
   },
 
   // ----- Financeiro -----

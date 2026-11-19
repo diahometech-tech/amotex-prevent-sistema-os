@@ -45,7 +45,24 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const body = await request.json();
-    const { finalizar, assinatura_zelador, assinatura_tecnico, ...rest } = body;
+    const { finalizar, cancelar, motivo, assinatura_zelador, assinatura_tecnico, ...rest } = body;
+
+    // Cancelar: só gestor, com motivo. Passa por Database.cancelarOS (nota na
+    // observação + auditoria), nunca por um PATCH solto de status.
+    if (cancelar) {
+      if (session.role !== 'admin') {
+        return NextResponse.json({ error: 'Só gestores podem cancelar uma OS.' }, { status: 403 });
+      }
+      const texto = typeof motivo === 'string' ? motivo.trim() : '';
+      if (texto.length < 3) return NextResponse.json({ error: 'Informe o motivo do cancelamento.' }, { status: 400 });
+      const os = await Database.cancelarOS(id, texto.slice(0, 500), session.name);
+      if (!os) return NextResponse.json({ error: 'Esta OS já foi finalizada ou cancelada.' }, { status: 409 });
+      notifyN8n('os_status_changed', os, { de: original.status });
+      return NextResponse.json({ success: true, os });
+    }
+    if (rest.status === 'cancelada') {
+      return NextResponse.json({ error: 'Use "Cancelar OS" para cancelar.' }, { status: 400 });
+    }
     const updates: Record<string, unknown> = {};
     for (const f of [
       'status', 'prioridade', 'tecnico_id', 'entrada_em', 'saida_em', 'observacao',
@@ -151,5 +168,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   } catch (e) {
     console.error('Erro ao atualizar OS:', e);
     return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });
+  }
+}
+
+// DELETE /api/os/[id] — apaga a OS de vez (checklist, fotos, assinaturas, PDF).
+// Só gestor. Para tirar da fila sem perder o histórico, use "Cancelar OS".
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const { id } = await context.params;
+  const session = getSessionFromRequest(request);
+  if (!session || session.role !== 'admin') {
+    return NextResponse.json({ error: 'Só gestores podem apagar uma OS.' }, { status: 403 });
+  }
+  try {
+    const ok = await Database.apagarOS(id, session.name);
+    if (!ok) return NextResponse.json({ error: 'OS não encontrada.' }, { status: 404 });
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error('Erro ao apagar OS:', e);
+    return NextResponse.json({ error: 'Não foi possível apagar a OS.' }, { status: 500 });
   }
 }

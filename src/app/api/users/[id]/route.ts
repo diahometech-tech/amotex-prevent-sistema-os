@@ -56,7 +56,17 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (id === session.id) {
     return NextResponse.json({ error: 'Você não pode excluir o próprio acesso.' }, { status: 400 });
   }
-  const removed = await Database.deleteUser(id);
-  if (!removed) return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
-  return NextResponse.json({ success: true });
+  try {
+    const removed = await Database.deleteUser(id);
+    if (!removed) return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    // Técnico com OS no histórico: a OS aponta pra ele (os.tecnico_id), o
+    // banco recusa. Desativar mantém o nome nas OS e bloqueia o login.
+    console.error('Erro ao excluir usuário:', e);
+    return NextResponse.json(
+      { error: 'Este acesso já tem OS no histórico e não pode ser excluído. Use "Desativar".' },
+      { status: 409 }
+    );
+  }
 }
