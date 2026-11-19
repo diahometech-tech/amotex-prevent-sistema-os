@@ -10,7 +10,7 @@ import { Input, Select } from '@/components/ui/Form';
 import { OSModal } from '@/components/os/OSModal';
 import { PlanejarPreventivas } from '@/components/os/PlanejarPreventivas';
 import { Modal } from '@/components/ui/Modal';
-import { canManageOS } from '@/lib/permissions';
+import { podeOperarCampo, podePlanejarPreventivas, podeVerRotaDeTodos } from '@/lib/roles';
 import { computeOsPrioridade, resumoRotasPorCondominio, OS_STATUS_LABELS, type RotaCondominio } from '@/lib/os-priority';
 import { formatarDataCurta, hojeISO, montarRotaDoDia, somarDias } from '@/lib/os-agenda';
 import { slaChegada } from '@/lib/os-sla';
@@ -42,9 +42,9 @@ function RotasContent() {
 
   const hoje = hojeISO();
   const [dia, setDia] = useState(hoje);
-  // Técnico abre direto na própria rota; admin vê a equipe toda. (O AppShell
+  // Escritório vê a equipe toda e filtra por técnico; técnico só tem a própria rota. (O AppShell
   // só monta esta tela depois de carregar o usuário, então `user` já existe.)
-  const [filtroTecnico, setFiltroTecnico] = useState(user?.role === 'tecnico' ? user.id : '');
+  const [filtroTecnico, setFiltroTecnico] = useState('');
 
   const condominioNome = useMemo(() => {
     const map = new Map(condominios.map((c) => [c.id, c.nome]));
@@ -95,11 +95,16 @@ function RotasContent() {
     load();
   }, []);
 
+  const verTodos = podeVerRotaDeTodos(user?.role);
+
   const doTecnico = useMemo(() => {
+    // Técnico só tem a própria rota: a lista dele traz também corretivas sem
+    // técnico (pra assumir), que ficam na tela de OS, não aqui.
+    if (!verTodos) return oss.filter((o) => o.tecnico_id === user?.id);
     if (!filtroTecnico) return oss;
     if (filtroTecnico === SEM_TECNICO) return oss.filter((o) => !o.tecnico_id);
     return oss.filter((o) => o.tecnico_id === filtroTecnico);
-  }, [oss, filtroTecnico]);
+  }, [oss, filtroTecnico, verTodos, user?.id]);
 
   const rota = useMemo(() => montarRotaDoDia(doTecnico, dia, hoje), [doTecnico, dia, hoje]);
 
@@ -141,21 +146,6 @@ function RotasContent() {
 
   if (!user) return null;
 
-  // Gestão de Rotas é tela de operação (admin ou técnico), igual ao gate do
-  // menu no AppShell. Sem isto o síndico não via o ícone mas abria a tela
-  // digitando a URL. Não é vazamento — o GET /api/os já escopa o síndico ao
-  // próprio condomínio no servidor — mas é uma tela que não é dele.
-  if (!canManageOS(user.role)) {
-    return (
-      <div className="flex-1 flex items-center justify-center px-4">
-        <EmptyState
-          title="Acesso negado"
-          description="A gestão de rotas é restrita à equipe de operação (administrador ou técnico)."
-        />
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -164,7 +154,7 @@ function RotasContent() {
     );
   }
 
-  const minhaRota = user.role === 'tecnico' && filtroTecnico === user.id;
+  const minhaRota = !verTodos;
   const tituloDia = dia === hoje ? 'hoje' : formatarDataCurta(dia);
 
   const renderGrupo = (g: GrupoNomeado) => (
@@ -225,7 +215,7 @@ function RotasContent() {
               </button>
               {os.entrada_em ? (
                 <Badge tone="success">Visitado</Badge>
-              ) : (
+              ) : podeOperarCampo(user?.role) ? (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -237,7 +227,7 @@ function RotasContent() {
                 >
                   {visitando === os.id ? 'Marcando...' : 'Marcar Visitado'}
                 </Button>
-              )}
+              ) : null}
             </div>
           );
         })}
@@ -276,24 +266,23 @@ function RotasContent() {
               Hoje
             </Button>
           )}
-          <Select
-            id="rota-tecnico"
-            value={filtroTecnico}
-            onChange={(e) => setFiltroTecnico(e.target.value)}
-            className="w-auto py-1.5 text-xs"
-          >
-            <option value="">Todos os técnicos</option>
-            {user.role === 'tecnico' && <option value={user.id}>Só as minhas</option>}
-            {tecnicos
-              .filter((t) => !(user.role === 'tecnico' && t.id === user.id))
-              .map((t) => (
+          {verTodos && (
+            <Select
+              id="rota-tecnico"
+              value={filtroTecnico}
+              onChange={(e) => setFiltroTecnico(e.target.value)}
+              className="w-auto py-1.5 text-xs"
+            >
+              <option value="">Todos os técnicos</option>
+              {tecnicos.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.nome}
                 </option>
               ))}
-            <option value={SEM_TECNICO}>Não atribuídas</option>
-          </Select>
-          {user.role === 'admin' && (
+              <option value={SEM_TECNICO}>Não atribuídas</option>
+            </Select>
+          )}
+          {podePlanejarPreventivas(user.role) && (
             <Button size="sm" onClick={() => setShowPlanejar(true)} className="sm:ml-auto">
               Planejar preventivas do mês
             </Button>

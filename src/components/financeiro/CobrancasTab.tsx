@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAmxUser } from '@/components/layout/AppShell';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -15,6 +16,8 @@ import {
   type ResumoMes, type StatusEfetivo,
 } from '@/lib/financeiro/cobranca';
 import { normalizeSearch } from '@/lib/text';
+import { podeAcaoCobranca, podeEditarCondominio } from '@/lib/roles';
+import type { UserRole } from '@/lib/db';
 import { STATUS_TONE } from './ContratoCondominio';
 import { CopiarTexto } from './CopiarTexto';
 
@@ -56,8 +59,11 @@ function fileToDataUrl(file: File): Promise<string> {
 
 // Aba "Cobranças": o equivalente da aba mensal da planilha — um mês por vez,
 // com o resumo no topo e a rotina: gerar o mês, marcar enviada, registrar
-// pagamento com comprovante, isentar.
+// pagamento com comprovante, isentar. A secretária faz só a rotina (gerar,
+// enviada, pagamento, comprovante); isentar, reabrir e editar valor são do
+// gestor (podeAcaoCobranca) e nem aparecem pra ela.
 export function CobrancasTab({ competenciaInicial }: { competenciaInicial: string }) {
+  const role = useAmxUser()?.role;
   const [competencia, setCompetencia] = useState(competenciaInicial);
   const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState('');
@@ -202,7 +208,7 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
           {dados.cobrancas.length === 0 ? (
             <EmptyState
               title={`Nenhuma cobrança em ${rotuloCompetencia(competencia, true)}`}
-              description={dados.aGerar ? 'Toque em "Gerar cobranças do mês" para criar uma por condomínio ativo, com o valor do contrato.' : 'Cadastre o valor mensal dos condomínios para gerar as cobranças.'}
+              description={dados.aGerar ? 'Toque em "Gerar cobranças do mês" para criar uma por condomínio ativo, com o valor do contrato.' : podeEditarCondominio(role) ? 'Cadastre o valor mensal dos condomínios para gerar as cobranças.' : 'Peça ao gestor para cadastrar o valor mensal dos condomínios.'}
             />
           ) : linhas.length === 0 ? (
             <p className="text-xs text-amx-muted py-6 text-center">Nada neste filtro.</p>
@@ -234,7 +240,7 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {c.comprovante_url && (
                       <a href={encodeURI(c.comprovante_url)} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-amx-blue-light hover:text-white px-2">
-                        Comprovante
+                        Ver comprovante
                       </a>
                     )}
                     {cond?.emails_cobranca && st !== 'paga' && st !== 'isenta' && <CopiarTexto texto={cond.emails_cobranca} rotulo="E-mails" />}
@@ -242,7 +248,10 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
                       <Button size="sm" variant="secondary" onClick={() => acao(c.id, { acao: 'marcar_enviada' })}>Marcar enviada</Button>
                     )}
                     {st !== 'paga' && st !== 'isenta' && <Button size="sm" onClick={() => setPagando(c)}>Registrar pagamento</Button>}
-                    <Button size="sm" variant="ghost" onClick={() => setEditando(c)}>Mais</Button>
+                    {/* Gestor: editar/isentar/reabrir. Secretária: só o comprovante de cobrança já paga. */}
+                    {(podeAcaoCobranca(role, 'editar') || (st === 'paga' && podeAcaoCobranca(role, 'anexar_comprovante'))) && (
+                      <Button size="sm" variant="ghost" onClick={() => setEditando(c)}>{podeAcaoCobranca(role, 'editar') ? 'Mais' : c.comprovante_url ? 'Trocar comprovante' : 'Anexar comprovante'}</Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -273,6 +282,7 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
             cobranca={editando}
             nome={condPorId.get(editando.condominio_id)?.nome ?? ''}
             status={statusEfetivo(editando, dados?.hoje ?? '')}
+            role={role}
             onClose={() => setEditando(null)}
             onAcao={async (body) => {
               const ok = await acao(editando.id, body);
@@ -349,11 +359,12 @@ function PagamentoForm({
 }
 
 function EditarCobranca({
-  cobranca, nome, status, onClose, onAcao,
+  cobranca, nome, status, role, onClose, onAcao,
 }: {
   cobranca: Cobranca;
   nome: string;
   status: StatusEfetivo;
+  role?: UserRole;
   onClose: () => void;
   onAcao: (body: Record<string, unknown>) => Promise<boolean>;
 }) {
@@ -367,7 +378,7 @@ function EditarCobranca({
     <>
       <ModalHeader title="Cobrança" subtitle={`${nome} · ${rotuloCompetencia(cobranca.competencia, true)}`} onClose={onClose} />
       <div className="p-5 flex flex-col gap-4">
-        {!encerrada && (
+        {!encerrada && podeAcaoCobranca(role, 'editar') && (
           <>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Valor previsto (R$)"><Input id="ed-valor" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} /></Field>
@@ -379,7 +390,7 @@ function EditarCobranca({
             </div>
           </>
         )}
-        {status === 'paga' && (
+        {status === 'paga' && podeAcaoCobranca(role, 'anexar_comprovante') && (
           <Field label="Anexar/trocar comprovante">
             <div className="flex items-center gap-2 flex-wrap">
               <input id="ed-comprovante" type="file" accept="application/pdf,image/*" onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} className="text-xs text-amx-muted file:mr-3 file:rounded-md file:border-0 file:bg-amx-panel-2 file:px-3 file:py-1.5 file:text-white" />
@@ -387,6 +398,7 @@ function EditarCobranca({
             </div>
           </Field>
         )}
+        {podeAcaoCobranca(role, 'isentar') && (
         <div className="border-t border-amx-line pt-4 flex flex-wrap gap-2">
           {!encerrada && (
             <Button size="sm" variant="secondary" onClick={() => onAcao({ acao: 'isentar', observacao: obs })}>Isentar este mês</Button>
@@ -397,6 +409,7 @@ function EditarCobranca({
             </Button>
           )}
         </div>
+        )}
       </div>
     </>
   );

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { getSessionFromRequest, canManageUsers } from '@/lib/auth';
+import { getSessionFromRequest } from '@/lib/auth';
+import { isEscritorio } from '@/lib/roles';
 
 const LIMITE_PADRAO = 100;
 const LIMITE_MAXIMO = 500;
 
 // GET /api/alertas — alertas recebidos (mais recentes primeiro), pro
-// "Dashboard Consolidado (Admin)" do PRD. Só admin, mesmo padrão de
-// activity-logs/session-logs (visão operacional, não é dado do síndico).
+// "Dashboard Consolidado (Admin)" do PRD. Gestor e secretária (o
+// Dashboard é do escritório); activity-logs/session-logs seguem só admin.
 //
 // ?limit=N devolve os N mais recentes (padrão 100, teto 500): o histórico
 // cresce indefinidamente com a integração SensorLog, então sem teto cada
@@ -20,8 +21,8 @@ const LIMITE_MAXIMO = 500;
 // em duas leituras, independente da quantidade de alertas.
 export async function GET(request: NextRequest) {
   const session = getSessionFromRequest(request);
-  if (!session || !canManageUsers(session.role)) {
-    return NextResponse.json({ error: 'Acesso restrito a administradores.' }, { status: 403 });
+  if (!session || !isEscritorio(session.role)) {
+    return NextResponse.json({ error: 'Acesso restrito ao escritório.' }, { status: 403 });
   }
 
   const limitParam = Number(request.nextUrl.searchParams.get('limit'));

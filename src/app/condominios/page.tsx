@@ -10,7 +10,7 @@ import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { CondominioForm, type CondominioFormData } from '@/components/cadastro/CondominioForm';
 import { ImportarCondominios } from '@/components/cadastro/ImportarCondominios';
-import { canEditCondominio } from '@/lib/permissions';
+import { podeEditarCondominio } from '@/lib/roles';
 import type { Condominio } from '@/lib/db';
 
 interface CondominiosResponse {
@@ -100,7 +100,7 @@ function CondominiosContent() {
     <div className="w-full max-w-4xl mx-auto px-8 py-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-white">Condomínios</h1>
-        {canEditCondominio(user.role) && (
+        {podeEditarCondominio(user.role) && (
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <Button variant="secondary" onClick={() => setShowImport(true)}>
               Importar planilha
@@ -129,10 +129,16 @@ function CondominiosContent() {
         </div>
       ) : condominios.length === 0 ? (
         <EmptyState
-          title="Nenhum condomínio cadastrado"
-          description="Comece a criar um novo condomínio para gerenciar as OS"
+          title={podeEditarCondominio(user.role) ? 'Nenhum condomínio cadastrado' : 'Nenhum condomínio por aqui'}
+          description={
+            podeEditarCondominio(user.role)
+              ? 'Comece a criar um novo condomínio para gerenciar as OS'
+              : user.role === 'tecnico'
+                ? 'Você ainda não tem OS em nenhum condomínio.'
+                : 'Peça ao gestor para cadastrar os condomínios.'
+          }
           action={
-            canEditCondominio(user.role) ? (
+            podeEditarCondominio(user.role) ? (
               <Button
                 variant="primary"
                 onClick={() => {

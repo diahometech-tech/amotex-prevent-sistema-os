@@ -12,6 +12,7 @@ import { OSModal } from '@/components/os/OSModal';
 import { computeOsPrioridade, compararPorPrioridade, resumoRotasPorCondominio } from '@/lib/os-priority';
 import { hojeISO, montarRotaDoDia } from '@/lib/os-agenda';
 import { resumoSla } from '@/lib/os-sla';
+import { podeGerirPlantao } from '@/lib/roles';
 import type { Alerta, Condominio, EventoAlerta, OS } from '@/lib/db';
 
 // Shape devolvido por GET /api/alertas: reservatorio/condominio já
@@ -170,7 +171,7 @@ function DashboardContent() {
   if (denied) {
     return (
       <div className="flex-1 flex items-center justify-center px-4">
-        <EmptyState title="Acesso negado" description="O dashboard consolidado é restrito a administradores." />
+        <EmptyState title="Acesso negado" description="O dashboard consolidado é restrito ao escritório." />
       </div>
     );
   }
@@ -187,9 +188,11 @@ function DashboardContent() {
           <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2 mb-4">{error}</p>
         )}
 
-        <div className="mb-6">
-          <PlantaoCard />
-        </div>
+        {podeGerirPlantao(user?.role) && (
+          <div className="mb-6">
+            <PlantaoCard />
+          </div>
+        )}
 
         {/* KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

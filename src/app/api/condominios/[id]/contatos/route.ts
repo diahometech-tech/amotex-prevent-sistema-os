@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest, canAccessCondominio } from '@/lib/auth';
+import { podeEditarContato } from '@/lib/roles';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -16,12 +17,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 // POST — cadastra contato (zelador/síndico/administradora/conservadora/plantão)
-// com canal preferencial e nível de escalonamento. Só admin.
+// com canal preferencial e nível de escalonamento. Gestor e secretária.
 export async function POST(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || session.role !== 'admin') {
-    return NextResponse.json({ error: 'Apenas administradores podem cadastrar contatos.' }, { status: 403 });
+  if (!session || !podeEditarContato(session.role)) {
+    return NextResponse.json({ error: 'Você não pode cadastrar contatos.' }, { status: 403 });
+  }
+  if (!(await canAccessCondominio(session, id))) {
+    return NextResponse.json({ error: 'Você não tem acesso a este condomínio.' }, { status: 403 });
   }
   try {
     const { papel, nome, canal_preferencial, identificador_canal, nivel_escalonamento } = await request.json();

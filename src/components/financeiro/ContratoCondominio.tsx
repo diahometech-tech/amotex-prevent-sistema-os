@@ -27,10 +27,18 @@ function data(iso?: string) {
   return `${d}/${m}/${a}`;
 }
 
-// Bloco "Contrato e cobrança" na página do condomínio (só gestor): dados do
-// contrato, ajustes temporários de valor e últimas cobranças. A edição dos
-// dados é o formulário do condomínio (botão Editar no topo da página).
-export function ContratoCondominio({ condominio }: { condominio: Condominio }) {
+// Bloco "Contrato e cobrança" na página do condomínio: dados do contrato,
+// ajustes temporários de valor e últimas cobranças. A edição dos dados é o
+// formulário do condomínio (botão Editar no topo da página).
+// `somenteLeitura` (secretária): mostra contrato e cobranças, mas sem os
+// ajustes de valor — nem a tela deles nem a busca (a API é só do gestor).
+export function ContratoCondominio({
+  condominio,
+  somenteLeitura = false,
+}: {
+  condominio: Condominio;
+  somenteLeitura?: boolean;
+}) {
   const [ajustes, setAjustes] = useState<AjusteValor[]>([]);
   const [cobrancas, setCobrancas] = useState<Cobranca[]>([]);
   const [erro, setErro] = useState('');
@@ -40,7 +48,9 @@ export function ContratoCondominio({ condominio }: { condominio: Condominio }) {
   useEffect(() => {
     let cancel = false;
     Promise.all([
-      fetch(`/api/financeiro/ajustes?condominio_id=${condominio.id}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
+      somenteLeitura
+        ? Promise.resolve(null)
+        : fetch(`/api/financeiro/ajustes?condominio_id=${condominio.id}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
       fetch(`/api/financeiro/cobrancas?condominio_id=${condominio.id}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
     ]).then(([a, c]) => {
       if (cancel) return;
@@ -50,7 +60,7 @@ export function ContratoCondominio({ condominio }: { condominio: Condominio }) {
     return () => {
       cancel = true;
     };
-  }, [condominio.id]);
+  }, [condominio.id, somenteLeitura]);
 
   const salvarAjuste = async () => {
     if (!novo) return;
@@ -104,6 +114,7 @@ export function ContratoCondominio({ condominio }: { condominio: Condominio }) {
       </dl>
       {c.observacoes && <p className="text-xs text-amx-amber">{c.observacoes}</p>}
 
+      {!somenteLeitura && (
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-white">Ajustes temporários de valor</p>
@@ -140,6 +151,7 @@ export function ContratoCondominio({ condominio }: { condominio: Condominio }) {
         )}
         {erro && <p className="text-xs font-semibold text-amx-red-hover">{erro}</p>}
       </div>
+      )}
 
       {cobrancas.length > 0 && (
         <div className="flex flex-col gap-1.5">

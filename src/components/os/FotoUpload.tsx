@@ -93,6 +93,10 @@ export function FotoUpload({ momento, fotos, onUpload, disabled, busy, pendentes
 
         {/* Slot tracejado — sempre visível pra convidar a próxima foto,
             igual ao protótipo (caixa tracejada com ícone de câmera). */}
+        {/* Sem permissão (ou OS encerrada) o slot some: esconder, não desabilitar. */}
+        {disabled ? (
+          totalFotos === 0 && <p className="col-span-3 text-xs text-amx-muted">Nenhuma foto</p>
+        ) : (
         <button
           type="button"
           onClick={handleClick}
@@ -120,6 +124,7 @@ export function FotoUpload({ momento, fotos, onUpload, disabled, busy, pendentes
             </>
           )}
         </button>
+        )}
       </div>
     </div>
   );

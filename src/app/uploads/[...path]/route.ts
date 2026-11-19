@@ -3,7 +3,8 @@
 // Em dev (UPLOADS_DIR padrão = public/uploads) o Next serve o arquivo estático
 // diretamente e esta rota nem é alcançada.
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest, canAccessCondominio } from '@/lib/auth';
+import { getSessionFromRequest, canAccessCondominio, podeVerOS } from '@/lib/auth';
+import { isEscritorio } from '@/lib/roles';
 import { resolveUploadFile } from '@/lib/storage';
 import { Database } from '@/lib/db';
 import fs from 'fs';
@@ -43,8 +44,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const [kind, ownerId] = parts;
   if (kind === 'financeiro') {
     // Comprovantes de pagamento (uploads/financeiro/<cobrancaId>/...): só o
-    // gestor (admin) — técnico e síndico não veem o financeiro.
-    if (session.role !== 'admin') {
+    // gestor e secretária (rotina de cobrança) — técnico e síndico não veem.
+    if (!isEscritorio(session.role)) {
       return NextResponse.json({ error: 'Você não tem acesso a este arquivo.' }, { status: 403 });
     }
   } else if (kind === 'equipamentos' && ownerId) {
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!os) {
       return NextResponse.json({ error: 'Arquivo não encontrado.' }, { status: 404 });
     }
-    if (!(await canAccessCondominio(session, os.condominio_id))) {
+    if (!(await podeVerOS(session, os))) {
       return NextResponse.json({ error: 'Você não tem acesso a este arquivo.' }, { status: 403 });
     }
   } else {

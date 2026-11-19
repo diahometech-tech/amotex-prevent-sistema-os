@@ -9,7 +9,7 @@ import { atendeCorretiva } from '@/lib/plantao';
 type Tecnico = Pick<User, 'id' | 'nome' | 'papel' | 'especialidade' | 'ativo' | 'de_plantao' | 'telegram_chat_id'>;
 
 // Quem está de plantão agora — o supervisor marca aqui (regra em
-// src/lib/plantao.ts). Só admin: lê a lista completa de GET /api/users e grava
+// src/lib/plantao.ts). Gestor e secretária: lê a lista completa de GET /api/users e grava
 // com PATCH /api/users/[id]. Usado no Dashboard e em Usuários.
 export function PlantaoCard({ onChange }: { onChange?: () => void }) {
   const [tecnicos, setTecnicos] = useState<Tecnico[] | null>(null);
@@ -58,7 +58,7 @@ export function PlantaoCard({ onChange }: { onChange?: () => void }) {
         <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider">Plantão agora</p>
         <p className="text-xs text-amx-muted">
           {dePlantao.length > 0
-            ? 'Aviso de corretiva vai para quem está de plantão e para os gestores.'
+            ? 'Aviso de corretiva vai para quem está de plantão, os gestores e a secretária.'
             : 'Ninguém marcado: aviso de corretiva vai para todos os técnicos.'}
         </p>
       </div>

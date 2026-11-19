@@ -4,7 +4,7 @@
     {
       "papel": "admin",
       "titulo": "Gestor",
-      "resumo": "O gestor (perfil Administrador) vê o sistema inteiro: abre e acompanha as OS, organiza o plantão e as rotas, cadastra condomínios e acessos e cuida do financeiro.",
+      "resumo": "O gestor vê o sistema inteiro: abre e acompanha as OS, organiza o plantão e as rotas, cadastra condomínios e acessos e cuida do financeiro.",
       "secoes": [
         {
           "titulo": "Entrar, trocar a senha e sair",
@@ -20,7 +20,7 @@
           "passos": [
             "Abra Dashboard no menu lateral.",
             "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
-            "Com alguém de plantão, o aviso de corretiva vai só para ele e para os gestores. Sem ninguém marcado, vai para todos os técnicos de corretiva.",
+            "Com alguém de plantão, o aviso de corretiva vai só para ele, para os gestores e para a secretária. Sem ninguém marcado, vai para todos os técnicos de corretiva.",
             "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Cadastre o ID do Telegram dela em Usuários.",
             "Os quadros mostram corretivas fora do prazo, chegada em até 3h, OS abertas, pendências críticas, alertas e a rota do dia."
           ]
@@ -71,9 +71,10 @@
         {
           "titulo": "Usuários",
           "passos": [
-            "Em Usuários, preencha Nome, Login, Senha inicial e Papel (Técnico, Síndico ou Administrador).",
+            "Em Usuários, preencha Nome, Login, Senha inicial e Papel (Técnico, Síndico, Secretária ou Gestor).",
             "Para técnico, escolha a especialidade: Corretiva e preventiva, só Corretiva (urgências) ou só Preventiva (rota mensal).",
             "Informe o ID do Telegram para a pessoa receber os avisos de corretiva.",
+            "Para a secretária, escolha o papel Secretária. Informe o ID do Telegram dela para receber os avisos de corretiva junto com os gestores.",
             "Clique em + Criar acesso e passe o login e a senha para a pessoa.",
             "Na lista: Editar, Resetar senha, Desativar e Excluir. Quem saiu da equipe deve ser Desativado: o nome continua nas OS que atendeu."
           ]
@@ -88,14 +89,149 @@
             "Reajustes: mostra os índices (IGP-M, IPCA, INPC) e os contratos que fazem aniversário nos próximos 30 dias.",
             "Pendências de cadastro: lista o que falta em cada condomínio. Clique em Baixar planilha de levantamento, preencha e importe em Condomínios › Importar planilha."
           ]
+        },
+        {
+          "titulo": "Perfis de acesso",
+          "passos": [
+            "Cada pessoa só vê o que é do seu perfil. O que não é dela nem aparece no menu.",
+            "Gestor: vê e faz tudo.",
+            "Secretária: vê Dashboard, Ordens de Serviço, Rotas, Condomínios, Painel do Síndico, Cobranças e Ajuda. Abre OS, atribui técnico, reagenda, cancela, marca o plantão e planeja as preventivas. Edita contatos dos condomínios e vê o contrato só para leitura.",
+            "A secretária não vai a campo (iniciar atendimento, checklist, fotos, assinaturas e finalizar são do técnico). Também não apaga OS, não cadastra nem edita condomínio, não cria acesso de síndico, não vê Usuários e só usa a aba Cobranças do Financeiro.",
+            "Na Cobranças, a secretária gera o mês, marca como enviada, registra pagamento e anexa comprovante. Isentar, reabrir e editar valor são só do gestor.",
+            "Técnico: vê só as OS dele e as corretivas sem técnico, só a rota dele e só os condomínios das OS que vê.",
+            "Síndico: vê só o Painel do Condomínio dele e a Ajuda."
+          ]
         }
       ],
       "situacoes": [
-        { "pergunta": "Abri uma OS errada.", "resposta": "Se o serviço não vai acontecer, use Cancelar OS e escreva o motivo. Se foi só engano de cadastro, use Apagar OS." },
-        { "pergunta": "O técnico disse que não recebeu o aviso da corretiva.", "resposta": "Confira em Usuários se ele tem ID do Telegram e se está de plantão. Enquanto isso, ligue para ele." },
-        { "pergunta": "O síndico esqueceu a senha.", "resposta": "Na página do condomínio, clique em Gerar nova senha e envie a nova mensagem. A senha antiga para de funcionar na hora." },
-        { "pergunta": "Um técnico saiu da empresa.", "resposta": "Em Usuários, clique em Desativar. Não exclua: o nome dele precisa continuar nas OS que ele atendeu." },
-        { "pergunta": "Um condomínio cancelou o contrato.", "resposta": "Abra o condomínio, clique em Editar e desmarque Contrato ativo. Não use Apagar condomínio." }
+        {
+          "pergunta": "Abri uma OS errada.",
+          "resposta": "Se o serviço não vai acontecer, use Cancelar OS e escreva o motivo. Se foi só engano de cadastro, use Apagar OS."
+        },
+        {
+          "pergunta": "O técnico disse que não recebeu o aviso da corretiva.",
+          "resposta": "Confira em Usuários se ele tem ID do Telegram e se está de plantão. Enquanto isso, ligue para ele."
+        },
+        {
+          "pergunta": "O síndico esqueceu a senha.",
+          "resposta": "Na página do condomínio, clique em Gerar nova senha e envie a nova mensagem. A senha antiga para de funcionar na hora."
+        },
+        {
+          "pergunta": "Um técnico saiu da empresa.",
+          "resposta": "Em Usuários, clique em Desativar. Não exclua: o nome dele precisa continuar nas OS que ele atendeu."
+        },
+        {
+          "pergunta": "Um condomínio cancelou o contrato.",
+          "resposta": "Abra o condomínio, clique em Editar e desmarque Contrato ativo. Não use Apagar condomínio."
+        }
+      ]
+    },
+    {
+      "papel": "secretaria",
+      "titulo": "Secretária",
+      "resumo": "A secretária atende o telefone e organiza a operação do escritório: abre as OS, escolhe o técnico, reagenda, cancela, cuida do plantão e das rotas, atende o síndico e faz a rotina das cobranças.",
+      "secoes": [
+        {
+          "titulo": "Entrar e trocar a senha",
+          "passos": [
+            "Acesse os.amotexprevent.com.br e entre com o usuário e a senha que o gestor passou.",
+            "No primeiro acesso, troque a senha clicando no círculo com as suas iniciais, no canto inferior esquerdo.",
+            "Para sair, use o botão logo abaixo das iniciais. Depois de alguns minutos sem uso o sistema sai sozinho. É só entrar de novo."
+          ]
+        },
+        {
+          "titulo": "Abrir uma OS",
+          "passos": [
+            "Em Ordens de Serviço, clique em + Nova OS.",
+            "Escolha o condomínio e o tipo: Corretiva (chamado de defeito) ou Preventiva (visita programada).",
+            "Na corretiva por telefone, preencha quem ligou (solicitante), o telefone e o problema relatado. O problema é obrigatório.",
+            "Escolha o técnico responsável, se já souber. Sem técnico, a OS fica livre para algum técnico assumir.",
+            "Clique em Criar OS. Na corretiva, o sistema avisa técnicos e gestores no Telegram.",
+            "Se aparecer Aviso NÃO enviado, ninguém foi avisado pelo Telegram. Se aparecer o recado para avisar por telefone, ligue para o técnico de plantão."
+          ]
+        },
+        {
+          "titulo": "Reagendar ou trocar o técnico",
+          "passos": [
+            "Abra a OS em Ordens de Serviço.",
+            "Mude a data da visita ou o técnico responsável. Salva sozinho, não tem botão Salvar.",
+            "Ao trocar o técnico de uma corretiva, o aviso no Telegram vai para o plantão e o escritório, não necessariamente para o novo técnico. Se ele não estiver de plantão, ligue para ele."
+          ]
+        },
+        {
+          "titulo": "Cancelar uma OS",
+          "passos": [
+            "Abra a OS que não vai mais acontecer.",
+            "Clique em Cancelar OS e escreva o motivo. O motivo é obrigatório e fica registrado.",
+            "Só cancele OS em aberto. Apagar OS é com o gestor."
+          ]
+        },
+        {
+          "titulo": "Plantão",
+          "passos": [
+            "Abra Dashboard no menu lateral.",
+            "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
+            "Com alguém de plantão, o aviso de corretiva vai só para ele, para os gestores e para você. Sem ninguém marcado, vai para todos os técnicos de corretiva.",
+            "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Avise o gestor para cadastrar o ID dela."
+          ]
+        },
+        {
+          "titulo": "Rotas do dia e preventivas do mês",
+          "passos": [
+            "Em Rotas você vê as visitas do dia, agrupadas por condomínio. Use as setas para mudar o dia e Hoje para voltar.",
+            "Escolha um técnico no filtro para ver a rota dele.",
+            "Para montar o mês, clique em Planejar preventivas do mês, escolha o mês e clique em Ver prévia.",
+            "Confira a distribuição por dia e por técnico. Só então clique em Criar OS preventivas.",
+            "Rodar de novo no mesmo mês não duplica: quem já tem preventiva no mês fica de fora.",
+            "Você não marca visita como feita. Isso é do técnico, quando chega ao condomínio."
+          ]
+        },
+        {
+          "titulo": "Condomínios",
+          "passos": [
+            "Em Condomínios, clique no condomínio para ver endereço, contatos e equipamentos.",
+            "Em Contatos, use o botão de novo contato ou Editar para atualizar nome, telefone e nível de escalonamento.",
+            "O contrato (valor, vencimento, reajuste) aparece só para leitura. Mudanças no contrato são com o gestor.",
+            "Cadastrar, editar, apagar condomínio e criar acesso de síndico também são com o gestor."
+          ]
+        },
+        {
+          "titulo": "Atender o síndico pelo Painel",
+          "passos": [
+            "Abra Painel do Síndico no menu lateral e escolha o condomínio que ligou.",
+            "Você vê o mesmo que o síndico vê: próxima visita, histórico de atendimentos, fotos e PDF de cada visita.",
+            "Use a tela para responder ao telefone. Para mandar um relatório, abra a visita e baixe o PDF."
+          ]
+        },
+        {
+          "titulo": "Cobranças",
+          "passos": [
+            "Abra Financeiro. Você vê só a aba Cobranças.",
+            "Escolha o mês e clique em Gerar cobranças do mês (uma por condomínio ativo, com o valor do contrato).",
+            "Depois de mandar a cobrança, clique em Marcar enviada.",
+            "Quando o condomínio pagar, clique em Registrar pagamento: data, valor, forma de pagamento e o comprovante (PDF ou foto).",
+            "Para guardar ou trocar um comprovante depois, numa cobrança paga, clique em Anexar comprovante (ou Trocar comprovante, se já tem um), escolha o arquivo e clique em Enviar. Ver comprovante abre o arquivo já guardado.",
+            "Isentar, reabrir e editar o valor de uma cobrança são com o gestor."
+          ]
+        }
+      ],
+      "situacoes": [
+        {
+          "pergunta": "O técnico não recebeu o aviso.",
+          "resposta": "Ligue para ele agora. Depois peça ao gestor para conferir o ID do Telegram dele em Usuários e veja em Dashboard quem está de plantão."
+        },
+        {
+          "pergunta": "O síndico ligou perguntando da visita.",
+          "resposta": "Abra Painel do Síndico, escolha o condomínio e veja a próxima visita e o histórico. Se a visita não aparece, abra a OS em Ordens de Serviço e confira a data e o técnico."
+        },
+        {
+          "pergunta": "Preciso isentar ou mudar o valor de uma cobrança.",
+          "resposta": "Isso é do gestor. Avise qual condomínio, qual mês e o motivo. Enquanto isso, não registre pagamento que não aconteceu."
+        },
+        {
+          "pergunta": "Não acho um botão que o gestor usa.",
+          "resposta": "O botão é só do gestor ou do técnico, por isso não aparece para você. Peça ao gestor para fazer, ou para ajustar o seu perfil se for algo da sua rotina."
+        }
       ]
     },
     {
@@ -112,9 +248,18 @@
           ]
         },
         {
+          "titulo": "O que você vê no sistema",
+          "passos": [
+            "Ordens de Serviço mostra só as suas OS e as corretivas que ainda estão sem técnico.",
+            "Rotas mostra só a sua rota.",
+            "Condomínios mostra só os condomínios das OS que você vê.",
+            "O menu tem ainda a Ajuda. O resto é com o gestor e a secretária."
+          ]
+        },
+        {
           "titulo": "Minha rota do dia",
           "passos": [
-            "Abra Rotas no menu. A tela já mostra só as suas visitas de hoje.",
+            "Abra Rotas no menu. A tela mostra só as suas visitas, sob o título Minha rota.",
             "Use as setas para ver os próximos dias.",
             "Ao chegar no condomínio, clique em Marcar Visitado (ou abra a OS e use Iniciar atendimento)."
           ]
@@ -147,10 +292,26 @@
         }
       ],
       "situacoes": [
-        { "pergunta": "O botão Finalizar OS não libera.", "resposta": "Leia a lista logo abaixo do botão: ela diz o que falta (item obrigatório, foto antes, foto depois ou alguma assinatura)." },
-        { "pergunta": "Tirei a foto errada.", "resposta": "Na aba Fotos, clique em Remover na foto e tire de novo. Depois de finalizada a OS, não dá mais para remover." },
-        { "pergunta": "Cheguei e outro técnico já tinha assumido.", "resposta": "Veja o técnico responsável na OS e combine com ele ou com o gestor antes de atender." },
-        { "pergunta": "Não recebi o aviso no Telegram.", "resposta": "Peça ao gestor para conferir seu ID do Telegram em Usuários. Enquanto isso, acompanhe as OS abertas no sistema." }
+        {
+          "pergunta": "O botão Finalizar OS não libera.",
+          "resposta": "Leia a lista logo abaixo do botão: ela diz o que falta (item obrigatório, foto antes, foto depois ou alguma assinatura)."
+        },
+        {
+          "pergunta": "Tirei a foto errada.",
+          "resposta": "Na aba Fotos, clique em Remover na foto e tire de novo. Depois de finalizada a OS, não dá mais para remover."
+        },
+        {
+          "pergunta": "Cheguei e outro técnico já tinha assumido.",
+          "resposta": "A OS some da sua lista e o link do aviso mostra que ela já foi assumida. Combine com o gestor se precisar de ajuda no local."
+        },
+        {
+          "pergunta": "Não recebi o aviso no Telegram.",
+          "resposta": "Peça ao gestor para conferir seu ID do Telegram em Usuários. Enquanto isso, acompanhe as OS abertas no sistema."
+        },
+        {
+          "pergunta": "Não vejo uma OS que me falaram.",
+          "resposta": "Você só vê as suas OS e as corretivas sem técnico. Peça à secretária ou ao gestor para colocar você como técnico da OS."
+        }
       ]
     },
     {
@@ -168,7 +329,7 @@
         {
           "titulo": "Painel do condomínio",
           "passos": [
-            "Abra Painel do Síndico no menu lateral.",
+            "Ao entrar, você já cai no Painel do Condomínio. O menu só tem Painel e Ajuda.",
             "No topo: quantidade de equipamentos, manutenções no mês, tempo médio de resposta (até a chegada do técnico) e a próxima visita.",
             "Em Histórico de atendimentos, cada mês lista as visitas, preventivas e corretivas.",
             "Clique em Fotos para ver as fotos de antes e depois do serviço e em PDF para baixar o relatório da visita."
@@ -176,8 +337,14 @@
         }
       ],
       "situacoes": [
-        { "pergunta": "Esqueci a senha.", "resposta": "Fale com a Amotex: a equipe gera uma nova senha e envia para você." },
-        { "pergunta": "Uma visita não aparece no painel.", "resposta": "O painel mostra as visitas registradas pelo técnico. Se faltar alguma, fale com a Amotex." }
+        {
+          "pergunta": "Esqueci a senha.",
+          "resposta": "Fale com a Amotex: a equipe gera uma nova senha e envia para você."
+        },
+        {
+          "pergunta": "Uma visita não aparece no painel.",
+          "resposta": "O painel mostra as visitas registradas pelo técnico. Se faltar alguma, fale com a Amotex."
+        }
       ]
     }
   ]

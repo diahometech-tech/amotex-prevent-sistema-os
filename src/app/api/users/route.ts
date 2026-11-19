@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, type User } from '@/lib/db';
 import { getSessionFromRequest, canManageUsers } from '@/lib/auth';
-import { isAdminOrTecnico } from '@/lib/roles';
+import { isAdmin, isEscritorio, isPapelValido, isTecnico } from '@/lib/roles';
 import { normalizarEspecialidade, normalizarTelegramChatId } from '@/lib/usuario-campos';
-
-const VALID_ROLES = ['admin', 'tecnico', 'sindico'];
 
 function safe(u: User) {
   const { senha_hash: _senha_hash, ...rest } = u;
@@ -20,14 +18,20 @@ function safe(u: User) {
 // porque a rota respondia 403 e o erro era engolido no client.
 // Deliberadamente NÃO expõe síndicos, logins, papéis nem condominio_id: pra
 // preencher o seletor basta id e nome. Síndico continua bloqueado.
+// Secretária recebe a forma completa, mas só da equipe (sem síndicos): ela
+// atribui técnico e marca o plantão, e precisa de especialidade/plantão.
 export async function GET(request: NextRequest) {
   const session = getSessionFromRequest(request);
-  if (!session || !isAdminOrTecnico(session.role)) {
+  if (!session || !(isEscritorio(session.role) || isTecnico(session.role))) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
 
   const users = await Database.getUsers();
-  if (!canManageUsers(session.role)) {
+  if (!isAdmin(session.role)) {
+    if (isEscritorio(session.role)) {
+      const equipe = users.filter((u) => u.papel !== 'sindico').map(safe);
+      return NextResponse.json({ users: equipe });
+    }
     const tecnicos = users
       .filter((u) => u.papel === 'tecnico' && u.ativo)
       .map((u) => ({ id: u.id, nome: u.nome }));
@@ -48,7 +52,7 @@ export async function POST(request: NextRequest) {
     if (!nome || !login || !senha || !papel) {
       return NextResponse.json({ error: 'Preencha nome, login, senha e papel.' }, { status: 400 });
     }
-    if (!VALID_ROLES.includes(papel)) {
+    if (!isPapelValido(papel)) {
       return NextResponse.json({ error: 'Papel inválido.' }, { status: 400 });
     }
     if (papel === 'sindico' && !condominio_id) {

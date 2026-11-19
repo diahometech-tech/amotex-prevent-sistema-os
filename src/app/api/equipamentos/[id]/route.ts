@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { getSessionFromRequest } from '@/lib/auth';
-import { canEditEquipamento } from '@/lib/permissions';
+import { getSessionFromRequest, canAccessCondominio } from '@/lib/auth';
+import { podeEditarEquipamento } from '@/lib/roles';
 import { validarEquipamento } from '@/lib/equipamento-campos';
 import { saveFotoEquipamentoDataUrl } from '@/lib/uploads';
 
@@ -12,12 +12,15 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || !canEditEquipamento(session.role)) {
+  if (!session || !podeEditarEquipamento(session.role)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
   try {
     const atual = await Database.getEquipamentoById(id);
     if (!atual) return NextResponse.json({ error: 'Equipamento não encontrado.' }, { status: 404 });
+    if (!(await canAccessCondominio(session, atual.condominio_id))) {
+      return NextResponse.json({ error: 'Você não tem acesso a este condomínio.' }, { status: 403 });
+    }
     const body = await request.json();
     const { dados, erro } = validarEquipamento(body ?? {}, true);
     if (erro) return NextResponse.json({ error: erro }, { status: 400 });

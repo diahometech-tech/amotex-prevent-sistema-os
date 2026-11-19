@@ -11,7 +11,7 @@ import { SignaturePad } from '@/components/os/SignaturePad';
 import { FotoUpload } from '@/components/os/FotoUpload';
 import { HistoricoPanel } from '@/components/os/HistoricoPanel';
 import { useAmxUser } from '@/components/layout/AppShell';
-import { canFinalizeOS, canManageOS } from '@/lib/permissions';
+import { podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeOperarCampo, podeVerModulo } from '@/lib/roles';
 import { computeOsPrioridade, OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-priority';
 import { pendenciasFinalizacao } from '@/lib/os-finalizacao';
 import { formatarDataCurta } from '@/lib/os-agenda';
@@ -42,13 +42,20 @@ export function OSModal({
   onDeleted?: (osId: string) => void;
 }) {
   const user = useAmxUser();
-  const isAdmin = user?.role === 'admin';
   const [dialogo, setDialogo] = useState<'cancelar' | 'apagar' | null>(null);
   const [fotoParaRemover, setFotoParaRemover] = useState<Foto | null>(null);
   useTick();
-  const canManage = !!user && canManageOS(user.role);
+  // Cada ação responde ao seu predicado (src/lib/roles.ts): agenda (data,
+  // técnico) e campo (checklist, fotos, assinaturas, finalizar) são coisas
+  // diferentes — a secretária agenda mas não vai a campo.
+  const podeAgenda = podeAgendarOS(user?.role);
+  const ehTecnico = user?.role === 'tecnico';
+  // Técnico só opera campo na OS que já é dele (corretiva sem técnico: antes tem
+  // de "Assumir"); o servidor recusa o contrário.
+  const podeCampo = podeOperarCampo(user?.role);
+  const podeCancelar = podeCancelarOS(user?.role);
+  const podeApagar = podeApagarOS(user?.role);
   const [avisoMsg, setAvisoMsg] = useState<{ texto: string; ok: boolean } | null>(null);
-  const canFinalize = !!user && canFinalizeOS(user.role);
 
   const [os, setOs] = useState<OS | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,7 +117,13 @@ export function OSModal({
           setVinculos(data.vinculos || null);
         } else {
           const data = await res.json().catch(() => ({}));
-          setLoadError(data.error || 'Não foi possível carregar esta OS.');
+          // Aviso de corretiva vai pra vários técnicos; quem chega depois de
+          // outro assumir perde o acesso — o motivo mais provável é esse.
+          setLoadError(
+            res.status === 403 && user?.role === 'tecnico'
+              ? 'Esta OS já foi assumida por outro técnico.'
+              : data.error || 'Não foi possível carregar esta OS.'
+          );
         }
       })
       .catch(() => {
@@ -122,12 +135,12 @@ export function OSModal({
     return () => {
       cancelled = true;
     };
-  }, [osId]);
+  }, [osId, user?.role]);
 
   // Diretório de técnicos pro bloco de agendamento. Mesmo cuidado de
   // src/app/page.tsx: técnico recebe {id, nome} sem `papel`.
   useEffect(() => {
-    if (!canManage) return;
+    if (!podeAgenda) return;
     let cancelled = false;
     fetch('/api/users', { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
@@ -140,7 +153,7 @@ export function OSModal({
     return () => {
       cancelled = true;
     };
-  }, [canManage]);
+  }, [podeAgenda]);
 
   const isClosed = os?.status === 'finalizada' || os?.status === 'cancelada';
   // Mesma função que o backend usa em Database.finalizarOS — o botão trava
@@ -162,7 +175,8 @@ export function OSModal({
         ...(aguardandoEnvio > 0 ? [`${aguardandoEnvio} envio(s) aguardando rede — finalize depois que subirem`] : []),
       ]
     : [];
-  const podeFinalizar = canFinalize && !isClosed && pendencias.length === 0;
+  const campoLiberado = podeCampo && (!ehTecnico || os?.tecnico_id === user?.id);
+  const podeFinalizar = campoLiberado && !isClosed && pendencias.length === 0;
 
   // Agendamento (data da visita / técnico) — PATCH simples de um campo.
   const salvarAgendamento = async (campo: 'data_programada' | 'tecnico_id', valor: string) => {
@@ -339,7 +353,7 @@ export function OSModal({
     setFotoParaRemover(null);
   };
 
-  const podeRemoverFoto = canManage && !isClosed;
+  const podeRemoverFoto = campoLiberado && !isClosed;
 
   return (
     <Modal open onClose={onClose} maxWidth="max-w-2xl">
@@ -380,7 +394,7 @@ export function OSModal({
 
             <SlaBox os={os} />
 
-            {canManage && !isClosed && !os.tecnico_id && user?.role === 'tecnico' && (
+            {podeAgenda && !isClosed && !os.tecnico_id && os.tipo === 'corretiva' && user?.role === 'tecnico' && (
               <Button size="sm" onClick={() => salvarAgendamento('tecnico_id', user.id)} className="w-fit">
                 Assumir esta OS
               </Button>
@@ -396,7 +410,7 @@ export function OSModal({
               </p>
             )}
 
-            {canManage && !isClosed ? (
+            {podeAgenda && !isClosed ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Data da visita">
                   <Input
@@ -406,16 +420,19 @@ export function OSModal({
                     onChange={(e) => salvarAgendamento('data_programada', e.target.value)}
                   />
                 </Field>
-                <Field label="Técnico responsável">
-                  <Select id="os-tecnico" value={os.tecnico_id || ''} onChange={(e) => salvarAgendamento('tecnico_id', e.target.value)}>
-                    <option value="">Não atribuído</option>
-                    {tecnicos.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.nome}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                {/* Técnico não passa a OS adiante: trocar o responsável tira a OS dele. */}
+                {!ehTecnico && (
+                  <Field label="Técnico responsável">
+                    <Select id="os-tecnico" value={os.tecnico_id || ''} onChange={(e) => salvarAgendamento('tecnico_id', e.target.value)}>
+                      <option value="">Não atribuído</option>
+                      {tecnicos.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.nome}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                )}
               </div>
             ) : (
               os.data_programada && (
@@ -424,12 +441,18 @@ export function OSModal({
             )}
 
             {vinculos?.origem && (
-              <a
-                href={`/?os=${vinculos.origem.id}`}
-                className="text-xs font-semibold text-amx-blue-light hover:text-white transition-colors w-fit"
-              >
-                ↩ Aberta durante a preventiva #{vinculos.origem.id.slice(0, 6).toUpperCase()}
-              </a>
+              podeVerModulo(user?.role, 'os') ? (
+                <a
+                  href={`/?os=${vinculos.origem.id}`}
+                  className="text-xs font-semibold text-amx-blue-light hover:text-white transition-colors w-fit"
+                >
+                  ↩ Aberta durante a preventiva #{vinculos.origem.id.slice(0, 6).toUpperCase()}
+                </a>
+              ) : (
+                <p className="text-xs text-amx-muted">
+                  Aberta durante a preventiva #{vinculos.origem.id.slice(0, 6).toUpperCase()}
+                </p>
+              )
             )}
             {vinculos?.equipamento && (
               <p className="text-xs text-amx-muted">
@@ -446,7 +469,8 @@ export function OSModal({
                 os={os}
                 checklist={checklist}
                 corretivas={vinculos?.corretivas ?? []}
-                podeAbrir={canManage && os.status !== 'cancelada'}
+                podeAbrir={podeAbrirOS(user?.role) && os.status !== 'cancelada'}
+                podeLinkar={podeVerModulo(user?.role, 'os')}
                 tecnicoId={user?.role === 'tecnico' ? user.id : undefined}
                 onAberta={(nova, aviso) => {
                   setVinculos((v) => ({
@@ -474,41 +498,41 @@ export function OSModal({
               <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2">{actionError}</p>
             )}
 
-            {canManage && !isClosed && (
+            {campoLiberado && !isClosed && (
               <div className="flex items-center gap-2 flex-wrap">
                 {os.status === 'aberta' && (
                   <Button size="sm" variant="secondary" onClick={iniciarAtendimento} disabled={busyAction}>
                     Iniciar atendimento
                   </Button>
                 )}
-                {canFinalize && (
-                  <div className="flex flex-col gap-1">
-                    <Button size="sm" onClick={finalizar} disabled={!podeFinalizar || busyAction}>
-                      {busyAction ? 'Finalizando...' : 'Finalizar OS'}
-                    </Button>
-                    {pendencias.length > 0 && (
-                      <ul className="text-[11px] font-semibold text-amx-amber list-disc pl-4">
-                        {pendencias.map((p) => (
-                          <li key={p}>{p}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
+                <div className="flex flex-col gap-1">
+                  <Button size="sm" onClick={finalizar} disabled={!podeFinalizar || busyAction}>
+                    {busyAction ? 'Finalizando...' : 'Finalizar OS'}
+                  </Button>
+                  {pendencias.length > 0 && (
+                    <ul className="text-[11px] font-semibold text-amx-amber list-disc pl-4">
+                      {pendencias.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             )}
 
-            {isAdmin && (
+            {(podeCancelar || podeApagar) && (
               <div className="flex items-center gap-2 flex-wrap border-t border-amx-line pt-3">
                 <span className="text-[11px] text-amx-muted mr-1">Gestão:</span>
-                {!isClosed && (
+                {podeCancelar && !isClosed && (
                   <Button size="sm" variant="secondary" onClick={() => setDialogo('cancelar')}>
                     Cancelar OS
                   </Button>
                 )}
-                <Button size="sm" variant="danger" onClick={() => setDialogo('apagar')}>
-                  Apagar OS
-                </Button>
+                {podeApagar && (
+                  <Button size="sm" variant="danger" onClick={() => setDialogo('apagar')}>
+                    Apagar OS
+                  </Button>
+                )}
               </div>
             )}
 
@@ -537,7 +561,7 @@ export function OSModal({
             {tab === 'checklist' && (
               <ChecklistTab
                 items={checklist}
-                readOnly={!canManage || isClosed}
+                readOnly={!campoLiberado || isClosed}
                 onConcluir={concluirChecklistItem}
                 onAdd={addChecklistItem}
                 fotoObrigatoria={new Set(itensComFotoObrigatoria(os, checklist).map((i) => i.equipamento_id))}
@@ -555,7 +579,7 @@ export function OSModal({
                   fotos={fotos.filter((f) => f.momento === 'antes' && !f.equipamento_id)}
                   pendentes={fotosPendentes.filter((p) => p.momento === 'antes' && !p.equipamento_id)}
                   onUpload={(file) => uploadFoto('antes', file)}
-                  disabled={!canManage || isClosed}
+                  disabled={!campoLiberado || isClosed}
                   busy={uploadingMomento === 'antes'}
                   onRemover={podeRemoverFoto ? setFotoParaRemover : undefined}
                 />
@@ -564,7 +588,7 @@ export function OSModal({
                   fotos={fotos.filter((f) => f.momento === 'depois' && !f.equipamento_id)}
                   pendentes={fotosPendentes.filter((p) => p.momento === 'depois' && !p.equipamento_id)}
                   onUpload={(file) => uploadFoto('depois', file)}
-                  disabled={!canManage || isClosed}
+                  disabled={!campoLiberado || isClosed}
                   busy={uploadingMomento === 'depois'}
                   onRemover={podeRemoverFoto ? setFotoParaRemover : undefined}
                 />
@@ -578,7 +602,7 @@ export function OSModal({
                   value={assinaturaPendente('tecnico')?.data ?? os.assinatura_tecnico_url}
                   pendente={!!assinaturaPendente('tecnico')}
                   onSave={(dataUrl) => saveAssinatura('tecnico', dataUrl)}
-                  disabled={!canManage || isClosed}
+                  disabled={!campoLiberado || isClosed}
                   busy={savingSignature === 'tecnico'}
                 />
                 <SignaturePad
@@ -586,7 +610,7 @@ export function OSModal({
                   value={assinaturaPendente('zelador')?.data ?? os.assinatura_zelador_url}
                   pendente={!!assinaturaPendente('zelador')}
                   onSave={(dataUrl) => saveAssinatura('zelador', dataUrl)}
-                  disabled={!canManage || isClosed}
+                  disabled={!campoLiberado || isClosed}
                   busy={savingSignature === 'zelador'}
                 />
               </div>
@@ -647,6 +671,7 @@ function CorretivasDaPreventiva({
   checklist,
   corretivas,
   podeAbrir,
+  podeLinkar,
   tecnicoId,
   onAberta,
 }: {
@@ -654,6 +679,8 @@ function CorretivasDaPreventiva({
   checklist: ChecklistItem[];
   corretivas: VinculosOS['corretivas'];
   podeAbrir: boolean;
+  /** Síndico não tem a lista de OS (/ leva ao Painel): sem link, só texto. */
+  podeLinkar: boolean;
   tecnicoId?: string;
   onAberta: (nova: VinculosOS['corretivas'][number], aviso?: ResultadoAviso) => void;
 }) {
@@ -727,8 +754,8 @@ function CorretivasDaPreventiva({
       {corretivas.map((c) => (
         <a
           key={c.id}
-          href={`/?os=${c.id}`}
-          className="text-xs text-white hover:text-amx-blue-light transition-colors flex items-center gap-2"
+          href={podeLinkar ? `/?os=${c.id}` : undefined}
+          className={`text-xs text-white flex items-center gap-2 ${podeLinkar ? 'hover:text-amx-blue-light transition-colors' : ''}`}
         >
           <Badge tone={c.status === 'finalizada' ? 'success' : 'red'}>{OS_STATUS_LABELS[c.status]}</Badge>
           <span>

@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS usuario (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome TEXT NOT NULL,
   login TEXT NOT NULL UNIQUE,
-  papel TEXT NOT NULL CHECK (papel IN ('admin', 'tecnico', 'sindico')),
+  papel TEXT NOT NULL CHECK (papel IN ('admin', 'secretaria', 'tecnico', 'sindico')),
   condominio_id UUID REFERENCES condominio(id) ON DELETE SET NULL, -- só p/ papel=sindico
   especialidade TEXT CHECK (especialidade IN ('corretiva', 'preventiva')), -- só técnico; NULL = as duas
   telegram_chat_id TEXT, -- avisos operacionais (corretiva aberta/assumida)

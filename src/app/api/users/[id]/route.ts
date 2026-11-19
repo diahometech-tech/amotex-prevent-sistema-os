@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, type User } from '@/lib/db';
 import { getSessionFromRequest, canManageUsers, hashPassword } from '@/lib/auth';
+import { isSecretaria } from '@/lib/roles';
 import { normalizarEspecialidade, normalizarTelegramChatId } from '@/lib/usuario-campos';
 
 function safe(u: User) {
@@ -9,15 +10,29 @@ function safe(u: User) {
 }
 
 // PATCH /api/users/[id] — reseta senha, ativa/desativa, especialidade do
-// técnico, plantão e chat do Telegram. Só admin.
+// técnico, plantão e chat do Telegram. Admin; a secretária só mexe no plantão
+// (e só de técnico).
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = getSessionFromRequest(request);
-  if (!session || !canManageUsers(session.role)) {
+  const soPlantao = !!session && isSecretaria(session.role);
+  if (!session || !(canManageUsers(session.role) || soPlantao)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
   const { id } = await params;
   try {
     const body = await request.json();
+    if (soPlantao) {
+      // Secretária: só {de_plantao}, em usuário técnico. Qualquer outro campo é 403.
+      const campos = Object.keys(body ?? {});
+      if (campos.length !== 1 || campos[0] !== 'de_plantao' || typeof body.de_plantao !== 'boolean') {
+        return NextResponse.json({ error: 'Acesso negado. A secretária só marca o plantão.' }, { status: 403 });
+      }
+      const alvo = await Database.getUserById(id);
+      if (!alvo) return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
+      if (alvo.papel !== 'tecnico') {
+        return NextResponse.json({ error: 'O plantão é só dos técnicos.' }, { status: 403 });
+      }
+    }
     const { senha, ativo, condominio_id } = body;
     const updates: Record<string, unknown> = {};
     if (typeof senha === 'string' && senha.length > 0) updates.senha_hash = hashPassword(senha);

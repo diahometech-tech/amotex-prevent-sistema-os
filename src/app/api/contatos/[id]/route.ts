@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Contato, Database } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/auth';
+import { podeEditarContato } from '@/lib/roles';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -9,12 +10,14 @@ const CANAIS: Contato['canal_preferencial'][] = ['telegram', 'whatsapp', 'email'
 
 // PATCH /api/contatos/[id] — edita contato existente (inclusive ativar/
 // desativar, sem apagar o histórico de escalonamento que referencia o
-// contato_id). Só admin, mesma regra do POST em condominios/[id]/contatos.
+// contato_id). Gestor e secretária, mesma regra do POST em
+// condominios/[id]/contatos. Os dois papéis acessam todos os condomínios
+// (canAccessCondominio), então não há checagem de escopo adicional aqui.
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || session.role !== 'admin') {
-    return NextResponse.json({ error: 'Apenas administradores podem editar contatos.' }, { status: 403 });
+  if (!session || !podeEditarContato(session.role)) {
+    return NextResponse.json({ error: 'Você não pode editar contatos.' }, { status: 403 });
   }
   try {
     const { papel, nome, canal_preferencial, identificador_canal, nivel_escalonamento, ativo } = await request.json();

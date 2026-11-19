@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { AppShell } from '@/components/layout/AppShell';
+import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -36,6 +36,7 @@ export default function PainelDetailPage() {
 }
 
 function PainelDetailContent() {
+  const user = useAmxUser();
   const params = useParams();
   const id = params?.id as string;
 
@@ -125,7 +126,7 @@ function PainelDetailContent() {
       {/* Header */}
       <div className="px-8 pt-6 pb-4 border-b border-amx-line flex items-center justify-between">
         <div>
-          <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider mb-1">Painel do Síndico</p>
+          <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider mb-1">{user?.role === 'sindico' ? 'Painel do Condomínio' : 'Painel do Síndico'}</p>
           <h1 className="text-white">{condominio.nome}</h1>
         </div>
         <Badge tone="info">{relatorioMes}</Badge>

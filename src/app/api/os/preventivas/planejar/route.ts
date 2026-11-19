@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/auth';
+import { podePlanejarPreventivas } from '@/lib/roles';
 import { hojeISO } from '@/lib/os-agenda';
 import { criarChecklistInicial } from '@/lib/os-checklist-inicial';
 import { mesValido, planejarPreventivasMes } from '@/lib/planejamento-preventiva';
 
-// POST /api/os/preventivas/planejar — rota mensal das preventivas. Só admin.
+// POST /api/os/preventivas/planejar — rota mensal das preventivas. Gestor e secretária.
 // Corpo: { mes: 'YYYY-MM', confirmar?: boolean }. Sem `confirmar` devolve só a
 // prévia (nada é gravado); com `confirmar: true` cria uma OS preventiva por
 // item do plano. Recalcula o plano na confirmação (não confia na prévia do
@@ -14,8 +15,8 @@ import { mesValido, planejarPreventivasMes } from '@/lib/planejamento-preventiva
 // src/lib/planejamento-preventiva.ts.
 export async function POST(request: NextRequest) {
   const session = getSessionFromRequest(request);
-  if (!session || session.role !== 'admin') {
-    return NextResponse.json({ error: 'Apenas administradores planejam a rota de preventivas.' }, { status: 403 });
+  if (!session || !podePlanejarPreventivas(session.role)) {
+    return NextResponse.json({ error: 'Apenas o escritório planeja a rota de preventivas.' }, { status: 403 });
   }
   try {
     const { mes, confirmar } = await request.json();
