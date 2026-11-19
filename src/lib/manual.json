@@ -41,6 +41,8 @@
           "passos": [
             "Use os filtros do topo: Todas, Preventiva, Corretiva, condomínio e situação (Em aberto, Finalizadas, Canceladas, Todas).",
             "Clique numa OS para abrir. As abas mostram Checklist, Fotos, Assinaturas e Histórico (quem fez o quê e quando).",
+            "No alto da OS, o bloco Local mostra o endereço completo, o botão Abrir no mapa e o botão Ligar (zelador, quem chamou ou responsável). Se faltar o endereço, cadastre em Condomínios.",
+            "Na primeira visita a um condomínio novo, o técnico cadastra os equipamentos direto pela OS. Cada equipamento vira um item Inspecionar no checklist, com fotos de antes e depois.",
             "OS finalizada tem o link Baixar PDF da OS.",
             "Na linha Gestão, Cancelar OS encerra uma OS em aberto que não vai mais acontecer. O motivo é obrigatório e fica registrado.",
             "Apagar OS remove a OS de vez, com fotos. Use só para OS aberta por engano ou de teste."
@@ -148,6 +150,14 @@
             "Escolha o técnico responsável, se já souber. Sem técnico, a OS fica livre para algum técnico assumir.",
             "Clique em Criar OS. Na corretiva, o sistema avisa técnicos e gestores no Telegram.",
             "Se aparecer Aviso NÃO enviado, ninguém foi avisado pelo Telegram. Se aparecer o recado para avisar por telefone, ligue para o técnico de plantão."
+          ]
+        },
+        {
+          "titulo": "Endereço, mapa e ligação",
+          "passos": [
+            "Ao abrir uma OS, o bloco Local no alto mostra o endereço do condomínio.",
+            "Abrir no mapa abre o endereço no Google Maps. Ligar chama o zelador, quem chamou ou o responsável, direto do celular.",
+            "Na primeira visita a um condomínio novo, o técnico cadastra os equipamentos pela própria OS. Você não precisa cadastrar."
           ]
         },
         {
@@ -265,20 +275,39 @@
           ]
         },
         {
+          "titulo": "Chegar ao local",
+          "passos": [
+            "O endereço aparece na lista de OS, na Rota do dia e no bloco Local, no alto da OS.",
+            "Toque em Abrir no mapa para traçar o caminho no Google Maps.",
+            "Toque em Ligar para chamar o zelador (ou quem chamou, ou o responsável) sem digitar o número.",
+            "Se aparecer Endereço não cadastrado, peça ao gestor para completar em Condomínios."
+          ]
+        },
+        {
+          "titulo": "Primeira visita: cadastrar os equipamentos",
+          "passos": [
+            "Se o condomínio ainda não tem equipamentos, a aba Checklist avisa no topo. Cadastre antes de começar o serviço, porque cada equipamento vai pedir foto antes e depois. Toque em Cadastrar equipamento.",
+            "Escolha a categoria e o tipo. Informe onde fica e tire a foto pela câmera. Só categoria e tipo são obrigatórios.",
+            "Toque em Salvar e cadastrar outro para seguir para o próximo equipamento, ou em Salvar para terminar.",
+            "Cada equipamento cadastrado vira na hora um item Inspecionar no checklist da OS. Esqueceu um? Use + Cadastrar outro equipamento no fim da lista."
+          ]
+        },
+        {
           "titulo": "Corretiva urgente",
           "passos": [
             "Você recebe o aviso de corretiva no Telegram com o condomínio, o problema e o horário limite de chegada.",
             "Abra a OS em Ordens de Serviço e clique em Assumir esta OS. Assim os outros técnicos sabem que você vai.",
             "Ao chegar no local, clique em Iniciar atendimento. Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
-            "O endereço do condomínio fica em Condomínios, na página do condomínio."
+            "Para chegar, use Abrir no mapa e Ligar no bloco Local da OS."
           ]
         },
         {
           "titulo": "Durante o atendimento",
           "passos": [
             "Aba Checklist: marque cada item conforme faz. Itens com OBRIG. são obrigatórios para finalizar.",
-            "Itens de inspeção de equipamento têm o botão Foto, para registrar o equipamento.",
-            "Aba Fotos: tire a foto ANTES do serviço e a foto DEPOIS. Se tirar uma foto errada, use Remover e tire de novo.",
+            "Cada equipamento do checklist tem duas faixas: Antes e Depois. Toque na câmera de cada uma e tire a foto do equipamento antes e depois do serviço.",
+            "Aba Fotos: são as fotos gerais do serviço. Quando a OS pede foto de equipamento (preventiva, ou corretiva de um equipamento), elas são opcionais. Nos outros casos, tire pelo menos uma foto antes e uma depois, geral ou de qualquer equipamento.",
+            "Se tirar uma foto errada, no Checklist toque no X da miniatura; na aba Fotos, toque em Remover. Depois tire de novo.",
             "Aba Assinaturas: assine no quadro e toque em Confirmar assinatura. Depois peça ao zelador para assinar no quadro dele."
           ]
         },
@@ -294,11 +323,15 @@
       "situacoes": [
         {
           "pergunta": "O botão Finalizar OS não libera.",
-          "resposta": "Leia a lista logo abaixo do botão: ela diz o que falta (item obrigatório, foto antes, foto depois ou alguma assinatura)."
+          "resposta": "Leia a lista logo abaixo do botão. Falta foto ANTES de: ou Falta foto DEPOIS de: mostra os equipamentos sem foto (até 3 nomes e mais N). Abra o Checklist, ache o equipamento e tire a foto na faixa Antes ou Depois. A lista também avisa item obrigatório ou assinatura que falta."
         },
         {
           "pergunta": "Tirei a foto errada.",
-          "resposta": "Na aba Fotos, clique em Remover na foto e tire de novo. Depois de finalizada a OS, não dá mais para remover."
+          "resposta": "No Checklist, toque no X da miniatura da faixa do equipamento; na aba Fotos, toque em Remover. Depois tire de novo. Depois de finalizada a OS, não dá mais para remover."
+        },
+        {
+          "pergunta": "Cadastrei um equipamento errado.",
+          "resposta": "Se ainda não tirou foto dele, toque em Remover equipamento no item do Checklist e cadastre de novo. O botão só aparece enquanto o equipamento não tem foto nem está concluído. Depois da primeira foto, só o gestor corrige o cadastro em Condomínios."
         },
         {
           "pergunta": "Cheguei e outro técnico já tinha assumido.",

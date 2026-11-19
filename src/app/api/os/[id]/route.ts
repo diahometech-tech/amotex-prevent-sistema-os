@@ -22,10 +22,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Sem acesso a esta OS.' }, { status: 403 });
   }
 
-  const [checklist, fotos, condominio, logs, vinculos] = await Promise.all([
+  const [checklist, fotos, condominio, contatosTodos, logs, vinculos] = await Promise.all([
     Database.getChecklistByOS(id),
     Database.getFotosByOS(id),
     Database.getCondominioById(os.condominio_id),
+    Database.getContatosByCondominio(os.condominio_id),
     Database.getAuditLogsByEntidade('os', id),
     vinculosDaOS(os, session),
   ]);
@@ -33,6 +34,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
   // síndico — ele vê a OS pelo Painel, não o histórico interno.
   return NextResponse.json({
     os, checklist, fotos,
+    // Contatos ativos do local (zelador etc.): a tela monta os botões "Ligar".
+    // Quem vê a OS já pode ver os contatos do condomínio.
+    contatos: contatosTodos.filter((c) => c.ativo),
     condominio: condominio ? condominioParaPapel(session.role, condominio) : condominio,
     logs: isScopedToOwnCondominio(session.role) ? [] : logs,
     vinculos,

@@ -15,7 +15,12 @@ import { computeOsPrioridade, resumoRotasPorCondominio, OS_STATUS_LABELS, type R
 import { formatarDataCurta, hojeISO, montarRotaDoDia, somarDias } from '@/lib/os-agenda';
 import { slaChegada } from '@/lib/os-sla';
 import { useTick } from '@/lib/useTick';
+import { BotaoLigar, BotaoMapa } from '@/components/os/LocalDoCondominio';
+import { enderecoCompleto, linkMapa, type TelefoneLocal } from '@/lib/endereco';
 import type { Condominio, OS } from '@/lib/db';
+
+// GET /api/condominios devolve também o telefone pra ligar ao chegar.
+type CondominioRota = Condominio & { contato_local?: TelefoneLocal | null };
 
 interface TecnicoLite {
   id: string;
@@ -32,7 +37,7 @@ function RotasContent() {
   useTick(); // prazo de chegada das corretivas anda sozinho na rota
 
   const [oss, setOss] = useState<OS[]>([]);
-  const [condominios, setCondominios] = useState<Condominio[]>([]);
+  const [condominios, setCondominios] = useState<CondominioRota[]>([]);
   const [tecnicos, setTecnicos] = useState<TecnicoLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -50,6 +55,7 @@ function RotasContent() {
     const map = new Map(condominios.map((c) => [c.id, c.nome]));
     return (id: string) => map.get(id) || 'Condomínio desconhecido';
   }, [condominios]);
+  const condominioPorId = useMemo(() => new Map(condominios.map((c) => [c.id, c])), [condominios]);
 
   const tecnicoNome = useMemo(() => {
     const map = new Map(tecnicos.map((t) => [t.id, t.nome]));
@@ -157,10 +163,24 @@ function RotasContent() {
   const minhaRota = !verTodos;
   const tituloDia = dia === hoje ? 'hoje' : formatarDataCurta(dia);
 
-  const renderGrupo = (g: GrupoNomeado) => (
+  const renderGrupo = (g: GrupoNomeado) => {
+    const cond = condominioPorId.get(g.condominio_id);
+    const local = cond
+      ? { endereco: enderecoCompleto(cond), mapa: linkMapa(cond), ligar: cond.contato_local ?? null }
+      : null;
+    return (
     <Card key={g.condominio_id}>
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <p className="text-sm font-semibold text-white">{g.nome}</p>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-white">{g.nome}</p>
+          {local?.endereco && <p className="text-xs text-amx-muted select-text">{local.endereco}</p>}
+          {(local?.mapa || local?.ligar) && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {local.mapa && <BotaoMapa href={local.mapa} />}
+              {local.ligar && <BotaoLigar item={local.ligar} />}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge tone="neutral">{g.total} OS</Badge>
           {g.urgentes > 0 && <Badge tone="red">{g.urgentes} urgente{g.urgentes > 1 ? 's' : ''}</Badge>}
@@ -234,6 +254,7 @@ function RotasContent() {
       </div>
     </Card>
   );
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0">

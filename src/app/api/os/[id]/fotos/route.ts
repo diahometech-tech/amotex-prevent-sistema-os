@@ -26,6 +26,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
   try {
     const { momento, data, client_id, equipamento_id } = await request.json();
+    if (client_id !== undefined && (typeof client_id !== 'string' || !CLIENT_ID.test(client_id))) {
+      return NextResponse.json({ error: 'Identificador do envio inválido.' }, { status: 400 });
+    }
+    // Reenvio da fila de uma foto que já foi gravada vem ANTES da trava de OS
+    // encerrada: se a OS fechou enquanto o aparelho estava sem sinal, a foto
+    // já está no PDF e o reenvio tem de ser aceito como repetido, não recusado.
+    if (client_id) {
+      const existente = await Database.getFotoByClientId(client_id);
+      if (existente) {
+        if (existente.os_id !== id) return NextResponse.json({ error: 'Identificador do envio já usado.' }, { status: 409 });
+        return NextResponse.json({ success: true, foto: existente, repetido: true });
+      }
+    }
+    // Upload em OS encerrada mudaria o registro que já virou PDF/assinatura.
+    if (os.status === 'finalizada' || os.status === 'cancelada') {
+      return NextResponse.json({ error: 'OS encerrada.' }, { status: 409 });
+    }
     // Foto de equipamento (pedido 8): o equipamento tem que estar no
     // checklist DESTA OS — não aceita id solto de outro condomínio.
     if (equipamento_id !== undefined) {
@@ -36,15 +53,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       if (!checklist.some((i) => i.equipamento_id === equipamento_id)) {
         return NextResponse.json({ error: 'Este equipamento não está no checklist desta OS.' }, { status: 400 });
       }
-    }
-    if (client_id !== undefined && (typeof client_id !== 'string' || !CLIENT_ID.test(client_id))) {
-      return NextResponse.json({ error: 'Identificador do envio inválido.' }, { status: 400 });
-    }
-    if (client_id) {
-      const existente = await Database.getFotoByClientId(client_id);
-      if (existente) {
-        if (existente.os_id !== id) return NextResponse.json({ error: 'Identificador do envio já usado.' }, { status: 409 });
-        return NextResponse.json({ success: true, foto: existente, repetido: true });
+      // O checklist sozinho não prova nada (item antigo pode apontar pra outro
+      // prédio): confere também que o equipamento é do condomínio da OS.
+      const equipamento = await Database.getEquipamentoById(equipamento_id);
+      if (!equipamento || equipamento.condominio_id !== os.condominio_id) {
+        return NextResponse.json({ error: 'Este equipamento não é deste condomínio.' }, { status: 400 });
       }
     }
     if (momento !== 'antes' && momento !== 'depois') {
@@ -58,7 +71,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const foto = await Database.createFoto({
       os_id: id,
-      momento: equipamento_id ? 'depois' : momento,
+      momento,
       url,
       client_id: client_id || undefined,
       equipamento_id: equipamento_id || undefined,

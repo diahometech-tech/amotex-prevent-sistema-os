@@ -337,6 +337,7 @@ export interface DbBackend {
 
   // Contato
   getContatosByCondominio(condominioId: string): Promise<Contato[]>;
+  getContatosAtivos(): Promise<Contato[]>;
   getContatoNivel(condominioId: string, nivel: number): Promise<Contato | null>;
   insertContato(c: Contato): Promise<void>;
   updateContato(id: string, updates: Partial<Contato>): Promise<Contato | null>;
@@ -350,6 +351,10 @@ export interface DbBackend {
   /** Remove; false se não existe. Quem chama verifica antes se está em uso. */
   deleteEquipamento(id: string): Promise<boolean>;
   equipamentoEmUso(id: string): Promise<boolean>;
+  /** Remove o equipamento cadastrado por engano (e os itens de checklist que
+   *  apontam pra ele) se não houver histórico: foto, item concluído, item em
+   *  OS encerrada ou OS corretiva ligada a ele. */
+  removerEquipamentoSemHistorico(id: string): Promise<'removido' | 'em_uso' | 'nao_encontrado'>;
 
   // Usuário (RBAC)
   getUsers(): Promise<User[]>;
@@ -559,6 +564,9 @@ const jsonBackend: DbBackend = {
     return db.reservatorios[i];
   },
 
+  async getContatosAtivos() {
+    return readLocalDB().contatos.filter((c) => c.ativo);
+  },
   async getContatosByCondominio(condominioId) {
     return readLocalDB().contatos.filter((c) => c.condominio_id === condominioId);
   },
@@ -635,6 +643,22 @@ const jsonBackend: DbBackend = {
   },
   async equipamentoEmUso(id) {
     return readLocalDB().checklist_items.some((c) => c.equipamento_id === id);
+  },
+  async removerEquipamentoSemHistorico(id) {
+    const db = readLocalDB();
+    if (!db.equipamentos.some((e) => e.id === id)) return 'nao_encontrado';
+    const encerrada = new Set(
+      db.oss.filter((o) => o.status === 'finalizada' || o.status === 'cancelada').map((o) => o.id)
+    );
+    const temHistorico =
+      db.fotos.some((f) => f.equipamento_id === id) ||
+      db.oss.some((o) => o.equipamento_id === id) ||
+      db.checklist_items.some((c) => c.equipamento_id === id && (c.concluido || encerrada.has(c.os_id)));
+    if (temHistorico) return 'em_uso';
+    db.checklist_items = db.checklist_items.filter((c) => c.equipamento_id !== id);
+    db.equipamentos = db.equipamentos.filter((e) => e.id !== id);
+    writeLocalDB(db);
+    return 'removido';
   },
 
   async getUsers() { return readLocalDB().users; },
@@ -961,6 +985,9 @@ export class Database {
 
   // ----- Contato -----
   static getContatosByCondominio(condominioId: string) { return backend().getContatosByCondominio(condominioId); }
+  // Uma leitura só de todos os contatos ativos: listas que precisam do contato
+  // de vários condomínios não fazem uma consulta por condomínio.
+  static getContatosAtivos() { return backend().getContatosAtivos(); }
   static getContatoNivel(condominioId: string, nivel: number) { return backend().getContatoNivel(condominioId, nivel); }
 
   static async createContato(data: Partial<Contato>): Promise<Contato> {
@@ -1004,6 +1031,7 @@ export class Database {
   static updateEquipamento(id: string, updates: Partial<Equipamento>) { return backend().updateEquipamento(id, updates); }
   static deleteEquipamento(id: string) { return backend().deleteEquipamento(id); }
   static equipamentoEmUso(id: string) { return backend().equipamentoEmUso(id); }
+  static removerEquipamentoSemHistorico(id: string) { return backend().removerEquipamentoSemHistorico(id); }
 
   // ----- Usuário (RBAC) -----
   static getUsers() { return backend().getUsers(); }

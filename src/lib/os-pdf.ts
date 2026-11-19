@@ -13,7 +13,8 @@ import fs from 'fs';
 import { resolveUploadFile } from './storage';
 import type { Condominio, OS, ChecklistItem, Foto, User, Equipamento } from './db';
 import { OS_TIPO_LABELS, OS_STATUS_LABELS } from './os-priority';
-import { itensComFotoObrigatoria, nomeEquipamentoDoItem } from './os-finalizacao';
+import { enderecoCompleto } from './endereco';
+import { nomeEquipamentoDoItem } from './os-finalizacao';
 
 // pdfkit só embute JPEG/PNG nativamente — uma foto em outro formato (ex.:
 // webp, dependendo do navegador/câmera) entra como texto indicando o
@@ -116,7 +117,8 @@ export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
   // Dados do condomínio e da OS
   doc.fillColor('#000').fontSize(11);
   doc.text(`Condomínio: ${condominio.nome}`);
-  if (condominio.endereco) doc.text(`Endereço: ${condominio.endereco}`);
+  const enderecoPdf = enderecoCompleto(condominio);
+  if (enderecoPdf) doc.text(`Endereço: ${enderecoPdf}`);
   doc.text(`Tipo: ${OS_TIPO_LABELS[os.tipo]}    Status: ${OS_STATUS_LABELS[os.status]}    Prioridade: ${os.prioridade}`);
   doc.text(`Técnico: ${tecnico?.nome ?? '—'}`);
   doc.text(`Aberta em: ${fmtData(os.criado_em)}    Entrada: ${fmtData(os.entrada_em)}    Saída: ${fmtData(os.saida_em)}`);
@@ -165,39 +167,56 @@ export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
     doc.moveDown();
   }
 
-  // Foto de cada equipamento (preventiva — pedido 8). Uma por item; se houver
-  // mais de uma do mesmo equipamento, entram todas.
-  const itensEquip = itensComFotoObrigatoria(os, checklist);
-  const comFotoEquip = itensEquip.filter((i) => fotos.some((f) => f.equipamento_id === i.equipamento_id));
-  if (comFotoEquip.length > 0) {
-    doc.font('Helvetica-Bold').fontSize(12).text('Fotos dos equipamentos');
+  // Fotos por equipamento, com sub-rótulos Antes/Depois (preventiva e
+  // corretiva). Qualquer foto com equipamento_id entra aqui; a ordem segue o
+  // checklist e o nome vem do item ("Inspecionar X"). Em sequência (não lado
+  // a lado): a foto de celular é vertical e, em 2 colunas, fica minúscula.
+  const nomesEquip = new Map<string, string>();
+  for (const item of checklist) {
+    if (item.equipamento_id && !nomesEquip.has(item.equipamento_id)) {
+      nomesEquip.set(item.equipamento_id, nomeEquipamentoDoItem(item.descricao));
+    }
+  }
+  const idsComFoto = [...new Set(fotos.map((f) => f.equipamento_id).filter((x): x is string => !!x))];
+  idsComFoto.sort((a, b) => {
+    const ia = [...nomesEquip.keys()].indexOf(a);
+    const ib = [...nomesEquip.keys()].indexOf(b);
+    return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib);
+  });
+  if (idsComFoto.length > 0) {
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#000').text('Fotos dos equipamentos');
     doc.moveDown(0.2);
-    for (const item of comFotoEquip) {
-      const doItem = fotos.filter((f) => f.equipamento_id === item.equipamento_id);
+    for (const equipId of idsComFoto) {
+      const doEquip = fotos.filter((f) => f.equipamento_id === equipId);
       // Nome e 1ª foto na mesma página (senão o nome fica órfão no rodapé).
-      const primeira = fotoBufferByFoto.get(doItem[0]) ?? null;
+      const primeira = fotoBufferByFoto.get(doEquip[0]) ?? null;
       if (primeira) {
         try {
           const img = (doc as PDFDocumentComOpenImage).openImage(primeira);
-          const altura = 180 * (img.height / img.width) + 20;
+          const altura = 180 * (img.height / img.width) + 40;
           if (altura > doc.page.height - doc.page.margins.bottom - doc.y) doc.addPage();
         } catch {
           // imagem ilegível: embedImageOrNote mostra o aviso
         }
       }
-      doc.font('Helvetica').fontSize(10).fillColor('#000').text(nomeEquipamentoDoItem(item.descricao));
-      for (const foto of doItem) {
-        embedImageOrNote(doc, foto.url, fotoBufferByFoto.get(foto) ?? null, 180);
-        doc.moveDown(0.3);
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#000').text(nomesEquip.get(equipId) ?? 'Equipamento');
+      for (const [momento, rotulo] of [['antes', 'Antes'], ['depois', 'Depois']] as const) {
+        const lista = doEquip.filter((f) => f.momento === momento);
+        if (lista.length === 0) continue;
+        doc.font('Helvetica').fontSize(9).fillColor('#666').text(rotulo);
+        doc.fillColor('#000');
+        for (const foto of lista) {
+          embedImageOrNote(doc, foto.url, fotoBufferByFoto.get(foto) ?? null, 180);
+          doc.moveDown(0.3);
+        }
       }
+      doc.moveDown(0.2);
     }
     doc.moveDown(0.3);
   }
 
-  // Fotos antes/depois (gerais; as de equipamento ficam na seção acima, ou
-  // nesta lista quando a OS não é preventiva)
-  const naSecaoEquip = new Set(comFotoEquip.map((i) => i.equipamento_id));
-  const gerais = fotos.filter((f) => !f.equipamento_id || !naSecaoEquip.has(f.equipamento_id));
+  // Fotos antes/depois gerais (as de equipamento ficam na seção acima)
+  const gerais = fotos.filter((f) => !f.equipamento_id);
   const antes = gerais.filter((f) => f.momento === 'antes');
   const depois = gerais.filter((f) => f.momento === 'depois');
   for (const [label, lista] of [['Fotos — antes', antes], ['Fotos — depois', depois]] as const) {

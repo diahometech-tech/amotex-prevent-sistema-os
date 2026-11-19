@@ -609,7 +609,7 @@ function CondominioDetailContent() {
             {equipamentoParaRemover.identificacao ? ` (${equipamentoParaRemover.identificacao})` : ''} sai do parque de máquinas.
           </p>
         )}
-        <p>Equipamento que já aparece em alguma OS não pode ser removido.</p>
+        <p>Equipamento que já tem foto ou serviço registrado não pode ser removido.</p>
       </ConfirmDialog>
       <ConfirmDialog
         open={apagandoCondominio}
@@ -954,7 +954,7 @@ function EquipamentosTab({
   onDeleteClick,
 }: TabPanelProps<Equipamento> & { onDeleteClick?: (item: Equipamento) => void }) {
   const canEdit = podeEditarEquipamento(user.role);
-  const canDelete = podeEditarCondominio(user.role);
+  const canDelete = podeEditarCondominio(user.role) || podeEditarEquipamento(user.role);
 
   if (loading) {
     return (

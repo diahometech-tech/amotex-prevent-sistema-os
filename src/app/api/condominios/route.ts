@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Database } from '@/lib/db';
+import { Database, type Contato } from '@/lib/db';
+import { telefonesDoLocal } from '@/lib/endereco';
 import { condominioParaPapel, filtrarOSVisiveis, getSessionFromRequest, isScopedToOwnCondominio } from '@/lib/auth';
 import { isEscritorio, podeEditarCondominio } from '@/lib/roles';
 import { validarCadastro } from '@/lib/financeiro/cadastro';
@@ -22,7 +23,19 @@ export async function GET(request: NextRequest) {
     const ids = new Set(oss.map((o) => o.condominio_id));
     visiveis = all.filter((c) => ids.has(c.id));
   }
-  return NextResponse.json({ condominios: visiveis.map((c) => condominioParaPapel(session.role, c)) });
+  // Telefone pra ligar ao chegar (rota do dia): uma leitura de contatos pra
+  // todos os condomínios, agrupada em memória — não uma consulta por item.
+  const contatosPorCondominio = new Map<string, Contato[]>();
+  for (const ct of await Database.getContatosAtivos()) {
+    const l = contatosPorCondominio.get(ct.condominio_id);
+    if (l) l.push(ct); else contatosPorCondominio.set(ct.condominio_id, [ct]);
+  }
+  return NextResponse.json({
+    condominios: visiveis.map((c) => ({
+      ...condominioParaPapel(session.role, c),
+      contato_local: telefonesDoLocal(c, contatosPorCondominio.get(c.id) ?? [])[0] ?? null,
+    })),
+  });
 }
 
 // POST /api/condominios — cria condomínio. Só admin.

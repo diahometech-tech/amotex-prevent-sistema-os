@@ -41,19 +41,33 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 }
 
-// DELETE — só admin, e só se nenhuma OS usou o equipamento no checklist (o
-// histórico da OS aponta pra ele).
+// DELETE — admin ou quem cadastra equipamento (técnico, que pode ter errado o
+// cadastro dentro da OS). Só sem histórico: foto, serviço concluído ou OS
+// encerrada travam a remoção; os itens "Inspecionar …" ainda abertos saem junto.
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || session.role !== 'admin') {
-    return NextResponse.json({ error: 'Só gestores podem remover equipamentos.' }, { status: 403 });
+  if (!session || (session.role !== 'admin' && !podeEditarEquipamento(session.role))) {
+    return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
-  if (await Database.equipamentoEmUso(id)) {
-    return NextResponse.json({ error: 'Este equipamento já aparece em OS e não pode ser removido.' }, { status: 409 });
+  try {
+    const atual = await Database.getEquipamentoById(id);
+    if (!atual) return NextResponse.json({ error: 'Equipamento não encontrado.' }, { status: 404 });
+    if (!(await canAccessCondominio(session, atual.condominio_id))) {
+      return NextResponse.json({ error: 'Você não tem acesso a este condomínio.' }, { status: 403 });
+    }
+    const r = await Database.removerEquipamentoSemHistorico(id);
+    if (r === 'nao_encontrado') return NextResponse.json({ error: 'Equipamento não encontrado.' }, { status: 404 });
+    if (r === 'em_uso') {
+      return NextResponse.json(
+        { error: 'Este equipamento já tem foto ou serviço registrado e não pode ser removido.' },
+        { status: 409 }
+      );
+    }
+    await Database.createAuditLog({ entidade: 'equipamento', entidade_id: id, acao: 'REMOVIDO', ator: session.name });
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error('Erro ao remover equipamento:', e);
+    return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });
   }
-  const ok = await Database.deleteEquipamento(id);
-  if (!ok) return NextResponse.json({ error: 'Equipamento não encontrado.' }, { status: 404 });
-  await Database.createAuditLog({ entidade: 'equipamento', entidade_id: id, acao: 'REMOVIDO', ator: session.name });
-  return NextResponse.json({ success: true });
 }

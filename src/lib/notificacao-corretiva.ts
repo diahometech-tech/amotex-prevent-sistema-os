@@ -13,6 +13,7 @@ import { fmtHora, slaChegada } from './os-sla';
 import type { ResultadoAviso } from './aviso';
 import { escaparMarkdown } from './telegram-texto';
 import { escolherDestinatarios } from './plantao';
+import { enderecoCompleto } from './endereco';
 
 export interface Destinatario {
   nome: string;
@@ -46,7 +47,7 @@ export function mensagemCorretivaAberta(os: OS, condominio: Condominio, tecnico?
   const sla = slaChegada(os);
   const linhas = [
     `🚨 CORRETIVA URGENTE — ${condominio.nome}`,
-    condominio.endereco,
+    enderecoCompleto(condominio),
     os.descricao_problema && `Problema: ${os.descricao_problema}`,
     (os.solicitante_nome || os.solicitante_telefone) &&
       `Solicitante: ${[os.solicitante_nome, os.solicitante_telefone].filter(Boolean).join(' · ')}`,
@@ -101,7 +102,7 @@ export async function avisarCorretiva(
   notifyN8n(evento, os, {
     mensagem,
     destinatarios,
-    condominio: { nome: condominio.nome, endereco: condominio.endereco },
+    condominio: { nome: condominio.nome, endereco: enderecoCompleto(condominio) },
     tecnico_nome: tecnico?.nome,
     prazo_chegada: sla ? new Date(sla.prazo).toISOString() : undefined,
     link: linkOs(os.id),
