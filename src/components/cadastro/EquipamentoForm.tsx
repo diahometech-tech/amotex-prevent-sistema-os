@@ -17,6 +17,9 @@ interface EquipamentoFormProps {
   onSubmit: (data: EquipamentoFormData) => void | Promise<void>;
   onCancel: () => void;
   busy?: boolean;
+  /** Mostra "Salvar e cadastrar outro" (1ª vistoria, dentro da OS). Devolve
+   *  true se salvou: aí o form limpa os campos e mantém a categoria. */
+  onSalvarEOutro?: (data: EquipamentoFormData) => boolean | Promise<boolean>;
 }
 
 interface CatalogoItem {
@@ -31,7 +34,7 @@ function tiposDe(categoria: string): string[] {
   return CATEGORIAS_EQUIPAMENTO.find((c) => c.id === categoria)?.tipos ?? [];
 }
 
-export function EquipamentoForm({ inicial, onSubmit, onCancel, busy = false }: EquipamentoFormProps) {
+export function EquipamentoForm({ inicial, onSubmit, onCancel, busy = false, onSalvarEOutro }: EquipamentoFormProps) {
   const categoriaInicial = inicial ? inicial.categoria ?? categoriaDoTipo(inicial.tipo) ?? CATEGORIA_OUTRO : '';
   const tipoInicialNoCatalogo = !!inicial && tiposDe(categoriaInicial).includes(inicial.tipo);
   const [categoria, setCategoria] = useState<string>(categoriaInicial);
@@ -85,21 +88,42 @@ export function EquipamentoForm({ inicial, onSubmit, onCancel, busy = false }: E
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Valida e monta o payload; null (com `erro` preenchido) se faltar algo.
+  // Só categoria e tipo são obrigatórios — o resto o técnico completa se der.
+  const montarDados = (): EquipamentoFormData | null => {
     setErro('');
-    if (!categoria) return setErro('Escolha a categoria.');
-    if (!tipo.trim()) return setErro('Escolha ou digite o tipo do equipamento.');
+    if (!categoria) { setErro('Escolha a categoria.'); return null; }
+    if (!tipo.trim()) { setErro('Escolha ou digite o tipo do equipamento.'); return null; }
     const pot = potencia.trim() === '' ? undefined : Number(potencia.replace(',', '.'));
-    if (pot !== undefined && !Number.isFinite(pot)) return setErro('Potência deve ser um número, ex.: 1,5');
-    await onSubmit({
+    if (pot !== undefined && !Number.isFinite(pot)) { setErro('Potência deve ser um número, ex.: 1,5'); return null; }
+    return {
       categoria,
       tipo: tipo.trim(),
       identificacao,
       modelo,
       potencia_hp: pot,
       ...(foto ? { foto } : {}),
-    });
+    };
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const dados = montarDados();
+    if (dados) await onSubmit(dados);
+  };
+
+  const salvarEOutro = async () => {
+    const dados = montarDados();
+    if (!dados || !onSalvarEOutro) return;
+    if (await onSalvarEOutro(dados)) {
+      // Mantém a categoria (o parque costuma vir em sequência: várias bombas).
+      setTipoEscolhido('');
+      setTipoLivre('');
+      setIdentificacao('');
+      setModelo('');
+      setPotencia('');
+      setFoto(null);
+    }
   };
 
   const fotoAtual = foto ?? inicial?.foto_url;
@@ -220,13 +244,18 @@ export function EquipamentoForm({ inicial, onSubmit, onCancel, busy = false }: E
 
       {erro && <p className="text-xs font-semibold text-amx-red-hover">{erro}</p>}
 
-      <div className="flex gap-3 pt-2">
+      <div className="flex flex-wrap gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>
           Cancelar
         </Button>
         <Button type="submit" variant="primary" disabled={busy || preparandoFoto}>
           {busy ? 'Salvando...' : 'Salvar'}
         </Button>
+        {onSalvarEOutro && (
+          <Button type="button" variant="secondary" onClick={salvarEOutro} disabled={busy || preparandoFoto}>
+            Salvar e cadastrar outro
+          </Button>
+        )}
       </div>
     </form>
   );

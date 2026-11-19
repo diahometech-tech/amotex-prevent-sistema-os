@@ -416,6 +416,10 @@ export const pgBackend: DbBackend = {
   },
 
   // ----- Contato -----
+  async getContatosAtivos() {
+    const { rows } = await q('SELECT * FROM contato WHERE ativo = TRUE');
+    return rows as Contato[];
+  },
   async getContatosByCondominio(condominioId) {
     const { rows } = await q('SELECT * FROM contato WHERE condominio_id = $1', [condominioId]);
     return rows as Contato[];
@@ -477,6 +481,41 @@ export const pgBackend: DbBackend = {
   async equipamentoEmUso(id) {
     const { rows } = await q('SELECT 1 FROM checklist_item WHERE equipamento_id = $1 LIMIT 1', [id]);
     return rows.length > 0;
+  },
+  // Transação com FOR UPDATE no equipamento: evita que uma foto/conclusão
+  // chegue entre a checagem de histórico e o DELETE.
+  async removerEquipamentoSemHistorico(id) {
+    await ensureSchema();
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const existe = await client.query('SELECT 1 FROM equipamento WHERE id = $1 FOR UPDATE', [id]);
+      if (existe.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return 'nao_encontrado';
+      }
+      const hist = await client.query(
+        `SELECT 1 WHERE EXISTS (SELECT 1 FROM foto WHERE equipamento_id = $1)
+            OR EXISTS (SELECT 1 FROM os WHERE equipamento_id = $1)
+            OR EXISTS (SELECT 1 FROM checklist_item c JOIN os o ON o.id = c.os_id
+                        WHERE c.equipamento_id = $1
+                          AND (c.concluido OR o.status IN ('finalizada', 'cancelada')))`,
+        [id]
+      );
+      if (hist.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return 'em_uso';
+      }
+      await client.query('DELETE FROM checklist_item WHERE equipamento_id = $1', [id]);
+      await client.query('DELETE FROM equipamento WHERE id = $1', [id]);
+      await client.query('COMMIT');
+      return 'removido';
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
   },
 
   // ----- Usuário -----

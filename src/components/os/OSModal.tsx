@@ -11,7 +11,7 @@ import { SignaturePad } from '@/components/os/SignaturePad';
 import { FotoUpload } from '@/components/os/FotoUpload';
 import { HistoricoPanel } from '@/components/os/HistoricoPanel';
 import { useAmxUser } from '@/components/layout/AppShell';
-import { podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeOperarCampo, podeVerModulo } from '@/lib/roles';
+import { podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeEditarEquipamento, podeOperarCampo, podeVerModulo } from '@/lib/roles';
 import { computeOsPrioridade, OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-priority';
 import { pendenciasFinalizacao } from '@/lib/os-finalizacao';
 import { formatarDataCurta } from '@/lib/os-agenda';
@@ -21,8 +21,10 @@ import { useTick } from '@/lib/useTick';
 import { enfileirar, ouvirFila } from '@/lib/fila-envio';
 import { useFilaEnvio } from '@/lib/useFilaEnvio';
 import { fotoReduzidaDataUrl } from '@/lib/imagem-cliente';
-import { itensComFotoObrigatoria, nomeEquipamentoDoItem } from '@/lib/os-finalizacao';
-import type { AuditLog, ChecklistItem, Foto, OS } from '@/lib/db';
+import { equipamentosObrigatorios, nomeEquipamentoDoItem } from '@/lib/os-finalizacao';
+import { LocalDoCondominio } from '@/components/os/LocalDoCondominio';
+import { EquipamentoForm, type EquipamentoFormData } from '@/components/cadastro/EquipamentoForm';
+import type { AuditLog, ChecklistItem, Condominio, Contato, Equipamento, Foto, OS } from '@/lib/db';
 import type { VinculosOS } from '@/lib/os-vinculos';
 
 type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico';
@@ -44,6 +46,9 @@ export function OSModal({
   const user = useAmxUser();
   const [dialogo, setDialogo] = useState<'cancelar' | 'apagar' | null>(null);
   const [fotoParaRemover, setFotoParaRemover] = useState<Foto | null>(null);
+  // Equipamento cadastrado por engano nesta OS (ainda sem foto) que o técnico
+  // quer desfazer; o servidor reconfere o histórico antes de apagar.
+  const [equipParaRemover, setEquipParaRemover] = useState<ChecklistItem | null>(null);
   useTick();
   // Cada ação responde ao seu predicado (src/lib/roles.ts): agenda (data,
   // técnico) e campo (checklist, fotos, assinaturas, finalizar) são coisas
@@ -67,6 +72,9 @@ export function OSModal({
   const [fotos, setFotos] = useState<Foto[]>([]);
   const [historico, setHistorico] = useState<AuditLog[]>([]);
   const [vinculos, setVinculos] = useState<VinculosOS | null>(null);
+  // Endereço e contatos do local (bloco "Local": mapa e ligar).
+  const [condominio, setCondominio] = useState<Partial<Condominio> | null>(null);
+  const [contatos, setContatos] = useState<Contato[]>([]);
   const [tecnicos, setTecnicos] = useState<{ id: string; nome: string }[]>([]);
 
   const [uploadingMomento, setUploadingMomento] = useState<'antes' | 'depois' | null>(null);
@@ -115,6 +123,8 @@ export function OSModal({
           setFotos(data.fotos || []);
           setHistorico(data.logs || []);
           setVinculos(data.vinculos || null);
+          setCondominio(data.condominio || null);
+          setContatos(data.contatos || []);
         } else {
           const data = await res.json().catch(() => ({}));
           // Aviso de corretiva vai pra vários técnicos; quem chega depois de
@@ -177,6 +187,71 @@ export function OSModal({
     : [];
   const campoLiberado = podeCampo && (!ehTecnico || os?.tecnico_id === user?.id);
   const podeFinalizar = campoLiberado && !isClosed && pendencias.length === 0;
+
+  // Cadastro do parque de máquinas na 1ª vistoria: o técnico cadastra o
+  // equipamento aqui mesmo e o item "Inspecionar …" nasce no checklist.
+  const podeCadastrarEquip = podeEditarEquipamento(user?.role) && campoLiberado && !isClosed;
+  const condominioId = os?.condominio_id;
+  const [temEquipamentos, setTemEquipamentos] = useState<boolean | null>(null);
+  const [cadastrandoEquip, setCadastrandoEquip] = useState(false);
+  const [salvandoEquip, setSalvandoEquip] = useState(false);
+  const [erroEquip, setErroEquip] = useState('');
+  const [avisoEquip, setAvisoEquip] = useState('');
+  // O formulário rola no celular: erro/confirmação ficam no topo e o modal
+  // rola até eles, senão o técnico toca em Salvar e não vê nada mudar.
+  const statusEquipRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (erroEquip || avisoEquip) statusEquipRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [erroEquip, avisoEquip]);
+  useEffect(() => {
+    if (!podeCadastrarEquip || !condominioId || tab !== 'checklist') return;
+    let cancelled = false;
+    fetch(`/api/condominios/${condominioId}/equipamentos`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.equipamentos) setTemEquipamentos((data.equipamentos as Equipamento[]).length > 0);
+      })
+      .catch(() => {
+        // Sem a resposta temEquipamentos fica null: a aba mostra o botão de
+        // cadastro mesmo assim (ver ChecklistTab).
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [podeCadastrarEquip, condominioId, tab]);
+
+  // Devolve true se salvou (o form usa pra limpar no "Salvar e cadastrar outro").
+  const salvarEquipamento = async (data: EquipamentoFormData): Promise<boolean> => {
+    setSalvandoEquip(true);
+    setErroEquip('');
+    setAvisoEquip('');
+    try {
+      const res = await fetch(`/api/condominios/${condominioId}/equipamentos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...data, os_id: osId }),
+      });
+      const resp: { checklistItem?: ChecklistItem; error?: string } = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErroEquip(resp.error || 'Não foi possível salvar o equipamento.');
+        return false;
+      }
+      if (resp.checklistItem) setChecklist((prev) => [...prev, resp.checklistItem!]);
+      setTemEquipamentos(true);
+      setAvisoEquip(`${data.tipo || 'Equipamento'}${data.identificacao ? ` — ${data.identificacao}` : ''} salvo. Cadastre o próximo.`);
+      return true;
+    } catch {
+      setErroEquip('Sem conexão. Tente de novo.');
+      return false;
+    } finally {
+      setSalvandoEquip(false);
+    }
+  };
+  const fecharCadastroEquip = () => {
+    setCadastrandoEquip(false);
+    setErroEquip('');
+    setAvisoEquip('');
+  };
 
   // Agendamento (data da visita / técnico) — PATCH simples de um campo.
   const salvarAgendamento = async (campo: 'data_programada' | 'tecnico_id', valor: string) => {
@@ -355,8 +430,30 @@ export function OSModal({
 
   const podeRemoverFoto = campoLiberado && !isClosed;
 
+  const removerEquipamentoCadastrado = async (): Promise<string | void> => {
+    const item = equipParaRemover;
+    if (!item?.equipamento_id) return;
+    const res = await fetch(`/api/equipamentos/${item.equipamento_id}`, { method: 'DELETE' }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok) return data.error || 'Não foi possível remover o equipamento.';
+    // Recarrega o checklist (o item some, e itens iguais em outras OS não
+    // importam aqui) e se o condomínio ainda tem equipamento.
+    const [osRes, eqRes] = await Promise.all([
+      fetch(`/api/os/${osId}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`/api/condominios/${condominioId}/equipamentos`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
+    if (osRes?.checklist) setChecklist(osRes.checklist);
+    else setChecklist((prev) => prev.filter((i) => i.id !== item.id));
+    if (eqRes?.equipamentos) setTemEquipamentos((eqRes.equipamentos as Equipamento[]).length > 0);
+    setEquipParaRemover(null);
+  };
+
   return (
-    <Modal open onClose={onClose} maxWidth="max-w-2xl">
+    <>
+    {/* Com o cadastro de equipamento ou um diálogo (cancelar, apagar, remover
+        foto) aberto por cima, o Esc é dele: o OSModal não pode fechar junto
+        (os dois ouvem a tecla na janela). */}
+    <Modal open onClose={cadastrandoEquip || dialogo || fotoParaRemover || equipParaRemover ? () => {} : onClose} maxWidth="max-w-2xl">
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Spinner className="h-6 w-6" />
@@ -377,6 +474,8 @@ export function OSModal({
           />
           <div className="p-5 flex flex-col gap-4">
             <OsSummary os={os} />
+
+            <LocalDoCondominio condominio={condominio} contatos={contatos} os={os} podeCadastrarEndereco={user?.role === 'admin'} />
 
             {(os.descricao_problema || os.solicitante_nome || os.solicitante_telefone) && (
               <div className="rounded-lg border border-amx-red/40 bg-amx-red/5 px-3.5 py-3 flex flex-col gap-1">
@@ -564,15 +663,26 @@ export function OSModal({
                 readOnly={!campoLiberado || isClosed}
                 onConcluir={concluirChecklistItem}
                 onAdd={addChecklistItem}
-                fotoObrigatoria={new Set(itensComFotoObrigatoria(os, checklist).map((i) => i.equipamento_id))}
+                fotoObrigatoria={new Set(equipamentosObrigatorios(os, checklist).map((i) => i.equipamento_id))}
                 fotosEquip={fotos.filter((f) => f.equipamento_id)}
                 pendentesEquip={fotosPendentes.filter((p) => p.equipamento_id)}
-                onFotoEquip={(equipamentoId, file) => uploadFoto('depois', file, equipamentoId)}
+                onFotoEquip={(equipamentoId, momento, file) => uploadFoto(momento, file, equipamentoId)}
                 onRemoverFoto={podeRemoverFoto ? setFotoParaRemover : undefined}
+                podeCadastrarEquip={podeCadastrarEquip}
+                temEquipamentos={temEquipamentos}
+                onCadastrarEquip={() => setCadastrandoEquip(true)}
+                onRemoverEquip={setEquipParaRemover}
               />
             )}
 
             {tab === 'fotos' && (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">Fotos gerais do serviço</p>
+                  {equipamentosObrigatorios(os, checklist).length > 0 && (
+                    <p className="text-xs text-amx-muted">Opcional: as fotos de cada equipamento ficam no Checklist.</p>
+                  )}
+                </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FotoUpload
                   momento="antes"
@@ -592,6 +702,7 @@ export function OSModal({
                   busy={uploadingMomento === 'depois'}
                   onRemover={podeRemoverFoto ? setFotoParaRemover : undefined}
                 />
+              </div>
               </div>
             )}
 
@@ -644,6 +755,18 @@ export function OSModal({
             <p>Para tirar da fila sem perder o histórico, use &quot;Cancelar OS&quot;.</p>
           </ConfirmDialog>
           <ConfirmDialog
+            open={!!equipParaRemover}
+            titulo="Remover equipamento?"
+            confirmarLabel="Remover equipamento"
+            perigo
+            onConfirm={removerEquipamentoCadastrado}
+            onClose={() => setEquipParaRemover(null)}
+          >
+            <p>
+              Remover <b className="text-white">{equipParaRemover ? nomeEquipamentoDoItem(equipParaRemover.descricao) : ''}</b>? Use só se foi cadastrado por engano.
+            </p>
+          </ConfirmDialog>
+          <ConfirmDialog
             open={!!fotoParaRemover}
             titulo="Remover esta foto?"
             confirmarLabel="Remover foto"
@@ -659,6 +782,32 @@ export function OSModal({
         </>
       )}
     </Modal>
+    <Modal open={cadastrandoEquip} onClose={fecharCadastroEquip} maxWidth="max-w-md">
+      <ModalHeader title="Cadastrar equipamento" subtitle={condominioNome} onClose={fecharCadastroEquip} />
+      <div className="p-5">
+        <div ref={statusEquipRef}>
+          {erroEquip && (
+            <div className="mb-3 text-xs font-semibold text-amx-red-hover" role="alert">
+              {erroEquip}
+            </div>
+          )}
+          {avisoEquip && !erroEquip && (
+            <div className="mb-3 text-xs font-semibold text-amx-green" role="status">
+              {avisoEquip}
+            </div>
+          )}
+        </div>
+        <EquipamentoForm
+          onSubmit={async (d) => {
+            if (await salvarEquipamento(d)) fecharCadastroEquip();
+          }}
+          onSalvarEOutro={salvarEquipamento}
+          onCancel={fecharCadastroEquip}
+          busy={salvandoEquip}
+        />
+      </div>
+    </Modal>
+    </>
   );
 }
 
@@ -833,8 +982,10 @@ function OsSummary({ os }: { os: OS }) {
   );
 }
 
-// Foto de um equipamento do checklist (pedido 8). Na preventiva é
-// obrigatória — sem ela a OS não finaliza (src/lib/os-finalizacao.ts).
+// Fotos de um equipamento do checklist (pedido 8): faixa "Antes" e faixa
+// "Depois", cada uma com câmera e miniaturas. Quando o equipamento é
+// obrigatório na OS (src/lib/os-finalizacao.ts), as duas são exigidas —
+// sem elas a OS não finaliza. Em leitura, a faixa sem foto some.
 function FotoEquipamento({
   obrigatoria,
   fotos,
@@ -845,6 +996,49 @@ function FotoEquipamento({
 }: {
   obrigatoria: boolean;
   fotos: Foto[];
+  pendentes: { id: string; data: string; momento: 'antes' | 'depois'; recusado?: boolean; erro?: string }[];
+  readOnly: boolean;
+  onFoto: (momento: 'antes' | 'depois', file: File) => Promise<void>;
+  onRemover?: (foto: Foto) => void;
+}) {
+  const faixas = (['antes', 'depois'] as const)
+    .map((momento) => ({
+      momento,
+      fotos: fotos.filter((f) => f.momento === momento),
+      pendentes: pendentes.filter((p) => p.momento === momento),
+    }))
+    .filter((f) => !readOnly || f.fotos.length + f.pendentes.length > 0);
+  if (faixas.length === 0) return null;
+  return (
+    <div className="basis-full flex flex-col gap-1.5 pl-[34px]">
+      {faixas.map((f) => (
+        <FaixaFotoEquipamento
+          key={f.momento}
+          momento={f.momento}
+          obrigatoria={obrigatoria}
+          fotos={f.fotos}
+          pendentes={f.pendentes}
+          readOnly={readOnly}
+          onFoto={(file) => onFoto(f.momento, file)}
+          onRemover={onRemover}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FaixaFotoEquipamento({
+  momento,
+  obrigatoria,
+  fotos,
+  pendentes,
+  readOnly,
+  onFoto,
+  onRemover,
+}: {
+  momento: 'antes' | 'depois';
+  obrigatoria: boolean;
+  fotos: Foto[];
   pendentes: { id: string; data: string; recusado?: boolean; erro?: string }[];
   readOnly: boolean;
   onFoto: (file: File) => Promise<void>;
@@ -852,23 +1046,28 @@ function FotoEquipamento({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [lendo, setLendo] = useState(false);
-  const tem = fotos.length + pendentes.length > 0;
-  if (readOnly && !tem) return null;
+  const rotulo = momento === 'antes' ? 'Antes' : 'Depois';
+  // Foto recusada pelo servidor não resolve a pendência: não conta como "tem".
+  const recusadas = pendentes.filter((p) => p.recusado);
+  const tem = fotos.length + pendentes.length - recusadas.length > 0;
   return (
-    <div className="flex items-center gap-1.5 shrink-0">
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="w-12 shrink-0 text-[11px] font-semibold text-amx-muted">{rotulo}</span>
       {fotos.map((f) => (
         <span key={f.id} className="relative">
           <a href={f.url} target="_blank" rel="noopener noreferrer">
-            <img src={f.url} alt="Foto do equipamento" className="w-9 h-9 rounded-md object-cover border border-amx-line" />
+            <img src={f.url} alt={`Foto ${rotulo.toLowerCase()} do equipamento`} className="w-11 h-11 rounded-md object-cover border border-amx-line" />
           </a>
           {onRemover && (
             <button
               type="button"
               onClick={() => onRemover(f)}
-              aria-label="Remover foto do equipamento"
-              className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amx-bg border border-amx-line text-[10px] leading-none text-amx-muted hover:text-white hover:border-amx-red"
+              aria-label={`Remover foto ${rotulo.toLowerCase()} do equipamento`}
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-amx-bg border border-amx-line text-amx-muted hover:text-white hover:border-amx-red flex items-center justify-center"
             >
-              ×
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
             </button>
           )}
         </span>
@@ -879,7 +1078,7 @@ function FotoEquipamento({
           src={p.data}
           alt="Foto aguardando envio"
           title={p.recusado ? p.erro : 'Aguardando envio'}
-          className={`w-9 h-9 rounded-md object-cover border-2 border-dashed opacity-80 ${
+          className={`w-11 h-11 rounded-md object-cover border-2 border-dashed opacity-80 ${
             p.recusado ? 'border-amx-red' : 'border-amx-amber'
           }`}
         />
@@ -889,14 +1088,22 @@ function FotoEquipamento({
           type="button"
           disabled={lendo}
           onClick={() => inputRef.current?.click()}
-          className={`h-9 px-2 rounded-md border text-[10px] font-semibold flex items-center gap-1 transition-colors disabled:opacity-50 ${
+          aria-label={`${tem ? 'Adicionar outra foto' : 'Tirar foto'} ${rotulo.toLowerCase()} do equipamento`}
+          className={`h-11 min-w-11 px-3 rounded-md border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 ${
             !tem && obrigatoria
               ? 'border-amx-red text-amx-red-hover hover:bg-amx-red/10'
               : 'border-amx-line text-amx-muted hover:text-white'
           }`}
         >
-          {lendo ? <Spinner className="w-3.5 h-3.5" /> : '📷'}
-          {tem ? '+' : obrigatoria ? 'Foto obrig.' : 'Foto'}
+          {lendo ? (
+            <Spinner className="w-4 h-4" />
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          )}
+          {tem ? '+' : null}
           <input
             ref={inputRef}
             type="file"
@@ -917,6 +1124,12 @@ function FotoEquipamento({
           />
         </button>
       )}
+      {obrigatoria && !readOnly && !tem && <span className="text-[10px] text-amx-muted">obrigatória</span>}
+      {recusadas.map((p) => (
+        <span key={p.id} className="basis-full pl-14 text-[11px] font-semibold text-amx-red-hover" role="alert">
+          Foto não enviada: {p.erro || 'recusada pelo servidor.'}
+        </span>
+      ))}
     </div>
   );
 }
@@ -931,6 +1144,10 @@ function ChecklistTab({
   pendentesEquip,
   onFotoEquip,
   onRemoverFoto,
+  podeCadastrarEquip,
+  temEquipamentos,
+  onCadastrarEquip,
+  onRemoverEquip,
 }: {
   items: ChecklistItem[];
   readOnly: boolean;
@@ -938,9 +1155,14 @@ function ChecklistTab({
   onAdd: (descricao: string, obrigatorio: boolean) => void;
   fotoObrigatoria: Set<string>;
   fotosEquip: Foto[];
-  pendentesEquip: { id: string; data: string; equipamento_id?: string; recusado?: boolean; erro?: string }[];
-  onFotoEquip: (equipamentoId: string, file: File) => Promise<void>;
+  pendentesEquip: { id: string; data: string; momento: 'antes' | 'depois'; equipamento_id?: string; recusado?: boolean; erro?: string }[];
+  onFotoEquip: (equipamentoId: string, momento: 'antes' | 'depois', file: File) => Promise<void>;
   onRemoverFoto?: (foto: Foto) => void;
+  podeCadastrarEquip: boolean;
+  /** null = ainda não sabemos (carregando ou falhou). */
+  temEquipamentos: boolean | null;
+  onCadastrarEquip: () => void;
+  onRemoverEquip: (item: ChecklistItem) => void;
 }) {
   const [novaDescricao, setNovaDescricao] = useState('');
   const [novoObrigatorio, setNovoObrigatorio] = useState(true);
@@ -958,6 +1180,15 @@ function ChecklistTab({
 
   return (
     <div className="flex flex-col gap-3">
+      {podeCadastrarEquip && temEquipamentos === false && (
+        <div className="flex flex-col gap-3 rounded-lg border border-amx-red bg-amx-panel px-4 py-4">
+          <p className="text-sm font-semibold text-white">Este condomínio ainda não tem equipamentos cadastrados.</p>
+          <p className="text-xs text-amx-muted">Cadastre antes de começar o serviço: cada equipamento vai pedir foto antes e depois.</p>
+          <Button type="button" variant="primary" onClick={onCadastrarEquip} className="w-full sm:w-auto py-3 text-sm">
+            Cadastrar equipamento
+          </Button>
+        </div>
+      )}
       {items.length === 0 ? (
         <EmptyState title="Checklist vazio" description="Nenhum item cadastrado para esta OS ainda." />
       ) : (
@@ -1007,14 +1238,37 @@ function ChecklistTab({
                     fotos={fotosEquip.filter((f) => f.equipamento_id === item.equipamento_id)}
                     pendentes={pendentesEquip.filter((p) => p.equipamento_id === item.equipamento_id)}
                     readOnly={readOnly}
-                    onFoto={(file) => onFotoEquip(item.equipamento_id!, file)}
+                    onFoto={(momento, file) => onFotoEquip(item.equipamento_id!, momento, file)}
                     onRemover={onRemoverFoto}
                   />
                 )}
+                {item.equipamento_id &&
+                  !readOnly &&
+                  !item.concluido &&
+                  !fotosEquip.some((f) => f.equipamento_id === item.equipamento_id) &&
+                  !pendentesEquip.some((p) => p.equipamento_id === item.equipamento_id) && (
+                    <button
+                      type="button"
+                      onClick={() => onRemoverEquip(item)}
+                      className="basis-full pl-[34px] text-left text-xs text-amx-muted hover:text-white underline underline-offset-2"
+                    >
+                      Remover equipamento
+                    </button>
+                  )}
               </li>
             );
           })}
         </ul>
+      )}
+
+      {podeCadastrarEquip && temEquipamentos !== false && (
+        <button
+          type="button"
+          onClick={onCadastrarEquip}
+          className="self-start text-xs font-semibold text-amx-muted hover:text-white underline underline-offset-2"
+        >
+          {temEquipamentos ? '+ Cadastrar outro equipamento' : '+ Cadastrar equipamento'}
+        </button>
       )}
 
       {!readOnly && (

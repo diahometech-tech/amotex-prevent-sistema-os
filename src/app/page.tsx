@@ -14,6 +14,7 @@ import { formatarDataCurta, hojeISO } from '@/lib/os-agenda';
 import { slaChegada } from '@/lib/os-sla';
 import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
 import { useTick } from '@/lib/useTick';
+import { enderecoCompleto, enderecoCurto } from '@/lib/endereco';
 import type { Condominio, OS, OsStatus, OsTipo } from '@/lib/db';
 
 // Os 3 níveis do campo manual os.prioridade (distinto de OsPrioridade, a
@@ -81,6 +82,11 @@ function OsListContent() {
     const map = new Map(condominios.map((c) => [c.id, c.nome]));
     return (id: string) => map.get(id) || 'Condomínio desconhecido';
   }, [condominios]);
+  // Endereço curto (rua + bairro) e completo (pra busca) por condomínio.
+  const enderecos = useMemo(
+    () => new Map(condominios.map((c) => [c.id, { curto: enderecoCurto(c), completo: enderecoCompleto(c) }])),
+    [condominios]
+  );
 
   const tecnicoNome = useMemo(() => {
     const map = new Map(tecnicos.map((t) => [t.id, t.nome]));
@@ -139,12 +145,12 @@ function OsListContent() {
       if (tipoFiltro !== 'todos' && os.tipo !== tipoFiltro) return false;
       if (condominioFiltro !== 'todos' && os.condominio_id !== condominioFiltro) return false;
       if (termo) {
-        const alvo = `${condominioNome(os.condominio_id)} ${tecnicoNome(os.tecnico_id) || ''} ${os.observacao || ''}`.toLowerCase();
+        const alvo = `${condominioNome(os.condominio_id)} ${enderecos.get(os.condominio_id)?.completo || ''} ${tecnicoNome(os.tecnico_id) || ''} ${os.observacao || ''}`.toLowerCase();
         if (!alvo.includes(termo)) return false;
       }
       return true;
     });
-  }, [oss, statusFiltro, tipoFiltro, condominioFiltro, busca, condominioNome, tecnicoNome]);
+  }, [oss, statusFiltro, tipoFiltro, condominioFiltro, busca, condominioNome, enderecos, tecnicoNome]);
 
   const ordenadas = useMemo(() => ordenarPorPrioridade(filtradas), [filtradas]);
   const totalAbertas = useMemo(() => oss.filter((o) => o.status !== 'finalizada' && o.status !== 'cancelada').length, [oss]);
@@ -290,6 +296,7 @@ function OsListContent() {
                 key={os.id}
                 os={os}
                 condominioNome={condominioNome(os.condominio_id)}
+                endereco={enderecos.get(os.condominio_id)?.curto}
                 tecnicoNome={tecnicoNome(os.tecnico_id)}
                 onClick={() => setSelectedOsId(os.id)}
               />
@@ -359,11 +366,13 @@ const PRIORIDADE_DOT: Record<OsPrioridade, string> = {
 function OsRow({
   os,
   condominioNome,
+  endereco,
   tecnicoNome,
   onClick,
 }: {
   os: OS;
   condominioNome: string;
+  endereco?: string;
   tecnicoNome?: string;
   onClick: () => void;
 }) {
@@ -391,6 +400,7 @@ function OsRow({
           <p className="text-sm font-semibold text-white truncate">{condominioNome}</p>
           {os.origem === 'hermes_automatica' && <Badge tone="navy">🤖 Hermes</Badge>}
         </div>
+        {endereco && <p className="text-xs text-amx-muted truncate mt-0.5">{endereco}</p>}
         {(os.descricao_problema || os.observacao) && (
           <p className="text-xs text-amx-muted truncate mt-0.5">{os.descricao_problema || os.observacao}</p>
         )}
