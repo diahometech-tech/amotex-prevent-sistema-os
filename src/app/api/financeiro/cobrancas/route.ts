@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { sessaoFinanceiro } from '@/lib/financeiro/acesso';
+import { sessaoCobrancas } from '@/lib/financeiro/acesso';
 import { competenciaValida, gerarCobrancasMes, resumoMes } from '@/lib/financeiro/cobranca';
 import { hojeISO } from '@/lib/os-agenda';
 
 // GET /api/financeiro/cobrancas?competencia=YYYY-MM — cobranças do mês +
-// resumo (mesmos números do topo da aba mensal da planilha). Admin.
+// resumo (mesmos números do topo da aba mensal da planilha). Gestor e secretária.
 export async function GET(request: NextRequest) {
-  if (!sessaoFinanceiro(request)) return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+  if (!sessaoCobrancas(request)) return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   // ?condominio_id= — histórico de um condomínio (página do condomínio).
   const condominioId = request.nextUrl.searchParams.get('condominio_id');
   if (condominioId) {
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 // Idempotente (src/lib/financeiro/cobranca.ts): rodar de novo só acrescenta
 // condomínio que ainda não tem cobrança no mês.
 export async function POST(request: NextRequest) {
-  const session = sessaoFinanceiro(request);
+  const session = sessaoCobrancas(request);
   if (!session) return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   try {
     const { competencia } = await request.json();

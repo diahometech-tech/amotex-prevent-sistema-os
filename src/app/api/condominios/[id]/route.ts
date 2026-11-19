@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { getSessionFromRequest, canAccessCondominio } from '@/lib/auth';
+import { getSessionFromRequest, canAccessCondominio, condominioParaPapel, filtrarOSVisiveis } from '@/lib/auth';
+import { podeEditarCondominio, podeVerReservatorios } from '@/lib/roles';
 import { validarCadastro } from '@/lib/financeiro/cadastro';
 import { hojeISO } from '@/lib/os-agenda';
 
@@ -16,20 +17,23 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const condominio = await Database.getCondominioById(id);
   if (!condominio) return NextResponse.json({ error: 'Condomínio não encontrado.' }, { status: 404 });
 
-  const [reservatorios, contatos, equipamentos, oss] = await Promise.all([
-    Database.getReservatoriosByCondominio(id),
+  // Reservatórios (sensor) só pro escritório; OS filtradas por papel (o
+  // técnico vê só as dele + corretivas sem técnico); contrato só pro escritório.
+  const [reservatorios, contatos, equipamentos, todasOss] = await Promise.all([
+    podeVerReservatorios(session.role) ? Database.getReservatoriosByCondominio(id) : Promise.resolve([]),
     Database.getContatosByCondominio(id),
     Database.getEquipamentosByCondominio(id),
     Database.getOSsByCondominio(id),
   ]);
-  return NextResponse.json({ condominio, reservatorios, contatos, equipamentos, oss });
+  const oss = await filtrarOSVisiveis(session, todasOss);
+  return NextResponse.json({ condominio: condominioParaPapel(session.role, condominio), reservatorios, contatos, equipamentos, oss });
 }
 
 // PATCH /api/condominios/[id] — só admin.
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || session.role !== 'admin') {
+  if (!session || !podeEditarCondominio(session.role)) {
     return NextResponse.json({ error: 'Apenas administradores podem editar condomínios.' }, { status: 403 });
   }
   try {
@@ -64,7 +68,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || session.role !== 'admin') {
+  if (!session || !podeEditarCondominio(session.role)) {
     return NextResponse.json({ error: 'Só gestores podem apagar um condomínio.' }, { status: 403 });
   }
   const condominio = await Database.getCondominioById(id);

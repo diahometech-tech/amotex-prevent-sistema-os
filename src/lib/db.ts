@@ -171,7 +171,7 @@ export interface Equipamento {
   cadastrado_em: string;
 }
 
-export type UserRole = 'admin' | 'tecnico' | 'sindico';
+export type UserRole = 'admin' | 'secretaria' | 'tecnico' | 'sindico';
 export type Especialidade = 'corretiva' | 'preventiva';
 
 export interface User {

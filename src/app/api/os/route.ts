@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { getSessionFromRequest, isScopedToOwnCondominio } from '@/lib/auth';
+import { canAccessCondominio, filtrarOSVisiveis, getSessionFromRequest, podeVerOS } from '@/lib/auth';
+import { isTecnico, podeAbrirOS } from '@/lib/roles';
 import { notifyN8n } from '@/lib/notify';
 import { avisarCorretiva } from '@/lib/notificacao-corretiva';
 import { criarChecklistInicial } from '@/lib/os-checklist-inicial';
@@ -10,28 +11,24 @@ function textoOpcional(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
-// GET /api/os — lista OS. Síndico só vê as do próprio condomínio.
-// Filtro opcional ?condominio_id= (ignorado se o usuário for síndico).
+// GET /api/os — lista OS, já filtrada pelo papel (filtrarOSVisiveis): escritório
+// vê todas; técnico só as dele + corretivas sem técnico; síndico só as do
+// próprio condomínio. Filtro opcional ?condominio_id= (o síndico é limitado
+// ao dele pelo próprio filtro de visibilidade).
 export async function GET(request: NextRequest) {
   const session = getSessionFromRequest(request);
   if (!session) return NextResponse.json({ error: 'Sessão expirada.' }, { status: 401 });
 
-  if (isScopedToOwnCondominio(session.role)) {
-    const user = await Database.getUserById(session.id);
-    if (!user?.condominio_id) return NextResponse.json({ oss: [] });
-    const oss = await Database.getOSsByCondominio(user.condominio_id);
-    return NextResponse.json({ oss });
-  }
-
   const condominioId = request.nextUrl.searchParams.get('condominio_id');
-  const oss = condominioId ? await Database.getOSsByCondominio(condominioId) : await Database.getOSs();
+  const todas = condominioId ? await Database.getOSsByCondominio(condominioId) : await Database.getOSs();
+  const oss = await filtrarOSVisiveis(session, todas);
   return NextResponse.json({ oss });
 }
 
-// POST /api/os — cria OS manual. Admin ou técnico.
+// POST /api/os — cria OS manual. Gestor, secretária ou técnico.
 export async function POST(request: NextRequest) {
   const session = getSessionFromRequest(request);
-  if (!session || (session.role !== 'admin' && session.role !== 'tecnico')) {
+  if (!session || !podeAbrirOS(session.role)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
   try {
@@ -75,6 +72,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Equipamento não pertence a este condomínio.' }, { status: 400 });
       }
       equipamento_id = body.equipamento_id;
+    }
+
+    // Técnico só abre OS em condomínio que ele acessa (onde tem OS visível).
+    // Exceção: corretiva ligada a uma preventiva que ele vê.
+    if (isTecnico(session.role) && !(await canAccessCondominio(session, condominio_id))) {
+      const origem = typeof body.os_origem_id === 'string' && body.os_origem_id ? await Database.getOSById(body.os_origem_id) : null;
+      if (!origem || !(await podeVerOS(session, origem))) {
+        return NextResponse.json({ error: 'Sem acesso a este condomínio.' }, { status: 403 });
+      }
     }
 
     const os = await Database.createOS({

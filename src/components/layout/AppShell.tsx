@@ -4,7 +4,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useIdleLogout } from '@/lib/useIdleLogout';
 import type { UserRole } from '@/lib/db';
-import { ROLE_LABELS, canManageUsers, canManageOS, canSeeFinanceiro } from '@/lib/permissions';
+import { ROLE_LABELS } from '@/lib/permissions';
+import { podeVerModulo, moduloDaRota, telaInicial, type Modulo } from '@/lib/roles';
 import { Spinner } from '@/components/ui/EmptyState';
 import { TrocarSenhaModal } from './TrocarSenhaModal';
 import { FilaEnvioAviso } from './FilaEnvioAviso';
@@ -67,21 +68,27 @@ const ICON_AJUDA = (
 );
 const ICON_LOGOUT =<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />;
 
-// gate ausente = visível pra qualquer papel autenticado. Cada gate espelha a
-// regra real (ver src/lib/permissions.ts) — não é a barreira de segurança,
-// só decide o que aparece no menu.
-const NAV_ITEMS: { href: string; label: string; icon: React.ReactNode; gate?: (role: UserRole) => boolean }[] = [
-  { href: '/', label: 'Ordens de Serviço', icon: ICON_OS },
-  { href: '/dashboard', label: 'Dashboard', icon: ICON_DASHBOARD, gate: canManageUsers },
-  { href: '/rotas', label: 'Rotas', icon: ICON_ROTAS, gate: canManageOS },
-  { href: '/financeiro', label: 'Financeiro', icon: ICON_FINANCEIRO, gate: canSeeFinanceiro },
-  { href: '/condominios', label: 'Condomínios', icon: ICON_CONDOMINIO },
-  { href: '/painel', label: 'Painel do Síndico', icon: ICON_PAINEL },
-  { href: '/admin/usuarios', label: 'Usuários', icon: ICON_GEAR, gate: canManageUsers },
+// Cada item aponta pro módulo de roles.ts; quem não pode ver o módulo não
+// recebe o item (esconder, não desabilitar). Não é a barreira de segurança —
+// a API recusa também.
+const NAV_ITEMS: { href: string; label: string; icon: React.ReactNode; modulo: Modulo }[] = [
+  { href: '/', label: 'Ordens de Serviço', icon: ICON_OS, modulo: 'os' },
+  { href: '/dashboard', label: 'Dashboard', icon: ICON_DASHBOARD, modulo: 'dashboard' },
+  { href: '/rotas', label: 'Rotas', icon: ICON_ROTAS, modulo: 'rotas' },
+  { href: '/financeiro', label: 'Financeiro', icon: ICON_FINANCEIRO, modulo: 'financeiro' },
+  { href: '/condominios', label: 'Condomínios', icon: ICON_CONDOMINIO, modulo: 'condominios' },
+  { href: '/painel', label: 'Painel do Síndico', icon: ICON_PAINEL, modulo: 'painel' },
+  { href: '/admin/usuarios', label: 'Usuários', icon: ICON_GEAR, modulo: 'usuarios' },
   // Manual de uso: todo papel vê, mas só o conteúdo do próprio papel (ver
   // manuaisVisiveis em src/lib/manual.ts).
-  { href: '/ajuda', label: 'Ajuda', icon: ICON_AJUDA },
+  { href: '/ajuda', label: 'Ajuda', icon: ICON_AJUDA, modulo: 'ajuda' },
 ];
+
+// O síndico enxerga só o condomínio dele, então pra ele o painel tem outro nome.
+function rotuloDoItem(item: { label: string; modulo: Modulo }, role: UserRole): string {
+  if (item.modulo === 'painel' && role === 'sindico') return 'Painel do Condomínio';
+  return item.label;
+}
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -122,6 +129,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const [trocarSenha, setTrocarSenha] = useState(false);
 
+  // Guard central: quem abre pela URL uma tela que não é do seu papel é
+  // levado pra tela inicial dele, sem renderizar o conteúdo.
+  const moduloAtual = moduloDaRota(pathname);
+  const semAcesso = !!user && !!moduloAtual && !podeVerModulo(user.role, moduloAtual);
+  useEffect(() => {
+    if (user && semAcesso) window.location.replace(telaInicial(user.role));
+  }, [user, semAcesso]);
+
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     window.location.href = '/login';
@@ -139,6 +154,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // do conteúdo protegido nesse meio-tempo.
   if (!user) return null;
 
+  if (semAcesso) {
+    return (
+      <div className="min-h-screen shrink-0 flex items-center justify-center bg-amx-bg">
+        <Spinner className="h-6 w-6" />
+      </div>
+    );
+  }
+
   return (
     <UserContext.Provider value={user}>
       {/* shrink-0: evita o mesmo bug de fundo cortado do admin/usuarios
@@ -154,13 +177,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="flex flex-col gap-[22px] items-center flex-1">
-            {NAV_ITEMS.filter((item) => !item.gate || item.gate(user.role)).map((item) => {
+            {NAV_ITEMS.filter((item) => podeVerModulo(user.role, item.modulo)).map((item) => {
               const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
               return (
                 <a
                   key={item.href}
                   href={item.href}
-                  title={item.label}
+                  title={rotuloDoItem(item, user.role)}
+                  aria-label={rotuloDoItem(item, user.role)}
                   className={`w-11 h-11 rounded-[10px] flex items-center justify-center border transition-colors ${
                     active
                       ? 'bg-amx-red/14 border-amx-red/40'

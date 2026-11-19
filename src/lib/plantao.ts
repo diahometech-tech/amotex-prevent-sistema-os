@@ -1,6 +1,6 @@
 // Quem é avisado de corretiva — regra da Amotex (09/11): os técnicos
 // trabalham em plantões intercalados e o supervisor define a ordem. O aviso
-// vai pros gestores (admin, sempre) e pro(s) técnico(s) DE PLANTÃO. Se
+// vai pros gestores (admin e secretária, sempre) e pro(s) técnico(s) DE PLANTÃO. Se
 // ninguém estiver marcado de plantão, vai pra todos os técnicos que atendem
 // corretiva — melhor acordar todo mundo do que ninguém.
 //
@@ -30,7 +30,9 @@ export function escolherDestinatarios<
 >(users: T[]): EscolhaAviso<T> {
   const dePlantao = plantonistas(users);
   const tecnicos = dePlantao.length > 0 ? dePlantao : users.filter(atendeCorretiva);
-  const gestores = users.filter((u) => u.ativo && u.papel === 'admin');
+  // Secretária também é avisada (19/11): é quem atende o telefone e precisa
+  // saber que a corretiva abriu — junto com os gestores, sempre.
+  const gestores = users.filter((u) => u.ativo && (u.papel === 'admin' || u.papel === 'secretaria'));
   return {
     destinatarios: [...gestores, ...tecnicos].filter((u) => u.telegram_chat_id),
     plantao: dePlantao.map((u) => u.nome),

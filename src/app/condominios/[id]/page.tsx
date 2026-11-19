@@ -17,7 +17,14 @@ import { ReservatorioForm } from '@/components/cadastro/ReservatorioForm';
 import { ContatoForm } from '@/components/cadastro/ContatoForm';
 import { EquipamentoForm, type EquipamentoFormData } from '@/components/cadastro/EquipamentoForm';
 import { CATEGORIAS_EQUIPAMENTO, nomeCategoria } from '@/lib/catalogo-equipamentos';
-import { canEditCondominio, canEditReservatorio, canEditContato, canEditEquipamento } from '@/lib/permissions';
+import {
+  podeEditarCondominio,
+  podeEditarContato,
+  podeEditarEquipamento,
+  podeVerContrato,
+  podeVerModulo,
+  podeVerReservatorios,
+} from '@/lib/roles';
 import type { AmxUser } from '@/components/layout/AppShell';
 import type {
   Condominio,
@@ -55,7 +62,8 @@ function CondominioDetailContent() {
   const [loadingCondominio, setLoadingCondominio] = useState(true);
   const [condominioError, setCondominioError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<TabType>('reservatorios');
+  // Técnico não tem a aba Reservatórios: abre direto em Contatos.
+  const [activeTab, setActiveTab] = useState<TabType>(podeVerReservatorios(user?.role) ? 'reservatorios' : 'contatos');
   const [tabData, setTabData] = useState<TabState>({});
   const [loadingTab, setLoadingTab] = useState(false);
 
@@ -420,7 +428,7 @@ function CondominioDetailContent() {
       <div className="w-full max-w-4xl mx-auto px-4 py-6">
         <EmptyState
           title="Condomínio não encontrado"
-          description="O condomínio que você tentou acessar não existe ou foi removido."
+          description={condominioError || 'O condomínio que você tentou acessar não existe ou foi removido.'}
           action={
             <Link href="/condominios">
               <Button variant="secondary">Voltar para Condomínios</Button>
@@ -463,7 +471,7 @@ function CondominioDetailContent() {
               ? 'Monitorado'
               : 'Sem monitoramento'}
           </Badge>
-          {canEditCondominio(user.role) && (
+          {podeEditarCondominio(user.role) && (
             <Button
               variant="secondary"
               size="sm"
@@ -476,20 +484,24 @@ function CondominioDetailContent() {
               Editar
             </Button>
           )}
-          <Link href={`/painel/${condominio.id}`}>
-            <Button variant="secondary" size="sm">
-              Ver painel
-            </Button>
-          </Link>
+          {podeVerModulo(user.role, 'painel') && (
+            <Link href={`/painel/${condominio.id}`}>
+              <Button variant="secondary" size="sm">
+                Ver painel
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
-      {user.role === 'admin' && <ContratoCondominio condominio={condominio} />}
-      {user.role === 'admin' && <AcessoSindico condominio={condominio} contatos={contatosData?.data ?? []} />}
+      {podeVerContrato(user.role) && (
+        <ContratoCondominio condominio={condominio} somenteLeitura={!podeEditarCondominio(user.role)} />
+      )}
+      {podeEditarCondominio(user.role) && <AcessoSindico condominio={condominio} contatos={contatosData?.data ?? []} />}
 
       {/* Tab bar */}
       <div className="flex gap-2 mb-6 border-b border-amx-line pb-4">
-        {(['reservatorios', 'contatos', 'equipamentos'] as TabType[]).map(
+        {(['reservatorios', 'contatos', 'equipamentos'] as TabType[]).filter((tab) => tab !== 'reservatorios' || podeVerReservatorios(user.role)).map(
           (tab) => (
             <button
               key={tab}
@@ -569,7 +581,7 @@ function CondominioDetailContent() {
         />
       )}
 
-      {user.role === 'admin' && (
+      {podeEditarCondominio(user.role) && (
         <div className="mt-10 rounded-lg border border-amx-red/40 bg-amx-red/5 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div>
             <p className="text-[13px] font-semibold text-white">Apagar condomínio</p>
@@ -777,7 +789,7 @@ function ReservatoriosTab({
   onCreateClick,
   onEditClick,
 }: TabPanelProps<Reservatorio>) {
-  const canEdit = canEditReservatorio(user.role);
+  const canEdit = podeEditarCondominio(user.role);
 
   if (loading) {
     return (
@@ -862,7 +874,7 @@ function ContatosTab({
   onCreateClick,
   onEditClick,
 }: TabPanelProps<Contato>) {
-  const canEdit = canEditContato(user.role);
+  const canEdit = podeEditarContato(user.role);
 
   if (loading) {
     return (
@@ -941,8 +953,8 @@ function EquipamentosTab({
   onEditClick,
   onDeleteClick,
 }: TabPanelProps<Equipamento> & { onDeleteClick?: (item: Equipamento) => void }) {
-  const canEdit = canEditEquipamento(user.role);
-  const canDelete = user.role === 'admin';
+  const canEdit = podeEditarEquipamento(user.role);
+  const canDelete = podeEditarCondominio(user.role);
 
   if (loading) {
     return (

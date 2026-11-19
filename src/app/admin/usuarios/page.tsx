@@ -36,8 +36,9 @@ const ESPECIALIDADE_LABEL: Record<Especialidade | '', string> = {
 const TELEGRAM_HINT =
   'Para receber aviso de corretiva. A pessoa abre o bot de avisos da Amotex no Telegram e envia /start; o bot responde com o número.';
 
-const PAPEL_TONE: Record<UserRole, 'red' | 'info' | 'navy'> = {
+const PAPEL_TONE: Record<UserRole, 'red' | 'info' | 'navy' | 'neutral'> = {
   admin: 'red',
+  secretaria: 'neutral',
   tecnico: 'info',
   sindico: 'navy',
 };
@@ -241,7 +242,7 @@ function UsuariosContent() {
   if (denied || (user && user.role !== 'admin')) {
     return (
       <div className="flex-1 flex items-center justify-center px-4">
-        <EmptyState title="Acesso negado" description="Só administradores gerenciam usuários." />
+        <EmptyState title="Acesso negado" description="Só o gestor gerencia usuários." />
       </div>
     );
   }

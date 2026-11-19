@@ -92,7 +92,7 @@ async function runSchemaMigration(): Promise<void> {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       nome TEXT NOT NULL,
       login TEXT NOT NULL UNIQUE,
-      papel TEXT NOT NULL CHECK (papel IN ('admin', 'tecnico', 'sindico')),
+      papel TEXT NOT NULL CHECK (papel IN ('admin', 'secretaria', 'tecnico', 'sindico')),
       condominio_id UUID REFERENCES condominio(id) ON DELETE SET NULL,
       senha_hash TEXT NOT NULL,
       ativo BOOLEAN NOT NULL DEFAULT TRUE,
@@ -204,6 +204,30 @@ async function runSchemaMigration(): Promise<void> {
     ALTER TABLE usuario ADD COLUMN IF NOT EXISTS especialidade TEXT CHECK (especialidade IN ('corretiva', 'preventiva'));
     ALTER TABLE usuario ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;
     ALTER TABLE usuario ADD COLUMN IF NOT EXISTS de_plantao BOOLEAN NOT NULL DEFAULT false;
+    -- Papel Secretária (19/11): o CHECK antigo só aceita admin/tecnico/sindico.
+    -- Não depende do nome do constraint (varia conforme o banco foi criado):
+    -- se nenhum CHECK de papel já cita 'secretaria', derruba todo CHECK que
+    -- cita papel e recria um só. Idempotente.
+    DO $$
+    DECLARE c RECORD;
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'usuario'::regclass AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%papel%'
+          AND pg_get_constraintdef(oid) ILIKE '%secretaria%'
+      ) THEN
+        FOR c IN
+          SELECT conname FROM pg_constraint
+          WHERE conrelid = 'usuario'::regclass AND contype = 'c'
+            AND pg_get_constraintdef(oid) ILIKE '%papel%'
+        LOOP
+          EXECUTE format('ALTER TABLE usuario DROP CONSTRAINT %I', c.conname);
+        END LOOP;
+        ALTER TABLE usuario ADD CONSTRAINT usuario_papel_check
+          CHECK (papel IN ('admin', 'secretaria', 'tecnico', 'sindico'));
+      END IF;
+    END $$;
     ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS categoria TEXT;
     ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS identificacao TEXT;
     ALTER TABLE equipamento ADD COLUMN IF NOT EXISTS foto_url TEXT;

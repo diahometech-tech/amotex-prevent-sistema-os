@@ -4,8 +4,8 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import type { NextRequest } from 'next/server';
-import type { UserRole } from './db';
-import { isAdmin, isScopedToOwnCondominio as isSindico } from './roles';
+import type { Condominio, OS, UserRole } from './db';
+import { isAdmin, isEscritorio, isScopedToOwnCondominio as isSindico, tecnicoVeOS } from './roles';
 
 export const SESSION_COOKIE = 'amotex_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h (igual ao maxAge do cookie)
@@ -93,11 +93,67 @@ export function isScopedToOwnCondominio(role?: UserRole): boolean {
 // técnico acessam qualquer um; síndico só o próprio (busca no banco, nunca
 // confia num condominio_id vindo do client). Usar em toda rota aninhada sob
 // /api/condominios/[id]/* e /api/os que filtre por condomínio.
+//
+// Por papel: admin e secretária acessam qualquer um; síndico só o próprio;
+// técnico só os condomínios onde há alguma OS que ele vê (as dele ou uma
+// corretiva sem técnico) — ver tecnicoVeOS em src/lib/roles.ts. Qualquer
+// outro valor de papel (cookie antigo, papel desconhecido) é recusado.
 export async function canAccessCondominio(session: SessionUser, condominioId: string): Promise<boolean> {
-  if (session.role !== 'sindico') return true;
+  if (isEscritorio(session.role)) return true;
   const { Database } = await import('./db');
-  const user = await Database.getUserById(session.id);
-  return user?.condominio_id === condominioId;
+  if (session.role === 'sindico') {
+    const user = await Database.getUserById(session.id);
+    return !!condominioId && user?.condominio_id === condominioId;
+  }
+  if (session.role === 'tecnico') {
+    const oss = await Database.getOSsByCondominio(condominioId);
+    return oss.some((os) => tecnicoVeOS(session.id, os));
+  }
+  return false;
+}
+
+// Confere se a sessão pode ver/abrir uma OS específica (GET /api/os/[id] e
+// rotas aninhadas, fotos em /uploads/os/...). Mesma regra da lista.
+export async function podeVerOS(
+  session: SessionUser,
+  os: Pick<OS, 'condominio_id' | 'tecnico_id' | 'tipo' | 'status'>
+): Promise<boolean> {
+  if (isEscritorio(session.role)) return true;
+  if (session.role === 'tecnico') return tecnicoVeOS(session.id, os);
+  if (session.role === 'sindico') return canAccessCondominio(session, os.condominio_id);
+  return false;
+}
+
+// Filtra uma lista de OS para o que a sessão pode ver (GET /api/os).
+export async function filtrarOSVisiveis<T extends Pick<OS, 'condominio_id' | 'tecnico_id' | 'tipo' | 'status'>>(
+  session: SessionUser,
+  oss: T[]
+): Promise<T[]> {
+  if (isEscritorio(session.role)) return oss;
+  if (session.role === 'tecnico') return oss.filter((os) => tecnicoVeOS(session.id, os));
+  if (session.role === 'sindico') {
+    const { Database } = await import('./db');
+    const user = await Database.getUserById(session.id);
+    if (!user?.condominio_id) return [];
+    return oss.filter((os) => os.condominio_id === user.condominio_id);
+  }
+  return [];
+}
+
+// Campos do condomínio que são de contrato/financeiro — só o escritório
+// (gestor e secretária) recebe. Técnico e síndico recebem o cadastro sem eles
+// (antes, GET /api/condominios[/id] e /api/os/[id] entregavam valor, CNPJ e
+// e-mails de cobrança a qualquer sessão autorizada no condomínio).
+const CAMPOS_CONTRATO: (keyof Condominio)[] = [
+  'cnpj', 'razao_social', 'emails_cobranca', 'valor_mensal_centavos', 'dia_vencimento',
+  'contrato_inicio', 'reajuste_indice', 'reajuste_percentual_fixo', 'responsavel_email',
+  'observacoes', 'desativado_em',
+];
+export function condominioParaPapel<T extends Partial<Condominio>>(role: UserRole, c: T): T {
+  if (isEscritorio(role)) return c;
+  const copia: Partial<Condominio> = { ...c };
+  for (const k of CAMPOS_CONTRATO) delete copia[k];
+  return copia as T;
 }
 
 // ===== Senhas (bcrypt) =====

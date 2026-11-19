@@ -8,7 +8,7 @@ import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { Field, Input, Select, Textarea } from '@/components/ui/Form';
 import { OSModal } from '@/components/os/OSModal';
-import { canManageOS } from '@/lib/permissions';
+import { podeAbrirOS } from '@/lib/roles';
 import { computeOsPrioridade, OS_STATUS_LABELS, type OsPrioridade } from '@/lib/os-priority';
 import { formatarDataCurta, hojeISO } from '@/lib/os-agenda';
 import { slaChegada } from '@/lib/os-sla';
@@ -195,7 +195,7 @@ function OsListContent() {
                 className="bg-transparent outline-none text-[13px] text-white placeholder:text-amx-muted flex-1 min-w-0"
               />
             </div>
-            {user && canManageOS(user.role) && (
+            {user && podeAbrirOS(user.role) && (
               <Button onClick={() => setShowCreate(true)}>+ Nova OS</Button>
             )}
           </div>
@@ -266,7 +266,7 @@ function OsListContent() {
           title="Nenhuma OS encontrada"
           description="Ajuste os filtros acima ou crie uma nova ordem de serviço."
           action={
-            user && canManageOS(user.role) ? (
+            user && podeAbrirOS(user.role) ? (
               <Button onClick={() => setShowCreate(true)}>+ Nova OS</Button>
             ) : undefined
           }
@@ -452,6 +452,7 @@ function NovaOsForm({
   onCreated: (os: OS, aviso?: ResultadoAviso) => void;
 }) {
   const user = useAmxUser();
+  const ehTecnico = user?.role === 'tecnico';
   const [condominioId, setCondominioId] = useState(condominios[0]?.id || '');
   const [tipo, setTipo] = useState<OsTipo>('preventiva');
   // Vazio = deixa o backend aplicar o padrão por tipo (corretiva nasce alta,
@@ -515,6 +516,20 @@ function NovaOsForm({
   return (
     <>
       <ModalHeader title="Nova Ordem de Serviço" onClose={onClose} />
+      {ehTecnico && condominios.length === 0 ? (
+        // O técnico só abre OS em condomínio onde já tem OS; sem nenhum, o
+        // seletor ficaria vazio sem explicação.
+        <div className="p-5 flex flex-col gap-4">
+          <p className="text-[13px] text-amx-muted">
+            Você ainda não tem OS em nenhum condomínio. Peça ao escritório para abrir a OS.
+          </p>
+          <div className="flex justify-end">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Fechar
+            </Button>
+          </div>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
         <Field label="Condomínio" required>
           <Select value={condominioId} onChange={(e) => setCondominioId(e.target.value)} required>
@@ -534,7 +549,7 @@ function NovaOsForm({
         </Field>
         {tipo === 'corretiva' ? (
           <p className="text-xs font-semibold text-amx-red-hover">
-            Corretiva é sempre urgente: o técnico tem até 3h para chegar. Técnicos de corretiva e gestores recebem aviso no Telegram.
+            Corretiva é sempre urgente: o técnico tem até 3h para chegar. Técnicos de corretiva, gestores e secretária recebem aviso no Telegram.
           </p>
         ) : (
           <Field label="Prioridade" hint="Preventiva atrasada 48h ou mais além do dia da visita sobe para Alta.">
@@ -571,16 +586,20 @@ function NovaOsForm({
         <Field label="Data da visita" hint="Define em qual dia a OS aparece na rota do técnico">
           <Input id="nova-os-data" type="date" value={dataProgramada} onChange={(e) => setDataProgramada(e.target.value)} />
         </Field>
-        <Field label="Técnico responsável" hint="Opcional — pode ser atribuído depois">
-          <Select value={tecnicoId} onChange={(e) => setTecnicoId(e.target.value)}>
-            <option value="">Não atribuído</option>
-            {tecnicos.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.nome}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {/* Técnico abre a OS já como responsável (tecnicoId inicial): se escolhesse
+            outro colega, ou ninguém, a OS sumiria da lista dele. */}
+        {!ehTecnico && (
+          <Field label="Técnico responsável" hint="Opcional — pode ser atribuído depois">
+            <Select value={tecnicoId} onChange={(e) => setTecnicoId(e.target.value)}>
+              <option value="">Não atribuído</option>
+              {tecnicos.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <Field label="Observação" hint="Opcional — contexto inicial do serviço">
           <Textarea rows={3} value={observacao} onChange={(e) => setObservacao(e.target.value)} />
         </Field>
@@ -594,6 +613,7 @@ function NovaOsForm({
           </Button>
         </div>
       </form>
+      )}
     </>
   );
 }

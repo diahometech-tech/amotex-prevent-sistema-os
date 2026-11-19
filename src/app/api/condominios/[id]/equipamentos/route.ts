@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest, canAccessCondominio } from '@/lib/auth';
-import { canEditEquipamento } from '@/lib/permissions';
+import { podeEditarEquipamento } from '@/lib/roles';
 import { validarEquipamento } from '@/lib/equipamento-campos';
 import { saveFotoEquipamentoDataUrl } from '@/lib/uploads';
 
@@ -23,8 +23,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function POST(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || !canEditEquipamento(session.role)) {
+  if (!session || !podeEditarEquipamento(session.role)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+  }
+  if (!(await canAccessCondominio(session, id))) {
+    return NextResponse.json({ error: 'Você não tem acesso a este condomínio.' }, { status: 403 });
   }
   try {
     if (!(await Database.getCondominioById(id))) {

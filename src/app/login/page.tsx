@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { telaInicial } from '@/lib/roles';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -33,10 +34,10 @@ export default function LoginPage() {
         body: JSON.stringify({ login: username, password }),
       });
       if (res.ok) {
-        // admin, técnico e síndico caem no mesmo painel — o que cada um
-        // enxerga dentro dele é decidido por papel (ver src/lib/permissions.ts
-        // e isScopedToOwnCondominio em src/lib/auth.ts para o síndico).
-        window.location.href = '/';
+        // Cada papel abre na própria tela inicial (síndico cai direto no
+        // Painel do Condomínio; os demais, em Ordens de Serviço).
+        const data = await res.json().catch(() => ({}));
+        window.location.href = telaInicial(data?.user?.role);
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || 'Falha no login.');

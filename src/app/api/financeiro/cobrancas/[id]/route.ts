@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, type Cobranca, type FormaPagamento } from '@/lib/db';
-import { sessaoFinanceiro } from '@/lib/financeiro/acesso';
+import { sessaoCobrancas } from '@/lib/financeiro/acesso';
+import { podeAcaoCobranca } from '@/lib/roles';
 import { FORMAS_PAGAMENTO, nomeComprovante } from '@/lib/financeiro/cobranca';
 import { parseReais } from '@/lib/financeiro/dinheiro';
 import { normalizarDataProgramada } from '@/lib/os-agenda';
@@ -19,7 +20,7 @@ const FORMAS = new Set<string>(FORMAS_PAGAMENTO.map(([v]) => v));
 //   reabrir               — volta pra pendente e limpa pagamento (lançou errado)
 //   editar                — { valor_previsto?, vencimento?, observacao? }
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const session = sessaoFinanceiro(request);
+  const session = sessaoCobrancas(request);
   if (!session) return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   const { id } = await context.params;
   const atual = await Database.getCobrancaById(id);
@@ -27,6 +28,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   try {
     const body = await request.json();
+    // Secretária só faz a rotina; isentar, reabrir e editar são do gestor.
+    if (!podeAcaoCobranca(session.role, String(body.acao))) {
+      return NextResponse.json({ error: 'Ação permitida só para o gestor.' }, { status: 403 });
+    }
     const updates: Partial<Cobranca> = {};
     const comprovante = async () => {
       if (typeof body.comprovante !== 'string' || !body.comprovante) return null;
@@ -42,6 +47,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         Object.assign(updates, { status: 'enviada', enviada_em: new Date().toISOString() });
         break;
       case 'registrar_pagamento': {
+        // Cobrança encerrada só muda pelo gestor via reabrir/editar; sem isso a
+        // secretária desfaria isenção ou reescreveria valor de pagamento já lançado.
+        if (atual.status === 'paga' || atual.status === 'isenta') throw new ErroUsuario('Cobrança já encerrada.');
         const pago_em = normalizarDataProgramada(body.pago_em);
         if (!pago_em) throw new ErroUsuario('Informe a data do pagamento.');
         const valor = parseReais(body.valor_recebido);
@@ -55,6 +63,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         break;
       }
       case 'anexar_comprovante': {
+        // A tela da secretária só oferece o comprovante em cobrança paga.
+        if (session.role !== 'admin' && atual.status !== 'paga') throw new ErroUsuario('Só é possível anexar comprovante em cobrança paga.');
         const url = await comprovante();
         if (!url) throw new ErroUsuario('Selecione o arquivo do comprovante.');
         updates.comprovante_url = url;

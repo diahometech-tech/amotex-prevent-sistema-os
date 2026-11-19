@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest, canAccessCondominio } from '@/lib/auth';
+import { podeEditarCondominio, podeVerReservatorios } from '@/lib/roles';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
   if (!session) return NextResponse.json({ error: 'Sessão expirada.' }, { status: 401 });
-  if (!(await canAccessCondominio(session, id))) {
+  if (!podeVerReservatorios(session.role) || !(await canAccessCondominio(session, id))) {
     return NextResponse.json({ error: 'Você não tem acesso a este condomínio.' }, { status: 403 });
   }
   const reservatorios = await Database.getReservatoriosByCondominio(id);
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function POST(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || session.role !== 'admin') {
+  if (!session || !podeEditarCondominio(session.role)) {
     return NextResponse.json({ error: 'Apenas administradores podem cadastrar reservatórios.' }, { status: 403 });
   }
   try {

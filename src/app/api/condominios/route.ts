@@ -1,26 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { getSessionFromRequest, isScopedToOwnCondominio } from '@/lib/auth';
+import { condominioParaPapel, filtrarOSVisiveis, getSessionFromRequest, isScopedToOwnCondominio } from '@/lib/auth';
+import { isEscritorio, podeEditarCondominio } from '@/lib/roles';
 import { validarCadastro } from '@/lib/financeiro/cadastro';
 
-// GET /api/condominios — lista condomínios. Síndico só vê o próprio.
+// GET /api/condominios — lista condomínios. Escritório vê todos; síndico só o
+// próprio; técnico só os das OS que ele vê (calculado em lote: uma leitura de
+// OS, não uma consulta por condomínio). Campos de contrato só pro escritório.
 export async function GET(request: NextRequest) {
   const session = getSessionFromRequest(request);
   if (!session) return NextResponse.json({ error: 'Sessão expirada.' }, { status: 401 });
 
   const all = await Database.getCondominios();
+  let visiveis = all;
   if (isScopedToOwnCondominio(session.role)) {
     const user = await Database.getUserById(session.id);
-    const own = all.filter((c) => c.id === user?.condominio_id);
-    return NextResponse.json({ condominios: own });
+    visiveis = all.filter((c) => c.id === user?.condominio_id);
+  } else if (!isEscritorio(session.role)) {
+    if (session.role !== 'tecnico') return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
+    const oss = await filtrarOSVisiveis(session, await Database.getOSs());
+    const ids = new Set(oss.map((o) => o.condominio_id));
+    visiveis = all.filter((c) => ids.has(c.id));
   }
-  return NextResponse.json({ condominios: all });
+  return NextResponse.json({ condominios: visiveis.map((c) => condominioParaPapel(session.role, c)) });
 }
 
 // POST /api/condominios — cria condomínio. Só admin.
 export async function POST(request: NextRequest) {
   const session = getSessionFromRequest(request);
-  if (!session || session.role !== 'admin') {
+  if (!session || !podeEditarCondominio(session.role)) {
     return NextResponse.json({ error: 'Apenas administradores podem cadastrar condomínios.' }, { status: 403 });
   }
   try {

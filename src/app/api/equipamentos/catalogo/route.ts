@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/auth';
+import { podeEditarEquipamento } from '@/lib/roles';
 
 // GET /api/equipamentos/catalogo — combinações únicas de tipo/modelo/potência
 // já cadastradas em QUALQUER condomínio, pra reaproveitar no cadastro em vez
@@ -10,7 +11,7 @@ import { getSessionFromRequest } from '@/lib/auth';
 // (admin ou técnico); não expõe condominio_id, só o formato do equipamento.
 export async function GET(request: NextRequest) {
   const session = getSessionFromRequest(request);
-  if (!session || (session.role !== 'admin' && session.role !== 'tecnico')) {
+  if (!session || !podeEditarEquipamento(session.role)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
   const equipamentos = await Database.getEquipamentos();

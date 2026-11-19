@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { getSessionFromRequest, canAccessCondominio } from '@/lib/auth';
+import { getSessionFromRequest, podeVerOS } from '@/lib/auth';
+import { podeOperarCampo } from '@/lib/roles';
 import { saveOsFotoDataUrl } from '@/lib/uploads';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 // POST /api/os/[id]/fotos  body: { momento: 'antes'|'depois', data: dataURL, client_id? }
-// Admin ou técnico. Cada foto é um arquivo próprio — não sobrescreve as
+// Gestor ou técnico (campo), só nas OS que vê. Cada foto é um arquivo próprio — não sobrescreve as
 // anteriores (uma OS tem várias fotos de antes/depois).
 // client_id vem da fila de envio do celular (src/lib/fila-envio.ts): com sinal
 // ruim, a foto pode chegar e a resposta se perder; o reenvio com o mesmo id
@@ -15,13 +16,13 @@ const CLIENT_ID = /^[A-Za-z0-9-]{8,64}$/;
 export async function POST(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || (session.role !== 'admin' && session.role !== 'tecnico')) {
+  if (!session || !podeOperarCampo(session.role)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
   const os = await Database.getOSById(id);
   if (!os) return NextResponse.json({ error: 'OS não encontrada.' }, { status: 404 });
-  if (!(await canAccessCondominio(session, os.condominio_id))) {
-    return NextResponse.json({ error: 'Você não tem acesso a esta OS.' }, { status: 403 });
+  if (!(await podeVerOS(session, os))) {
+    return NextResponse.json({ error: 'Sem acesso a esta OS.' }, { status: 403 });
   }
   try {
     const { momento, data, client_id, equipamento_id } = await request.json();

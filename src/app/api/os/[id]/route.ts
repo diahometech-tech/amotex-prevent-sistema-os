@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, FinalizacaoBloqueadaError } from '@/lib/db';
 import { normalizarDataProgramada } from '@/lib/os-agenda';
-import { getSessionFromRequest, getClientIp, canAccessCondominio } from '@/lib/auth';
+import { getSessionFromRequest, getClientIp, podeVerOS, condominioParaPapel } from '@/lib/auth';
+import { isScopedToOwnCondominio, podeAgendarOS, podeApagarOS, podeCancelarOS, podeOperarCampo } from '@/lib/roles';
 import { saveAssinaturaDataUrl, saveOsPdfBuffer } from '@/lib/uploads';
 import { generateOsPdf } from '@/lib/os-pdf';
 import { notifyN8n } from '@/lib/notify';
@@ -17,8 +18,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const os = await Database.getOSById(id);
   if (!os) return NextResponse.json({ error: 'OS não encontrada.' }, { status: 404 });
-  if (!(await canAccessCondominio(session, os.condominio_id))) {
-    return NextResponse.json({ error: 'Você não tem acesso a esta OS.' }, { status: 403 });
+  if (!(await podeVerOS(session, os))) {
+    return NextResponse.json({ error: 'Sem acesso a esta OS.' }, { status: 403 });
   }
 
   const [checklist, fotos, condominio, logs, vinculos] = await Promise.all([
@@ -26,32 +27,46 @@ export async function GET(request: NextRequest, context: RouteContext) {
     Database.getFotosByOS(id),
     Database.getCondominioById(os.condominio_id),
     Database.getAuditLogsByEntidade('os', id),
-    vinculosDaOS(os),
+    vinculosDaOS(os, session),
   ]);
-  return NextResponse.json({ os, checklist, fotos, condominio, logs, vinculos });
+  // Contrato do condomínio só pro escritório; auditoria (logs) não vai pro
+  // síndico — ele vê a OS pelo Painel, não o histórico interno.
+  return NextResponse.json({
+    os, checklist, fotos,
+    condominio: condominio ? condominioParaPapel(session.role, condominio) : condominio,
+    logs: isScopedToOwnCondominio(session.role) ? [] : logs,
+    vinculos,
+  });
 }
 
 // PATCH /api/os/[id] — atualiza campos, registra assinatura, e finaliza
 // (aplicando a trava de qualidade: não finaliza com checklist obrigatório
-// pendente — ver Database.finalizarOS). Admin ou técnico.
+// pendente — ver Database.finalizarOS). Cada campo é checado por papel:
+// campo (chegada, status, assinaturas, finalizar) = gestor e técnico; agenda
+// (técnico, data, prioridade, chamado) = escritório e técnico; cancelar =
+// escritório. Sempre só nas OS que a sessão vê.
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || (session.role !== 'admin' && session.role !== 'tecnico')) {
+  if (!session) return NextResponse.json({ error: 'Sessão expirada.' }, { status: 401 });
+  if (!podeAgendarOS(session.role) && !podeOperarCampo(session.role) && !podeCancelarOS(session.role)) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
   const original = await Database.getOSById(id);
   if (!original) return NextResponse.json({ error: 'OS não encontrada.' }, { status: 404 });
+  if (!(await podeVerOS(session, original))) {
+    return NextResponse.json({ error: 'Sem acesso a esta OS.' }, { status: 403 });
+  }
 
   try {
     const body = await request.json();
     const { finalizar, cancelar, motivo, assinatura_zelador, assinatura_tecnico, ...rest } = body;
 
-    // Cancelar: só gestor, com motivo. Passa por Database.cancelarOS (nota na
+    // Cancelar: gestor e secretária, com motivo. Passa por Database.cancelarOS (nota na
     // observação + auditoria), nunca por um PATCH solto de status.
     if (cancelar) {
-      if (session.role !== 'admin') {
-        return NextResponse.json({ error: 'Só gestores podem cancelar uma OS.' }, { status: 403 });
+      if (!podeCancelarOS(session.role)) {
+        return NextResponse.json({ error: 'Só o escritório pode cancelar uma OS.' }, { status: 403 });
       }
       const texto = typeof motivo === 'string' ? motivo.trim() : '';
       if (texto.length < 3) return NextResponse.json({ error: 'Informe o motivo do cancelamento.' }, { status: 400 });
@@ -62,6 +77,32 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
     if (rest.status === 'cancelada') {
       return NextResponse.json({ error: 'Use "Cancelar OS" para cancelar.' }, { status: 400 });
+    }
+    // Permissão por campo: se o corpo mistura campo e agenda, cada um é
+    // checado — qualquer campo não permitido recusa o pedido inteiro.
+    const camposDeCampo = ['status', 'entrada_em', 'saida_em'].filter((f) => rest[f] !== undefined);
+    if (finalizar || typeof assinatura_zelador === 'string' || typeof assinatura_tecnico === 'string') camposDeCampo.push('finalizar/assinatura');
+    if (camposDeCampo.length > 0 && !podeOperarCampo(session.role)) {
+      return NextResponse.json(
+        { error: 'O trabalho de campo (chegada, andamento, assinaturas e finalizar) é do técnico ou do gestor.' },
+        { status: 403 }
+      );
+    }
+    // Técnico só trabalha em campo na OS que assumiu: corretiva sem técnico
+    // ainda é só "visível" pra ele — sem assumir, a OS ficaria sem responsável
+    // e sumiria do acesso dele ao finalizar.
+    if (camposDeCampo.length > 0 && session.role === 'tecnico' && original.tecnico_id !== session.id) {
+      return NextResponse.json({ error: 'Assuma a OS antes de iniciar o atendimento.' }, { status: 403 });
+    }
+    // Técnico só atribui a si mesmo (assumir); passar a OS adiante é do escritório.
+    if (session.role === 'tecnico' && rest.tecnico_id !== undefined && rest.tecnico_id !== session.id) {
+      return NextResponse.json({ error: 'Só o escritório pode trocar o técnico da OS.' }, { status: 403 });
+    }
+    const camposDeAgenda = [
+      'tecnico_id', 'data_programada', 'prioridade', 'observacao', 'solicitante_nome', 'solicitante_telefone', 'descricao_problema',
+    ].filter((f) => rest[f] !== undefined);
+    if (camposDeAgenda.length > 0 && !podeAgendarOS(session.role)) {
+      return NextResponse.json({ error: 'Você não pode alterar a agenda ou os dados desta OS.' }, { status: 403 });
     }
     const updates: Record<string, unknown> = {};
     for (const f of [
@@ -176,7 +217,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || session.role !== 'admin') {
+  if (!session || !podeApagarOS(session.role)) {
     return NextResponse.json({ error: 'Só gestores podem apagar uma OS.' }, { status: 403 });
   }
   try {
