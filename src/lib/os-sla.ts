@@ -1,10 +1,10 @@
 // Prazo de atendimento da corretiva (regra da Amotex, 23/10): toda corretiva
 // é urgente e o técnico tem que CHEGAR ao condomínio em até 3 horas da
-// abertura. A chegada é `os.entrada_em` (gravada em "Marcar Visitado" ou
-// "Iniciar atendimento"). O reparo em si pode passar das 3h — o prazo é de
+// abertura. A chegada é `os.entrada_em` (gravada em "Cheguei no local", na
+// rota do dia ou na OS). O reparo em si pode passar das 3h — o prazo é de
 // chegada, não de conclusão. Função pura, sem I/O.
 import type { OS } from './db';
-import { FUSO_OPERACAO } from './os-agenda';
+import { FUSO_OPERACAO, formatarDataCurta, hojeISO } from './os-agenda';
 
 export const PRAZO_CHEGADA_CORRETIVA_HORAS = 3;
 const PRAZO_MS = PRAZO_CHEGADA_CORRETIVA_HORAS * 3_600_000;
@@ -31,6 +31,13 @@ function fmtMin(min: number): string {
 
 export function fmtHora(ms: number): string {
   return new Intl.DateTimeFormat('pt-BR', { timeZone: FUSO_OPERACAO, hour: '2-digit', minute: '2-digit' }).format(ms);
+}
+
+/** "Chegou às 16:40"; se não foi hoje, traz o dia: "Chegou em qua 19/11 às 16:40". */
+export function textoChegada(entradaEm: string, agora: Date = new Date()): string {
+  const t = Date.parse(entradaEm);
+  const dia = hojeISO(new Date(t));
+  return dia === hojeISO(agora) ? `Chegou às ${fmtHora(t)}` : `Chegou em ${formatarDataCurta(dia)} às ${fmtHora(t)}`;
 }
 
 /** SLA de chegada da corretiva; `null` pra preventiva ou OS cancelada. */

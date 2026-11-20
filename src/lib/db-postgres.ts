@@ -197,6 +197,8 @@ async function runSchemaMigration(): Promise<void> {
     -- Migrações aditivas (banco de produção já existe — CREATE TABLE IF NOT
     -- EXISTS não acrescenta coluna nova em tabela antiga).
     ALTER TABLE os ADD COLUMN IF NOT EXISTS data_programada DATE;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS assinatura_zelador_nome TEXT;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS assinatura_zelador_documento TEXT;
     ALTER TABLE os ADD COLUMN IF NOT EXISTS solicitante_nome TEXT;
     ALTER TABLE os ADD COLUMN IF NOT EXISTS solicitante_telefone TEXT;
     ALTER TABLE os ADD COLUMN IF NOT EXISTS descricao_problema TEXT;
@@ -633,6 +635,7 @@ export const pgBackend: DbBackend = {
     const allowed = [
       'status', 'prioridade', 'tecnico_id', 'entrada_em', 'saida_em', 'observacao',
       'assinatura_zelador_url', 'assinatura_tecnico_url', 'pdf_url',
+      'assinatura_zelador_nome', 'assinatura_zelador_documento',
       'data_programada', 'solicitante_nome', 'solicitante_telefone', 'descricao_problema',
     ];
     const { sets, vals } = buildSet(allowed, updates);

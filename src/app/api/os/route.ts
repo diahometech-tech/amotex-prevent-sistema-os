@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Data da visita inválida.' }, { status: 400 });
     }
     if (!data_programada && tipo === 'corretiva') data_programada = hojeISO();
+    // Agendar o dia é do escritório: a OS que o técnico abre é sempre de hoje.
+    if (isTecnico(session.role)) data_programada = hojeISO();
 
     // Corretiva aberta de dentro da preventiva (pedido 10): liga à preventiva
     // de origem e, se informado, ao equipamento com defeito. Os dois têm que

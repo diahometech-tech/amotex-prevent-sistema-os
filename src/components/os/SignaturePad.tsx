@@ -14,9 +14,11 @@ interface SignaturePadProps {
   busy?: boolean;
   /** Assinatura guardada no aparelho, ainda não enviada (fila offline). */
   pendente?: boolean;
+  /** Quadro liberado para desenhar, mas o Confirmar fica travado e mostra este motivo (ex.: falta o nome). */
+  bloqueioConfirmar?: string;
 }
 
-export function SignaturePad({ label, value, onSave, disabled, busy, pendente }: SignaturePadProps) {
+export function SignaturePad({ label, value, onSave, disabled, busy, pendente, bloqueioConfirmar }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -166,7 +168,7 @@ export function SignaturePad({ label, value, onSave, disabled, busy, pendente }:
           variant="primary"
           size="sm"
           onClick={handleSave}
-          disabled={!hasDrawn || busy}
+          disabled={!hasDrawn || busy || !!bloqueioConfirmar}
         >
           {isSaving || busy ? (
             <>
@@ -178,6 +180,7 @@ export function SignaturePad({ label, value, onSave, disabled, busy, pendente }:
           )}
         </Button>
       </div>
+      {bloqueioConfirmar && <p className="text-[11px] text-amx-muted mt-2">{bloqueioConfirmar}</p>}
     </div>
   );
 }

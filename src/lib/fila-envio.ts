@@ -20,6 +20,8 @@
 // - Foto leva client_id: se o upload chegou e a resposta se perdeu, o reenvio
 //   não duplica (ver src/app/api/os/[id]/fotos/route.ts).
 // - Assinatura: só vale a última de cada papel por OS (id fixo, sobrescreve).
+// - Chegada ("Cheguei no local") sem sinal: guarda a hora do toque; o servidor
+//   só aceita essa hora se a OS ainda não tem chegada.
 //
 // Se o IndexedDB não estiver disponível (aba anônima de alguns navegadores),
 // a fila funciona só em memória: ainda reenvia enquanto a aba estiver aberta.
@@ -44,16 +46,34 @@ export type ItemFila =
       os_id: string;
       papel: 'tecnico' | 'zelador';
       data: string;
+      // Só na assinatura do zelador: quem assinou (viaja junto, mesmo offline).
+      nome?: string;
+      documento?: string;
+      criado_em: string;
+      tentativas: number;
+      erro?: string;
+      recusado?: boolean;
+    }
+  | {
+      id: string;
+      tipo: 'chegada';
+      os_id: string;
+      // Hora do aparelho no toque em "Cheguei no local" (o prazo de 3h da
+      // corretiva conta daqui, mesmo que o envio demore).
+      entrada_em: string;
       criado_em: string;
       tentativas: number;
       erro?: string;
       recusado?: boolean;
     };
 
+export type ItemAssinatura = Extract<ItemFila, { tipo: 'assinatura' }>;
+
 export type EventoFila =
   | { tipo: 'mudou' }
   | { tipo: 'foto_enviada'; item: ItemFila; foto: Foto }
   | { tipo: 'assinatura_enviada'; item: ItemFila; os: OS }
+  | { tipo: 'chegada_enviada'; item: ItemFila; os: OS }
   | { tipo: 'sessao_expirada' };
 
 const DB_NOME = 'amotex-fila-envio';
@@ -171,7 +191,8 @@ function novoId(): string {
 
 type NovoItem =
   | { tipo: 'foto'; os_id: string; momento: 'antes' | 'depois'; equipamento_id?: string; data: string }
-  | { tipo: 'assinatura'; os_id: string; papel: 'tecnico' | 'zelador'; data: string };
+  | { tipo: 'assinatura'; os_id: string; papel: 'tecnico' | 'zelador'; data: string; nome?: string; documento?: string }
+  | { tipo: 'chegada'; os_id: string; entrada_em: string };
 
 /** Guarda no aparelho e já tenta mandar. Devolve o item gravado. */
 export async function enfileirar(novo: NovoItem): Promise<ItemFila> {
@@ -179,8 +200,10 @@ export async function enfileirar(novo: NovoItem): Promise<ItemFila> {
   const item: ItemFila =
     novo.tipo === 'foto'
       ? { ...novo, ...base, id: novoId() }
-      : // Assinatura: id fixo por OS + papel — a nova substitui a que ainda não subiu.
-        { ...novo, ...base, id: `assinatura-${novo.os_id}-${novo.papel}` };
+      : novo.tipo === 'chegada'
+        ? { ...novo, ...base, id: `chegada-${novo.os_id}` }
+        : // Assinatura: id fixo por OS + papel — a nova substitui a que ainda não subiu.
+          { ...novo, ...base, id: `assinatura-${novo.os_id}-${novo.papel}` };
   await gravar(item);
   emitir({ tipo: 'mudou' });
   void processarFila();
@@ -213,7 +236,15 @@ async function enviar(item: ItemFila): Promise<Resultado> {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(
-              item.papel === 'tecnico' ? { assinatura_tecnico: item.data } : { assinatura_zelador: item.data }
+              item.tipo === 'chegada'
+                ? { entrada_em: item.entrada_em, status: 'em_andamento' }
+                : item.papel === 'tecnico'
+                  ? { assinatura_tecnico: item.data }
+                  : {
+                      assinatura_zelador: item.data,
+                      ...(item.nome ? { assinatura_zelador_nome: item.nome } : {}),
+                      ...(item.documento ? { assinatura_zelador_documento: item.documento } : {}),
+                    }
             ),
           });
   } catch {
@@ -225,6 +256,7 @@ async function enviar(item: ItemFila): Promise<Resultado> {
     if (await aindaIgual(item)) await apagar(item.id);
     if (item.tipo === 'foto' && json.foto) emitir({ tipo: 'foto_enviada', item, foto: json.foto });
     if (item.tipo === 'assinatura' && json.os) emitir({ tipo: 'assinatura_enviada', item, os: json.os });
+    if (item.tipo === 'chegada' && json.os) emitir({ tipo: 'chegada_enviada', item, os: json.os });
     return 'ok';
   }
   if (res.status === 401) {

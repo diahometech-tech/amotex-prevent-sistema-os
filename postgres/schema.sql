@@ -116,6 +116,8 @@ CREATE TABLE IF NOT EXISTS os (
   os_origem_id UUID REFERENCES os(id) ON DELETE SET NULL, -- corretiva aberta de dentro da preventiva
   equipamento_id UUID REFERENCES equipamento(id) ON DELETE SET NULL, -- equipamento com defeito
   assinatura_zelador_url TEXT,
+  assinatura_zelador_nome TEXT, -- quem assinou pelo condomínio (obrigatório para finalizar)
+  assinatura_zelador_documento TEXT, -- RG/CPF livre, opcional
   assinatura_tecnico_url TEXT,
   pdf_url TEXT,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
