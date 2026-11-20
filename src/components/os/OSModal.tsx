@@ -774,8 +774,8 @@ export function OSModal({
               <div className="flex flex-col gap-3">
                 <div>
                   <p className="text-sm font-semibold text-white">Fotos gerais do serviço</p>
-                  {equipamentosObrigatorios(os, checklist).length > 0 && (
-                    <p className="text-xs text-amx-muted">Opcional: as fotos de cada equipamento ficam no Checklist.</p>
+                  {(os.tipo !== 'corretiva' || equipamentosObrigatorios(os, checklist).length > 0) && (
+                    <p className="text-xs text-amx-muted">{os.tipo === 'corretiva' ? 'Opcional: as fotos do equipamento ficam no Checklist.' : 'Opcional na preventiva.'}</p>
                   )}
                 </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
