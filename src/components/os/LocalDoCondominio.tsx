@@ -5,7 +5,7 @@
 // abrir o mapa e um toque pra ligar pra quem abre o portão. São links (<a>),
 // não botões: o navegador do celular abre o app de mapas / discador sozinho.
 import React from 'react';
-import { enderecoCompleto, linkMapa, telefonesDoLocal, type TelefoneLocal } from '@/lib/endereco';
+import { enderecoCompleto, linkMapa, linkWaze, telefonesDoLocal, type TelefoneLocal } from '@/lib/endereco';
 import type { Condominio, Contato, OS } from '@/lib/db';
 import { Icon } from '@/components/ui/Icon';
 
@@ -15,18 +15,30 @@ const GRANDE = 'w-full sm:w-auto text-sm px-4 py-3 min-h-[44px]';
 const MAPA = 'border border-amx-line text-white hover:border-amx-muted hover:bg-amx-panel-2';
 const LIGAR = 'bg-amx-red hover:bg-amx-red-hover text-white';
 
-export function BotaoMapa({ href }: { href: string }) {
+function BotaoMapa({ href, rotulo }: { href: string; rotulo: string }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
-      className={`${BASE} ${GRANDE} ${MAPA}`}
+      className={`${BASE} text-sm px-4 py-3 min-h-[44px] flex-1 sm:flex-none ${MAPA}`}
     >
       <Icon name="mapa" size={18} />
-      Abrir no mapa
+      {rotulo}
     </a>
+  );
+}
+
+// Dois botões lado a lado, também no celular: o técnico escolhe o app de rota
+// que já usa (Google Maps ou Waze), sem precisar de configuração.
+export function BotoesMapa({ google, waze }: { google: string | null; waze: string | null }) {
+  if (!google && !waze) return null;
+  return (
+    <div className="flex gap-2 w-full sm:w-auto">
+      {google && <BotaoMapa href={google} rotulo="Google Maps" />}
+      {waze && <BotaoMapa href={waze} rotulo="Waze" />}
+    </div>
   );
 }
 
@@ -71,7 +83,7 @@ export function LocalDoCondominio({
       )}
       {(mapa || telefones.length > 0) && (
         <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
-          {mapa && <BotaoMapa href={mapa} />}
+          <BotoesMapa google={mapa} waze={linkWaze(condominio)} />
           {telefones.map((t) => (
             <BotaoLigar key={t.href} item={t} />
           ))}

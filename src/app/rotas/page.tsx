@@ -17,8 +17,8 @@ import { slaChegada, textoChegada } from '@/lib/os-sla';
 import { enfileirar, ouvirFila } from '@/lib/fila-envio';
 import { useFilaEnvio } from '@/lib/useFilaEnvio';
 import { useTick } from '@/lib/useTick';
-import { BotaoLigar, BotaoMapa } from '@/components/os/LocalDoCondominio';
-import { enderecoCompleto, linkMapa, type TelefoneLocal } from '@/lib/endereco';
+import { BotaoLigar, BotoesMapa } from '@/components/os/LocalDoCondominio';
+import { enderecoCompleto, linkMapa, linkWaze, type TelefoneLocal } from '@/lib/endereco';
 import type { Condominio, OS } from '@/lib/db';
 import { Icon } from '@/components/ui/Icon';
 
@@ -187,7 +187,7 @@ function RotasContent() {
   const renderGrupo = (g: GrupoNomeado) => {
     const cond = condominioPorId.get(g.condominio_id);
     const local = cond
-      ? { endereco: enderecoCompleto(cond), mapa: linkMapa(cond), ligar: cond.contato_local ?? null }
+      ? { endereco: enderecoCompleto(cond), mapa: linkMapa(cond), waze: linkWaze(cond), ligar: cond.contato_local ?? null }
       : null;
     return (
     <Card key={g.condominio_id}>
@@ -197,7 +197,7 @@ function RotasContent() {
           {local?.endereco && <p className="text-xs text-amx-muted select-text">{local.endereco}</p>}
           {(local?.mapa || local?.ligar) && (
             <div className="flex flex-wrap gap-2 mt-2">
-              {local.mapa && <BotaoMapa href={local.mapa} />}
+              <BotoesMapa google={local.mapa} waze={local.waze} />
               {local.ligar && <BotaoLigar item={local.ligar} />}
             </div>
           )}

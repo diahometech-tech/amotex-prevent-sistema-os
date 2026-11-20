@@ -41,6 +41,16 @@ export function linkMapa(c: (EnderecoFonte & { nome?: string }) | null | undefin
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(consulta)}`;
 }
 
+// Mesmo endereço no Waze (pedido dos técnicos em 19/11: cada um usa o app de
+// rota que prefere). `navigate=yes` já abre a rota em vez de só o ponto.
+export function linkWaze(c: (EnderecoFonte & { nome?: string }) | null | undefined): string | null {
+  if (!c) return null;
+  if (!limpo(c.endereco) && !limpo(c.cidade)) return null;
+  const consulta = enderecoCompleto(c) || limpo(c.nome);
+  if (!consulta) return null;
+  return `https://waze.com/ul?q=${encodeURIComponent(consulta)}&navigate=yes`;
+}
+
 // Converte o que a equipe digita ("+55 11 99999-8888", "11999998888",
 // "(11) 9999-8888") em `tel:+55...`. Menos de 10 dígitos (sem DDD) não dá pra
 // discar com segurança: null. Sem DDI, assume Brasil (55).
