@@ -1,5 +1,5 @@
 {
-  "atualizado": "2026-11-19",
+  "atualizado": "2026-11-20",
   "papeis": [
     {
       "papel": "admin",
@@ -41,7 +41,7 @@
           "passos": [
             "Use os filtros do topo: Todas, Preventiva, Corretiva, condomínio e situação (Em aberto, Finalizadas, Canceladas, Todas).",
             "Clique numa OS para abrir. As abas mostram Checklist, Fotos, Assinaturas e Histórico (quem fez o quê e quando).",
-            "No alto da OS, o bloco Local mostra o endereço completo, o botão Abrir no mapa e o botão Ligar (zelador, quem chamou ou responsável). Se faltar o endereço, cadastre em Condomínios.",
+            "No alto da OS, o bloco Local mostra o endereço completo, os botões Google Maps e Waze (escolha o app de rota que você usa) e o botão Ligar (zelador, quem chamou ou responsável). Se faltar o endereço, cadastre em Condomínios.",
             "Na primeira visita a um condomínio novo, o técnico cadastra os equipamentos direto pela OS. Cada equipamento vira um item Inspecionar no checklist, com fotos de antes e depois.",
             "OS finalizada tem o link Baixar PDF da OS.",
             "Na linha Gestão, Cancelar OS encerra uma OS em aberto que não vai mais acontecer. O motivo é obrigatório e fica registrado.",
@@ -156,7 +156,7 @@
           "titulo": "Endereço, mapa e ligação",
           "passos": [
             "Ao abrir uma OS, o bloco Local no alto mostra o endereço do condomínio.",
-            "Abrir no mapa abre o endereço no Google Maps. Ligar chama o zelador, quem chamou ou o responsável, direto do celular.",
+            "Google Maps e Waze abrem a rota até o condomínio no app que você preferir. Ligar chama o zelador, quem chamou ou o responsável, direto do celular.",
             "Na primeira visita a um condomínio novo, o técnico cadastra os equipamentos pela própria OS. Você não precisa cadastrar."
           ]
         },
@@ -279,7 +279,7 @@
           "titulo": "Chegar ao local",
           "passos": [
             "O endereço aparece na lista de OS, na Rota do dia e no bloco Local, no alto da OS.",
-            "Toque em Abrir no mapa para traçar o caminho no Google Maps.",
+            "Toque em Google Maps ou em Waze para traçar o caminho no app que você usa.",
             "Toque em Ligar para chamar o zelador (ou quem chamou, ou o responsável) sem digitar o número.",
             "Se aparecer Endereço não cadastrado, peça ao gestor para completar em Condomínios."
           ]
@@ -299,7 +299,7 @@
             "Você recebe o aviso de corretiva no Telegram com o condomínio, o problema e o horário limite de chegada.",
             "Abra a OS em Ordens de Serviço e clique em Assumir esta OS. Assim os outros técnicos sabem que você vai.",
             "Ao chegar, clique em Cheguei no local. Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
-            "Para chegar, use Abrir no mapa e Ligar no bloco Local da OS."
+            "Para chegar, use Google Maps ou Waze e Ligar no bloco Local da OS."
           ]
         },
         {
