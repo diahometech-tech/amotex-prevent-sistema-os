@@ -19,6 +19,7 @@ interface Previa {
   jaAgendados: number;
   dias: string[];
   capacidadeDia: number;
+  acimaDaMeta?: number;
   totalCondominios: number;
 }
 
@@ -65,7 +66,7 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
 
   return (
     <>
-      <ModalHeader title="Planejar preventivas do mês" subtitle="Na frequência de cada condomínio (mensal, quinzenal ou semanal), de segunda a domingo" onClose={onClose} />
+      <ModalHeader title="Planejar preventivas do mês" subtitle="Na frequência de cada condomínio (mensal, quinzenal ou semanal), de segunda a sexta" onClose={onClose} />
       <div className="p-5 flex flex-col gap-4">
         {feito ? (
           <>
@@ -112,6 +113,12 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
                   {previa.jaAgendados > 0 ? ` · ${previa.jaAgendados} já agendada${previa.jaAgendados !== 1 ? 's' : ''} no mês` : ''}
                 </p>
 
+                {!!previa.acimaDaMeta && (
+                  <p className="text-xs font-semibold text-amx-red-hover">
+                    A meta não comporta o mês: {previa.acimaDaMeta} visita{previa.acimaDaMeta !== 1 ? 's' : ''} passa
+                    {previa.acimaDaMeta !== 1 ? 'm' : ''} de {previa.capacidadeDia} por técnico no dia. Aumente a meta ou inclua outro técnico.
+                  </p>
+                )}
                 {previa.itens.length > 0 && (
                   <>
                     <div className="grid grid-cols-7 gap-1" aria-label="Visitas por dia">

@@ -1,8 +1,9 @@
 // Planejamento mensal das preventivas — função pura, sem I/O.
 //
 // Regra da Amotex (23/10): a preventiva é feita pelo(s) técnico(s) de
-// especialidade "preventiva" (ou pelos que fazem as duas), com atendimento de
-// segunda a domingo. Hoje são ~70 condomínios — em expansão, então nada aqui
+// especialidade "preventiva" (ou pelos que fazem as duas). Dias úteis da
+// preventiva: segunda a sexta (DIAS_UTEIS_PREVENTIVA, em os-agenda.ts) —
+// sábado e domingo são plantão. Hoje são ~70 condomínios — em expansão, então nada aqui
 // assume esses números.
 //
 // Frequência (pedido 9, 16/11): cada condomínio tem `preventivas_por_mes`
@@ -22,15 +23,19 @@
 // 3. Sem histórico: mensal preenche os dias menos carregados, em ordem
 //    alfabética (rodízio); quinzenal/semanal escolhe o dia de início do 1º
 //    ciclo que deixa a carga mais leve.
-// 4. Capacidade por técnico por dia = teto(total / (dias × técnicos)), então
-//    nenhum dia fica com o dobro de outro; e por técnico no mês =
+// 4. Capacidade por técnico por dia = a META de visitas por técnico/dia
+//    (20/11: padrão 5, ajustável na tela de Rotas); e por técnico no mês =
 //    teto(total / técnicos) — com um 2º técnico de preventiva, a carga se
-//    divide.
+//    divide. Se a meta não comporta tudo, o excedente vai pro dia mais perto
+//    e a reorganização diária (reorganizar-fila.ts) desliza o que passar.
 // 5. Mês corrente: só agenda de hoje em diante. Visita do ciclo que já
 //    passou não é recriada; se TODAS já passaram e o condomínio não teve
 //    nenhuma no mês, ganha uma no dia mais próximo.
 import type { OS } from './db';
-import { somarDias } from './os-agenda';
+import { DIAS_UTEIS_PREVENTIVA, ehDiaUtil, somarDias } from './os-agenda';
+
+/** Meta padrão de visitas por técnico por dia (a configurável fica em meta-visitas.ts). */
+export const META_PADRAO_PLANEJAMENTO = 5;
 
 export interface ItemPlano {
   condominio_id: string;
@@ -44,8 +49,10 @@ export interface ResultadoPlano {
   jaAgendados: number;
   /** Dias disponíveis considerados (YYYY-MM-DD). */
   dias: string[];
-  /** Máximo de visitas por técnico por dia usado no cálculo. */
+  /** Máximo de visitas por técnico por dia usado no cálculo (a meta). */
   capacidadeDia: number;
+  /** Visitas que passam da meta num mesmo técnico/dia (a meta não comporta o mês). */
+  acimaDaMeta: number;
 }
 
 export type Frequencia = 1 | 2 | 4;
@@ -57,10 +64,12 @@ export function mesValido(mes: unknown): mes is string {
 }
 
 /** Dias do mês (YYYY-MM-DD) a partir de `aPartirDe` (inclusive). */
-export function diasDoMes(mes: string, aPartirDe?: string): string[] {
+export function diasDoMes(mes: string, aPartirDe?: string, diasUteis?: readonly number[]): string[] {
   const dias: string[] = [];
   for (let d = `${mes}-01`; d.startsWith(mes); d = somarDias(d, 1)) {
-    if (!aPartirDe || d >= aPartirDe) dias.push(d);
+    if (aPartirDe && d < aPartirDe) continue;
+    if (diasUteis && !ehDiaUtil(d, diasUteis)) continue;
+    dias.push(d);
   }
   return dias;
 }
@@ -106,6 +115,8 @@ export function planejarPreventivasMes({
   condominios,
   tecnicos,
   oss,
+  meta = META_PADRAO_PLANEJAMENTO,
+  diasUteis = DIAS_UTEIS_PREVENTIVA,
 }: {
   mes: string;
   hoje: string;
@@ -114,10 +125,16 @@ export function planejarPreventivasMes({
   tecnicos: string[];
   /** Todas as OS (o histórico de preventivas sai daqui). */
   oss: Pick<OS, 'condominio_id' | 'tipo' | 'status' | 'data_programada' | 'tecnico_id'>[];
+  /** Visitas por técnico por dia (capacidade diária). */
+  meta?: number;
+  /** Dias da semana (0 = domingo) em que a preventiva é agendada. */
+  diasUteis?: readonly number[];
 }): ResultadoPlano {
   const todosDias = diasDoMes(mes);
-  const dias = diasDoMes(mes, hoje.startsWith(mes) ? hoje : undefined);
-  const vazio = { itens: [], jaAgendados: 0, dias, capacidadeDia: 0 };
+  // Só dias úteis recebem visita; os dias-alvo que caem no fim de semana vão
+  // pro dia útil mais perto (ver `agendar`).
+  const dias = diasDoMes(mes, hoje.startsWith(mes) ? hoje : undefined, diasUteis);
+  const vazio = { itens: [], jaAgendados: 0, dias, capacidadeDia: 0, acimaDaMeta: 0 };
   if (dias.length === 0 || tecnicos.length === 0) return vazio;
   const ultimoDia = diaDoMes(todosDias[todosDias.length - 1]);
   const primeiroDisponivel = diaDoMes(dias[0]);
@@ -192,7 +209,7 @@ export function planejarPreventivasMes({
       0
     );
   const jaNoPeriodo = [...carga.values()].reduce((a, b) => a + b, 0);
-  const capacidadeDia = Math.max(1, Math.ceil((totalVisitas + jaNoPeriodo) / (dias.length * tecnicos.length)));
+  const capacidadeDia = Math.max(1, Math.floor(meta));
   const capacidadeMes = Math.ceil((totalVisitas + jaNoPeriodo) / tecnicos.length);
 
   const cargaTotal = (t: string) => dias.reduce((acc, d) => acc + (carga.get(chave(t, d)) ?? 0), 0);
@@ -224,7 +241,7 @@ export function planejarPreventivasMes({
         const t = ordemTecnicos.find((tec) => temVaga(tec, d));
         if (t) { escolhido = { condominio_id: pd.c.id, tecnico_id: t, data: d }; break; }
       }
-      // Capacidade é teto da média, então quase sempre há vaga; sem vaga, o
+      // Sem vaga (a meta não comporta o mês: `acimaDaMeta` avisa na prévia), o
       // dia mais perto que não repete o mesmo dia do condomínio.
       if (!escolhido) {
         const d = porDistancia.find((x) => !ocupados.includes(diaDoMes(x))) ?? porDistancia[0];
@@ -277,5 +294,6 @@ export function planejarPreventivasMes({
   }
 
   itens.sort((a, b) => a.data.localeCompare(b.data));
-  return { itens, jaAgendados, dias, capacidadeDia };
+  const acimaDaMeta = [...carga.values()].reduce((a, v) => a + Math.max(0, v - capacidadeDia), 0);
+  return { itens, jaAgendados, dias, capacidadeDia, acimaDaMeta };
 }

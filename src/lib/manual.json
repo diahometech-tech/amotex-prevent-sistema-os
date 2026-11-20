@@ -56,7 +56,12 @@
             "Para montar o mês, clique em Planejar preventivas do mês, escolha o mês e clique em Ver prévia.",
             "Confira a distribuição por dia e por técnico. Só então clique em Criar OS preventivas.",
             "Rodar de novo no mesmo mês não duplica: quem já tem preventiva no mês fica de fora.",
-            "Técnico só de Corretiva não entra no planejamento de preventivas."
+            "Técnico só de Corretiva não entra no planejamento de preventivas.",
+            "Meta por técnico/dia: em Rotas, o campo Meta por técnico/dia (padrão 5) define quantas preventivas cada técnico faz por dia, de segunda a sexta. Altere o número e clique em Salvar meta; vale para os próximos planejamentos e reorganizações.",
+            "Sobras vão sozinhas para o dia seguinte: o que o técnico não fez fica na frente da fila do próximo dia útil e o resto da fila desliza, sem passar da meta por dia. Corretivas não mudam de data.",
+            "Reorganizar agora: em Rotas, clique em Reorganizar agora, confira a prévia do que muda de dia e clique em Aplicar. Rodar duas vezes no mesmo dia não muda nada. Durante o expediente, o que já é de hoje continua em hoje; as visitas abertas de hoje só passam para o próximo dia útil na reorganização das 5h. A fila nunca passa para o mês seguinte: o que não cabe na meta fica no último dia útil do mês, acima dela, e aparece marcado na prévia.",
+            "Todo dia às 5h a reorganização roda sozinha, chamada pelo n8n em POST /api/integracoes/reorganizar-rotas com o cabeçalho X-Amotex-Secret (o mesmo segredo do webhook). O workflow do n8n ainda precisa ser criado: agende uma chamada diária às 5h, sem corpo. Cada visita remarcada fica registrada no histórico da OS como Reagendada automática.",
+            "Painel do mês: no alto de Rotas, a tabela mostra por técnico e no total as preventivas do mês: feitas, faltam e o ritmo necessário por dia útil restante para fechar o mês."
           ]
         },
         {
@@ -194,7 +199,12 @@
             "Para montar o mês, clique em Planejar preventivas do mês, escolha o mês e clique em Ver prévia.",
             "Confira a distribuição por dia e por técnico. Só então clique em Criar OS preventivas.",
             "Rodar de novo no mesmo mês não duplica: quem já tem preventiva no mês fica de fora.",
-            "Você não marca visita como feita. Isso é do técnico, quando chega ao condomínio."
+            "Você não marca visita como feita. Isso é do técnico, quando chega ao condomínio.",
+            "Meta por técnico/dia: em Rotas, o campo Meta por técnico/dia (padrão 5) define quantas preventivas cada técnico faz por dia, de segunda a sexta. Altere o número e clique em Salvar meta; vale para os próximos planejamentos e reorganizações.",
+            "Sobras vão sozinhas para o dia seguinte: o que o técnico não fez fica na frente da fila do próximo dia útil e o resto da fila desliza, sem passar da meta por dia. Corretivas não mudam de data.",
+            "Reorganizar agora: em Rotas, clique em Reorganizar agora, confira a prévia do que muda de dia e clique em Aplicar. Rodar duas vezes no mesmo dia não muda nada. Durante o expediente, o que já é de hoje continua em hoje; as visitas abertas de hoje só passam para o próximo dia útil na reorganização das 5h. A fila nunca passa para o mês seguinte: o que não cabe na meta fica no último dia útil do mês, acima dela, e aparece marcado na prévia.",
+            "Painel do mês: no alto de Rotas, a tabela mostra por técnico e no total as preventivas do mês: feitas, faltam e o ritmo necessário por dia útil restante para fechar o mês.",
+            "A reorganização também roda sozinha todo dia às 5h; você só precisa clicar em Reorganizar agora se quiser antecipar."
           ]
         },
         {
@@ -272,7 +282,10 @@
           "passos": [
             "Abra Rotas no menu. A tela mostra só as suas visitas, sob o título Minha rota.",
             "Use as setas para ver os próximos dias.",
-            "Ao chegar no condomínio, clique em Cheguei no local (na rota ou dentro da OS). Fica registrado \"Chegou às\" com a hora. Sem sinal, a chegada fica guardada no aparelho com a hora do toque e sobe sozinha quando a internet voltar."
+            "Ao chegar no condomínio, clique em Cheguei no local (na rota ou dentro da OS). Fica registrado \"Chegou às\" com a hora. Sem sinal, a chegada fica guardada no aparelho com a hora do toque e sobe sozinha quando a internet voltar.",
+            "No alto da rota aparece quantas visitas você já fez no dia, por exemplo 3 de 5 feitas hoje.",
+            "O que ficou sem fazer não se perde: as sobras vão sozinhas para o próximo dia útil, na frente da fila, e o resto da fila anda. Você nunca recebe mais que a meta do dia.",
+            "Terminou todas as visitas do dia, em dia útil? Aparece o bloco Adiantar: próximas visitas, com as 3 próximas preventivas do mês na sua fila. Pode abrir e fazer; ao clicar em Cheguei no local, a visita passa a ser do dia da chegada. Só preventiva muda de data; corretiva não."
           ]
         },
         {
