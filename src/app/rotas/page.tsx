@@ -9,11 +9,14 @@ import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { Input, Select } from '@/components/ui/Form';
 import { OSModal } from '@/components/os/OSModal';
 import { PlanejarPreventivas } from '@/components/os/PlanejarPreventivas';
+import { PainelPreventivasMes } from '@/components/os/PainelPreventivasMes';
+import { ReorganizarRotas } from '@/components/os/ReorganizarRotas';
 import { Modal } from '@/components/ui/Modal';
 import { podeOperarCampo, podePlanejarPreventivas, podeVerRotaDeTodos } from '@/lib/roles';
 import { computeOsPrioridade, resumoRotasPorCondominio, OS_STATUS_LABELS, type RotaCondominio } from '@/lib/os-priority';
-import { formatarDataCurta, hojeISO, montarRotaDoDia, somarDias } from '@/lib/os-agenda';
+import { ehDiaUtil, formatarDataCurta, hojeISO, montarRotaDoDia, somarDias } from '@/lib/os-agenda';
 import { slaChegada, textoChegada } from '@/lib/os-sla';
+import { preventivaAberta } from '@/lib/reorganizar-fila';
 import { enfileirar, ouvirFila } from '@/lib/fila-envio';
 import { useFilaEnvio } from '@/lib/useFilaEnvio';
 import { useTick } from '@/lib/useTick';
@@ -50,6 +53,7 @@ function RotasContent() {
   const chegadaPendente = (osId: string) => fila.flatMap((i) => (i.tipo === 'chegada' && i.os_id === osId && !i.recusado ? [i] : []))[0];
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
   const [showPlanejar, setShowPlanejar] = useState(false);
+  const [showReorganizar, setShowReorganizar] = useState(false);
 
   const hoje = hojeISO();
   const [dia, setDia] = useState(hoje);
@@ -137,6 +141,30 @@ function RotasContent() {
     [rota, condominioNome]
   );
   const gruposSemData = useMemo(() => nomear(resumoRotasPorCondominio(rota.semData), condominioNome), [rota, condominioNome]);
+
+  // "X de Y feitas": só quando a rota é de UM técnico (a dele, ou o filtro do
+  // escritório). Y = visitas agendadas pro dia, X = as finalizadas.
+  const tecnicoDaRota = !verTodos ? user?.id : filtroTecnico && filtroTecnico !== SEM_TECNICO ? filtroTecnico : undefined;
+  const progresso = useMemo(() => {
+    if (!tecnicoDaRota) return null;
+    const doDia = oss.filter((o) => o.tecnico_id === tecnicoDaRota && o.data_programada === dia && o.status !== 'cancelada');
+    return { feitas: doDia.filter((o) => o.status === 'finalizada').length, total: doDia.length };
+  }, [oss, tecnicoDaRota, dia]);
+
+  // Terminou tudo (técnico, dia útil, tinha visita hoje e fez todas): as 3
+  // próximas preventivas dele, só do mês corrente, pra adiantar. Fim de semana
+  // (plantão) e dia sem visita não oferecem.
+  const terminouTudo =
+    !verTodos && dia === hoje && ehDiaUtil(hoje) && rota.doDia.length === 0 && rota.atrasadas.length === 0 &&
+    !!progresso && progresso.total > 0 && progresso.feitas === progresso.total;
+  const gruposAdiantar = useMemo(() => {
+    if (!terminouTudo) return [];
+    const proximas = doTecnico
+      .filter((o) => preventivaAberta(o) && !!o.data_programada && o.data_programada > hoje && o.data_programada.slice(0, 7) === hoje.slice(0, 7))
+      .sort((a, b) => a.data_programada!.localeCompare(b.data_programada!) || a.id.localeCompare(b.id))
+      .slice(0, 3);
+    return nomear(resumoRotasPorCondominio(proximas), condominioNome);
+  }, [terminouTudo, doTecnico, hoje, condominioNome]);
 
   const totalDoDia = rota.doDia.length + rota.atrasadas.length;
   const totalUrgentes = gruposDoDia.reduce((acc, g) => acc + g.urgentes, 0);
@@ -244,6 +272,11 @@ function RotasContent() {
                       <span className="inline-flex items-center gap-1"><Icon name="relogio" size={12} />{sla.label}</span>
                     </p>
                   )}
+                  {os.data_programada && os.data_programada > dia && (
+                    <p className="text-[11px] font-semibold text-amx-blue">
+                      Programada para {formatarDataCurta(os.data_programada)} · pode adiantar
+                    </p>
+                  )}
                   {atrasada && (
                     <p className="text-[11px] font-semibold text-amx-amber">
                       Atrasada · era para {formatarDataCurta(os.data_programada!)}
@@ -296,6 +329,7 @@ function RotasContent() {
           {totalDoDia} OS em {gruposDoDia.length} condomínio{gruposDoDia.length !== 1 ? 's' : ''}
           {rota.atrasadas.length > 0 ? ` · ${rota.atrasadas.length} atrasada${rota.atrasadas.length > 1 ? 's' : ''}` : ''}
           {totalUrgentes > 0 ? ` · ${totalUrgentes} urgente${totalUrgentes > 1 ? 's' : ''}` : ''}
+          {progresso && progresso.total > 0 ? ` · ${progresso.feitas} de ${progresso.total} feitas${dia === hoje ? ' hoje' : ''}` : ''}
         </p>
 
         <div className="flex flex-wrap items-center gap-2 mt-4">
@@ -334,9 +368,14 @@ function RotasContent() {
             </Select>
           )}
           {podePlanejarPreventivas(user.role) && (
-            <Button size="sm" onClick={() => setShowPlanejar(true)} className="sm:ml-auto">
-              Planejar preventivas do mês
-            </Button>
+            <div className="flex flex-wrap gap-2 sm:ml-auto">
+              <Button size="sm" variant="secondary" onClick={() => setShowReorganizar(true)}>
+                Reorganizar agora
+              </Button>
+              <Button size="sm" onClick={() => setShowPlanejar(true)}>
+                Planejar preventivas do mês
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -346,13 +385,31 @@ function RotasContent() {
           <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2 mb-4">{error}</p>
         )}
 
+        {podePlanejarPreventivas(user.role) && <PainelPreventivasMes oss={oss} tecnicoNome={tecnicoNome} hoje={hoje} />}
+
         {gruposDoDia.length === 0 ? (
-          <EmptyState
-            title={`Nenhuma visita para ${tituloDia}`}
-            description="Agende OS para este dia pelo campo 'Data da visita', na criação ou no detalhe da OS."
-          />
+          progresso && progresso.total > 0 ? (
+            <EmptyState
+              title={`Tudo feito para ${tituloDia}`}
+              description={`${progresso.feitas} de ${progresso.total} visita${progresso.total > 1 ? 's' : ''} concluída${progresso.feitas > 1 ? 's' : ''}.`}
+            />
+          ) : (
+            <EmptyState
+              title={`Nenhuma visita para ${tituloDia}`}
+              description="Agende OS para este dia pelo campo 'Data da visita', na criação ou no detalhe da OS."
+            />
+          )
         ) : (
           <div className="space-y-5">{gruposDoDia.map(renderGrupo)}</div>
+        )}
+
+        {gruposAdiantar.length > 0 && (
+          <div className="mt-8">
+            <p className="font-heading text-[11px] font-semibold tracking-wider text-amx-muted mb-3">
+              ADIANTAR: PRÓXIMAS VISITAS · pode abrir e fazer; ao chegar, a visita passa a ser de hoje
+            </p>
+            <div className="space-y-5">{gruposAdiantar.map(renderGrupo)}</div>
+          </div>
         )}
 
         {gruposSemData.length > 0 && (
@@ -367,6 +424,10 @@ function RotasContent() {
 
       <Modal open={showPlanejar} onClose={() => setShowPlanejar(false)} maxWidth="max-w-2xl">
         {showPlanejar && <PlanejarPreventivas onClose={() => setShowPlanejar(false)} onCriado={load} />}
+      </Modal>
+
+      <Modal open={showReorganizar} onClose={() => setShowReorganizar(false)} maxWidth="max-w-2xl">
+        {showReorganizar && <ReorganizarRotas onClose={() => setShowReorganizar(false)} onAplicado={load} />}
       </Modal>
 
       {selectedOsId && (

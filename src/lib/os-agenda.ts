@@ -78,3 +78,28 @@ export function montarRotaDoDia(oss: OS[], dia: string, hoje: string = hojeISO()
   }
   return rota;
 }
+
+// Dias úteis da preventiva (0 = domingo ... 6 = sábado): segunda a sexta. O
+// time trabalha ~22 dias por mês nas preventivas; sábado e domingo ficam pro
+// plantão (corretivas). Única fonte dessa regra — o planejamento mensal e a
+// reorganização da fila usam esta constante.
+export const DIAS_UTEIS_PREVENTIVA: readonly number[] = [1, 2, 3, 4, 5];
+
+/** A data (YYYY-MM-DD) cai num dia útil da preventiva? */
+export function ehDiaUtil(iso: string, diasUteis: readonly number[] = DIAS_UTEIS_PREVENTIVA): boolean {
+  const [a, m, d] = iso.split('-').map(Number);
+  return diasUteis.includes(new Date(Date.UTC(a, m - 1, d)).getUTCDay());
+}
+
+/** Primeiro dia útil a partir de `iso` (inclusive). */
+export function diaUtilApartirDe(iso: string, diasUteis: readonly number[] = DIAS_UTEIS_PREVENTIVA): string {
+  if (diasUteis.length === 0) return iso;
+  let d = iso;
+  while (!ehDiaUtil(d, diasUteis)) d = somarDias(d, 1);
+  return d;
+}
+
+/** Próximo dia útil DEPOIS de `iso` (exclusivo). */
+export function proximoDiaUtil(iso: string, diasUteis: readonly number[] = DIAS_UTEIS_PREVENTIVA): string {
+  return diaUtilApartirDe(somarDias(iso, 1), diasUteis);
+}

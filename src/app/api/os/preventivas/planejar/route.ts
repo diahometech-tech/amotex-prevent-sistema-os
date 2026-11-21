@@ -5,6 +5,7 @@ import { podePlanejarPreventivas } from '@/lib/roles';
 import { hojeISO } from '@/lib/os-agenda';
 import { criarChecklistInicial } from '@/lib/os-checklist-inicial';
 import { mesValido, planejarPreventivasMes } from '@/lib/planejamento-preventiva';
+import { lerMetaVisitas } from '@/lib/meta-visitas';
 
 // POST /api/os/preventivas/planejar — rota mensal das preventivas. Gestor e secretária.
 // Corpo: { mes: 'YYYY-MM', confirmar?: boolean }. Sem `confirmar` devolve só a
@@ -38,8 +39,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // A meta de visitas por técnico/dia (tela de Rotas) é a capacidade diária.
     const plano = planejarPreventivasMes({
-      mes, hoje, oss,
+      mes, hoje, oss, meta: await lerMetaVisitas(),
       condominios: condominios.filter((c) => c.ativo !== false).map((c) => ({ id: c.id, nome: c.nome, preventivas_por_mes: c.preventivas_por_mes })),
       tecnicos: tecnicos.map((t) => t.id),
     });

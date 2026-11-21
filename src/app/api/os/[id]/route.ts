@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, FinalizacaoBloqueadaError } from '@/lib/db';
-import { normalizarDataProgramada } from '@/lib/os-agenda';
+import { hojeISO, normalizarDataProgramada } from '@/lib/os-agenda';
 import { getSessionFromRequest, getClientIp, podeVerOS, podeLerOS, condominioParaPapel } from '@/lib/auth';
 import { isScopedToOwnCondominio, podeAgendarOS, podeApagarOS, podeCancelarOS, podeOperarCampo } from '@/lib/roles';
 import { saveAssinaturaDataUrl, saveOsPdfBuffer } from '@/lib/uploads';
@@ -146,6 +146,24 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (updates.status === 'em_andamento' && !original.entrada_em && updates.entrada_em === undefined) {
       updates.entrada_em = new Date().toISOString();
     }
+    // Chegada numa PREVENTIVA agendada pra OUTRO dia (adiantar a próxima
+    // visita, ou fazer uma atrasada): a data dela passa a ser o dia da
+    // chegada, pra "feitas hoje" da rota e o painel do mês contarem no dia
+    // certo. O dia sai da hora da chegada (updates.entrada_em), não do relógio
+    // do servidor: chegada sem sinal só sobe depois. Corretiva não muda de
+    // data (o atraso dela continua visível). Só quando o PATCH não manda data
+    // (o escritório reagendando manda).
+    let reagendadaNaChegada: { de: string; para: string } | null = null;
+    if (
+      updates.status === 'em_andamento' && !original.entrada_em && rest.data_programada === undefined &&
+      original.tipo === 'preventiva' && original.data_programada
+    ) {
+      const diaChegada = hojeISO(new Date(updates.entrada_em as string));
+      if (original.data_programada !== diaChegada) {
+        reagendadaNaChegada = { de: original.data_programada, para: diaChegada };
+        updates.data_programada = diaChegada;
+      }
+    }
     if (rest.data_programada !== undefined) {
       const data = normalizarDataProgramada(rest.data_programada);
       if (data === undefined) return NextResponse.json({ error: 'Data da visita inválida.' }, { status: 400 });
@@ -241,6 +259,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         detalhe: { de: original.status, para: updates.status, ip: getClientIp(request) },
       });
       if (os) notifyN8n('os_status_changed', os, { de: original.status });
+    }
+    if (os && reagendadaNaChegada) {
+      await Database.createAuditLog({
+        entidade: 'os', entidade_id: id, acao: 'REAGENDADA_NA_CHEGADA', ator: session.name, detalhe: reagendadaNaChegada,
+      });
     }
     let aviso;
     if (os && updates.tecnico_id !== undefined && (updates.tecnico_id ?? null) !== (original.tecnico_id ?? null)) {
