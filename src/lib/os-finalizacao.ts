@@ -1,9 +1,10 @@
 // Trava de qualidade da finalização de OS (PRD — Must): checklist
 // obrigatório concluído, registro fotográfico antes/depois e assinatura do
-// técnico e do zelador. Com equipamento obrigatório (preventiva: todos do
-// checklist; corretiva: o equipamento com defeito), foto ANTES e DEPOIS de
-// cada um (pedido 8 da Amotex: "se o condomínio tem 5 equipamentos, abre 5
-// campos de foto"). Função pura, sem I/O — usada tanto pelo backend
+// técnico e do zelador. Foto só é exigida na CORRETIVA (decisão do Dm em
+// 20/11: "as fotos não são necessárias na preventiva, na corretiva precisa do
+// antes e depois"). Na corretiva de um equipamento (os.equipamento_id), as
+// duas fotos são daquele equipamento; nas demais, uma antes e uma depois
+// quaisquer. Na preventiva a foto é opcional. Função pura, sem I/O — usada tanto pelo backend
 // (Database.finalizarOS, que é a barreira real) quanto pela tela (OSModal,
 // pra travar o botão e listar o que falta). Uma fonte só, pra servidor e
 // tela não divergirem — mesma lição de os-priority.ts.
@@ -15,11 +16,10 @@ export function nomeEquipamentoDoItem(descricao: string): string {
 }
 
 /**
- * Equipamentos que exigem foto ANTES e DEPOIS nesta OS (um por equipamento).
- * Preventiva: todos os itens de equipamento do checklist. Corretiva: só o
- * equipamento com defeito (os.equipamento_id), se estiver no checklist —
- * a corretiva também recebe um item "Inspecionar X" por equipamento do
- * condomínio, mas esses são opcionais e não travam a finalização.
+ * Equipamentos que exigem foto ANTES e DEPOIS nesta OS. Só a corretiva de um
+ * equipamento (os.equipamento_id, se estiver no checklist) tem; a preventiva
+ * não exige foto nenhuma (20/11) e os demais itens "Inspecionar X" da
+ * corretiva também não travam a finalização.
  */
 export function equipamentosObrigatorios<T extends Pick<ChecklistItem, 'equipamento_id'>>(
   os: Pick<OS, 'tipo'> & { equipamento_id?: string },
@@ -27,9 +27,10 @@ export function equipamentosObrigatorios<T extends Pick<ChecklistItem, 'equipame
 ): (T & { equipamento_id: string })[] {
   const vistos = new Set<string>();
   const itens: (T & { equipamento_id: string })[] = [];
+  if (os.tipo !== 'corretiva') return itens;
   for (const item of checklist) {
     if (!item.equipamento_id || vistos.has(item.equipamento_id)) continue;
-    if (os.tipo === 'corretiva' && item.equipamento_id !== os.equipamento_id) continue;
+    if (item.equipamento_id !== os.equipamento_id) continue;
     vistos.add(item.equipamento_id);
     itens.push(item as T & { equipamento_id: string });
   }
@@ -67,8 +68,9 @@ export function pendenciasFinalizacao({
         pendencias.push(`Falta foto ${rotulo} de: ${listaCurta(faltam.map((i) => nomeEquipamentoDoItem(i.descricao)))}`);
       }
     }
-  } else {
-    // Sem equipamento obrigatório basta uma foto antes e uma depois, geral ou de equipamento.
+  } else if (os.tipo === 'corretiva') {
+    // Corretiva sem equipamento obrigatório: uma foto antes e uma depois, geral ou de equipamento.
+    // Preventiva não exige foto (20/11).
     if (!fotos.some((f) => f.momento === 'antes')) pendencias.push('Falta foto ANTES do serviço');
     if (!fotos.some((f) => f.momento === 'depois')) pendencias.push('Falta foto DEPOIS do serviço');
   }

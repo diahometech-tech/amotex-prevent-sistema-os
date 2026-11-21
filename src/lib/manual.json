@@ -20,7 +20,7 @@
           "passos": [
             "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
             "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
-            "Com alguém de plantão, o aviso de corretiva vai só para ele, para os gestores e para a secretária. Sem ninguém marcado, vai para todos os técnicos de corretiva.",
+            "Horário comercial e plantão: de segunda a sexta, das 8h às 18h, e no sábado, das 8h às 16h, é horário comercial. Fora disso, e no domingo o dia todo, é plantão. Em horário comercial, o aviso de corretiva sem técnico vai para todos os técnicos de corretiva, para os gestores e para a secretária; quem estiver mais perto assume a OS. No plantão, vai só para o plantonista marcado (mais gestores e secretária). Sem ninguém marcado de plantão, vai para todos os técnicos de corretiva e o sistema avisa isso na tela de quem abriu a OS.",
             "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Cadastre o ID do Telegram dela em Usuários.",
             "Os quadros mostram corretivas fora do prazo, chegada em até 3h, OS abertas, pendências críticas, alertas e a rota do dia."
           ]
@@ -42,7 +42,7 @@
             "Use os filtros do topo: Todas, Preventiva, Corretiva, condomínio e situação (Em aberto, Finalizadas, Canceladas, Todas).",
             "Clique numa OS para abrir. As abas mostram Checklist, Fotos, Assinaturas e Histórico (quem fez o quê e quando).",
             "No alto da OS, o bloco Local mostra o endereço completo, os botões Google Maps e Waze (escolha o app de rota que você usa) e o botão Ligar (zelador, quem chamou ou responsável). Se faltar o endereço, cadastre em Condomínios.",
-            "Na primeira visita a um condomínio novo, o técnico cadastra os equipamentos direto pela OS. Cada equipamento vira um item Inspecionar no checklist, com fotos de antes e depois.",
+            "Na primeira visita a um condomínio novo, o técnico cadastra os equipamentos direto pela OS. Cada equipamento vira um item Inspecionar no checklist. Foto é obrigatória só na corretiva (antes e depois); na preventiva é opcional.",
             "OS finalizada tem o link Baixar PDF da OS.",
             "Na linha Gestão, Cancelar OS encerra uma OS em aberto que não vai mais acontecer. O motivo é obrigatório e fica registrado.",
             "Apagar OS remove a OS de vez, com fotos. Use só para OS aberta por engano ou de teste."
@@ -165,7 +165,7 @@
           "passos": [
             "Abra a OS em Ordens de Serviço.",
             "Mude a data da visita ou o técnico responsável. Salva sozinho, não tem botão Salvar.",
-            "Ao trocar o técnico de uma corretiva, o aviso no Telegram vai para o plantão e o escritório, não necessariamente para o novo técnico. Se ele não estiver de plantão, ligue para ele."
+            "Ao atribuir ou trocar o técnico de uma corretiva, o aviso no Telegram vai só para esse técnico, para os gestores e para você. Os outros técnicos e o plantão não são avisados. Se aparecer o recado de que ele está sem Telegram, ligue para ele."
           ]
         },
         {
@@ -181,7 +181,7 @@
           "passos": [
             "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
             "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
-            "Com alguém de plantão, o aviso de corretiva vai só para ele, para os gestores e para você. Sem ninguém marcado, vai para todos os técnicos de corretiva.",
+            "Horário comercial e plantão: de segunda a sexta, das 8h às 18h, e no sábado, das 8h às 16h, é horário comercial. Fora disso, e no domingo o dia todo, é plantão. Em horário comercial, o aviso de corretiva sem técnico vai para todos os técnicos de corretiva, para os gestores e para você. No plantão, vai só para o plantonista marcado, para os gestores e para você. Sem ninguém marcado de plantão, vai para todos os técnicos de corretiva e o sistema avisa na tela.",
             "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Avise o gestor para cadastrar o ID dela.",
             "Reagendar a visita é com você e com o gestor: o técnico não muda a data e liga para o escritório. Se aparecer o recado de aviso não enviado ou plantonista sem Telegram, ligue para a pessoa."
           ]
@@ -287,7 +287,7 @@
         {
           "titulo": "Primeira visita: cadastrar os equipamentos",
           "passos": [
-            "Se o condomínio ainda não tem equipamentos, a aba Checklist avisa no topo. Cadastre antes de começar o serviço, porque cada equipamento vai pedir foto antes e depois. Toque em Cadastrar equipamento.",
+            "Se o condomínio ainda não tem equipamentos, a aba Checklist avisa no topo. Cadastre antes de começar o serviço. Toque em Cadastrar equipamento.",
             "Escolha a categoria e o tipo. Informe onde fica e tire a foto pela câmera. Só categoria e tipo são obrigatórios.",
             "Toque em Salvar e cadastrar outro para seguir para o próximo equipamento, ou em Salvar para terminar.",
             "Cada equipamento cadastrado vira na hora um item Inspecionar no checklist da OS. Esqueceu um? Use + Cadastrar outro equipamento no fim da lista."
@@ -296,18 +296,26 @@
         {
           "titulo": "Corretiva urgente",
           "passos": [
-            "Você recebe o aviso de corretiva no Telegram com o condomínio, o problema e o horário limite de chegada.",
+            "Você recebe o aviso de corretiva no Telegram com o condomínio, o problema e o horário limite de chegada. O aviso diz por que chegou a você: \"Horário comercial\" (todos os técnicos recebem; quem estiver mais perto assume), \"Plantão\" (você está de plantão) ou \"Atribuída a você\" (o escritório passou a OS para você).",
             "Abra a OS em Ordens de Serviço e clique em Assumir esta OS. Assim os outros técnicos sabem que você vai.",
             "Ao chegar, clique em Cheguei no local. Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
             "Para chegar, use Google Maps ou Waze e Ligar no bloco Local da OS."
           ]
         },
         {
+          "titulo": "Histórico do condomínio",
+          "passos": [
+            "Dentro de uma OS, abra a aba Histórico do condomínio. Ela lista as OS anteriores do local (finalizadas e canceladas): data, tipo, técnico, situação e o problema ou observação.",
+            "Toque numa OS da lista para abri-la só para leitura: você vê checklist, fotos, assinaturas e o PDF, mas não pode alterar nada.",
+            "Use para saber o que já foi feito no local, qual equipamento já deu defeito e como foi resolvido. Você só vê o histórico dos condomínios onde tem OS."
+          ]
+        },
+        {
           "titulo": "Durante o atendimento",
           "passos": [
             "Aba Checklist: marque cada item conforme faz. Itens com OBRIG. são obrigatórios para finalizar. Marcou sem querer? Toque de novo no item para desmarcar (enquanto a OS não for finalizada).",
-            "Cada equipamento do checklist tem duas faixas: Antes e Depois. Toque na câmera de cada uma e tire a foto do equipamento antes e depois do serviço.",
-            "Aba Fotos: são as fotos gerais do serviço. Quando a OS pede foto de equipamento (preventiva, ou corretiva de um equipamento), elas são opcionais. Nos outros casos, tire pelo menos uma foto antes e uma depois, geral ou de qualquer equipamento.",
+            "Fotos: obrigatórias só na corretiva, uma ANTES e uma DEPOIS do serviço (na corretiva de um equipamento, as duas são daquele equipamento, nas faixas Antes e Depois do item no Checklist). Na preventiva, foto é opcional.",
+            "Aba Fotos: são as fotos gerais do serviço. Na corretiva sem equipamento, tire aqui uma foto antes e uma depois.",
             "Se tirar uma foto errada, no Checklist toque no X da miniatura; na aba Fotos, toque em Remover. Depois tire de novo.",
             "Aba Assinaturas: assine no quadro e toque em Confirmar assinatura. Para o condomínio, escreva o nome de quem vai assinar (documento é opcional), peça para a pessoa assinar no quadro e toque em Confirmar. O nome vem preenchido com o zelador cadastrado: se quem assinou foi outra pessoa, troque o nome. Errou? Toque em Corrigir nome. Sem o nome, a OS não finaliza.",
             "Precisa mudar o dia da visita? Ligue para o escritório. Só o gestor e a secretária reagendam."
@@ -325,7 +333,7 @@
       "situacoes": [
         {
           "pergunta": "O botão Finalizar OS não libera.",
-          "resposta": "Leia a lista logo abaixo do botão. Falta foto ANTES de: ou Falta foto DEPOIS de: mostra os equipamentos sem foto (até 3 nomes e mais N). Abra o Checklist, ache o equipamento e tire a foto na faixa Antes ou Depois. A lista também avisa item obrigatório ou assinatura que falta."
+          "resposta": "Leia a lista logo abaixo do botão. Na corretiva, Falta foto ANTES/DEPOIS mostra a foto que falta: tire na aba Fotos ou, se for de um equipamento, na faixa Antes ou Depois do item no Checklist. A lista também avisa item obrigatório ou assinatura que falta."
         },
         {
           "pergunta": "Tirei a foto errada.",

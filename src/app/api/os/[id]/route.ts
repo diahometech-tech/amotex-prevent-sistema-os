@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, FinalizacaoBloqueadaError } from '@/lib/db';
 import { normalizarDataProgramada } from '@/lib/os-agenda';
-import { getSessionFromRequest, getClientIp, podeVerOS, condominioParaPapel } from '@/lib/auth';
+import { getSessionFromRequest, getClientIp, podeVerOS, podeLerOS, condominioParaPapel } from '@/lib/auth';
 import { isScopedToOwnCondominio, podeAgendarOS, podeApagarOS, podeCancelarOS, podeOperarCampo } from '@/lib/roles';
 import { saveAssinaturaDataUrl, saveOsPdfBuffer } from '@/lib/uploads';
 import { generateOsPdf } from '@/lib/os-pdf';
@@ -18,7 +18,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const os = await Database.getOSById(id);
   if (!os) return NextResponse.json({ error: 'OS não encontrada.' }, { status: 404 });
-  if (!(await podeVerOS(session, os))) {
+  // Leitura: o técnico também lê OS ENCERRADAS dos condomínios que atende
+  // (histórico do condomínio). Escrever (PATCH, checklist, fotos) segue
+  // exigindo podeVerOS.
+  if (!(await podeLerOS(session, os))) {
     return NextResponse.json({ error: 'Sem acesso a esta OS.' }, { status: 403 });
   }
 
@@ -38,7 +41,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     // Quem vê a OS já pode ver os contatos do condomínio.
     contatos: contatosTodos.filter((c) => c.ativo),
     condominio: condominio ? condominioParaPapel(session.role, condominio) : condominio,
-    logs: isScopedToOwnCondominio(session.role) ? [] : logs,
+    // Auditoria (IP, destinatários de aviso) não vai pro síndico nem pro técnico
+    // que só LÊ a OS de outro (histórico do condomínio).
+    logs: isScopedToOwnCondominio(session.role) || !(await podeVerOS(session, os)) ? [] : logs,
     vinculos,
   });
 }
@@ -243,9 +248,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         entidade: 'os', entidade_id: id, acao: 'TECNICO_ATRIBUIDO', ator: session.name,
         detalhe: { de: original.tecnico_id ?? null, para: updates.tecnico_id ?? null },
       });
-      // Corretiva ativa ganhou técnico: avisa os outros pra ninguém ir em dobro.
-      if (os.tipo === 'corretiva' && os.tecnico_id && os.status !== 'finalizada' && os.status !== 'cancelada') {
-        aviso = await avisarCorretiva('os_corretiva_assumida', os);
+      // Corretiva ativa ganhou técnico. Se o próprio técnico assumiu, avisa o
+      // grupo da abertura pra ninguém ir em dobro; se o escritório atribuiu ou
+      // trocou, avisa só o técnico escolhido (+ gestores e secretária).
+      if (os.tipo === 'corretiva' && os.status !== 'finalizada' && os.status !== 'cancelada') {
+        if (os.tecnico_id) {
+          aviso = await avisarCorretiva(session.role === 'tecnico' ? 'os_corretiva_assumida' : 'os_corretiva_atribuida', os);
+        } else {
+          // Escritório tirou o técnico: a OS voltou a ficar sem responsável e
+          // o prazo de 3h continua — chama de novo pela regra de horário.
+          aviso = await avisarCorretiva('os_corretiva_aberta', os);
+        }
       }
     }
     return NextResponse.json({ success: true, os, ...(aviso ? { aviso } : {}) });
