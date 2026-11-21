@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SignaturePad } from '@/components/os/SignaturePad';
 import { FotoUpload } from '@/components/os/FotoUpload';
 import { HistoricoPanel } from '@/components/os/HistoricoPanel';
+import { HistoricoCondominio } from '@/components/os/HistoricoCondominio';
 import { useAmxUser } from '@/components/layout/AppShell';
 import { isEscritorio, podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeEditarEquipamento, podeOperarCampo, podeVerModulo } from '@/lib/roles';
 import { computeOsPrioridade, OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-priority';
@@ -28,7 +29,7 @@ import type { AuditLog, ChecklistItem, Condominio, Contato, Equipamento, Foto, O
 import type { VinculosOS } from '@/lib/os-vinculos';
 import { Icon } from '@/components/ui/Icon';
 
-type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico';
+type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico' | 'condominio';
 
 export function OSModal({
   osId,
@@ -68,6 +69,8 @@ export function OSModal({
   const [loadError, setLoadError] = useState('');
   const [tab, setTab] = useState<Tab>('checklist');
   const [actionError, setActionError] = useState('');
+  // OS anterior aberta a partir do "Histórico do condomínio" (só leitura).
+  const [osAnteriorId, setOsAnteriorId] = useState<string | null>(null);
 
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [fotos, setFotos] = useState<Foto[]>([]);
@@ -646,7 +649,7 @@ export function OSModal({
                 os={os}
                 checklist={checklist}
                 corretivas={vinculos?.corretivas ?? []}
-                podeAbrir={podeAbrirOS(user?.role) && os.status !== 'cancelada'}
+                podeAbrir={podeAbrirOS(user?.role) && os.status !== 'cancelada' && (user?.role !== 'tecnico' || os.tecnico_id === user.id)}
                 podeLinkar={podeVerModulo(user?.role, 'os')}
                 tecnicoId={user?.role === 'tecnico' ? user.id : undefined}
                 onAberta={(nova, aviso) => {
@@ -725,13 +728,15 @@ export function OSModal({
               </div>
             )}
 
-            <div className="flex items-center gap-1 bg-amx-panel-2 border border-amx-line rounded-full p-1 w-fit">
+            <div className="flex items-center gap-1 bg-amx-panel-2 border border-amx-line rounded-full p-1 w-fit max-w-full overflow-x-auto">
               {(
                 [
                   ['checklist', `Checklist${checklist.length ? ` (${checklist.length})` : ''}`],
                   ['fotos', 'Fotos'],
                   ['assinaturas', 'Assinaturas'],
                   ['historico', 'Histórico'],
+                  // Técnico consulta as OS anteriores do local (só leitura).
+                  ...(ehTecnico ? [['condominio', 'Histórico do condomínio'] as [Tab, string]] : []),
                 ] as [Tab, string][]
               ).map(([value, label]) => (
                 <button
@@ -769,8 +774,8 @@ export function OSModal({
               <div className="flex flex-col gap-3">
                 <div>
                   <p className="text-sm font-semibold text-white">Fotos gerais do serviço</p>
-                  {equipamentosObrigatorios(os, checklist).length > 0 && (
-                    <p className="text-xs text-amx-muted">Opcional: as fotos de cada equipamento ficam no Checklist.</p>
+                  {(os.tipo !== 'corretiva' || equipamentosObrigatorios(os, checklist).length > 0) && (
+                    <p className="text-xs text-amx-muted">{os.tipo === 'corretiva' ? 'Opcional: as fotos do equipamento ficam no Checklist.' : 'Opcional na preventiva.'}</p>
                   )}
                 </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -882,6 +887,10 @@ export function OSModal({
             )}
 
             {tab === 'historico' && <HistoricoPanel logs={historico} />}
+
+            {tab === 'condominio' && ehTecnico && (
+              <HistoricoCondominio condominioId={os.condominio_id} osAtualId={os.id} onAbrir={setOsAnteriorId} />
+            )}
           </div>
 
           <ConfirmDialog
@@ -961,6 +970,14 @@ export function OSModal({
         />
       </div>
     </Modal>
+    {osAnteriorId && (
+      <OSModal
+        osId={osAnteriorId}
+        condominioNome={condominioNome}
+        onClose={() => setOsAnteriorId(null)}
+        onChanged={() => {}}
+      />
+    )}
     </>
   );
 }

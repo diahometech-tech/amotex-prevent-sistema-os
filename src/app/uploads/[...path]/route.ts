@@ -3,7 +3,7 @@
 // Em dev (UPLOADS_DIR padrão = public/uploads) o Next serve o arquivo estático
 // diretamente e esta rota nem é alcançada.
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest, canAccessCondominio, podeVerOS } from '@/lib/auth';
+import { getSessionFromRequest, canAccessCondominio, podeLerOS } from '@/lib/auth';
 import { isEscritorio } from '@/lib/roles';
 import { resolveUploadFile } from '@/lib/storage';
 import { Database } from '@/lib/db';
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!os) {
       return NextResponse.json({ error: 'Arquivo não encontrado.' }, { status: 404 });
     }
-    if (!(await podeVerOS(session, os))) {
+    if (!(await podeLerOS(session, os))) {
       return NextResponse.json({ error: 'Você não tem acesso a este arquivo.' }, { status: 403 });
     }
   } else {

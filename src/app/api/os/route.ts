@@ -66,6 +66,10 @@ export async function POST(request: NextRequest) {
       if (origem.status === 'cancelada') {
         return NextResponse.json({ error: 'A preventiva de origem está cancelada.' }, { status: 400 });
       }
+      // Técnico só abre corretiva a partir de preventiva que ele vê (a de outro técnico, no histórico, é só leitura).
+      if (isTecnico(session.role) && !(await podeVerOS(session, origem))) {
+        return NextResponse.json({ error: 'Sem acesso à preventiva de origem.' }, { status: 403 });
+      }
       os_origem_id = origem.id;
     }
     if (body.equipamento_id !== undefined && body.equipamento_id !== null && body.equipamento_id !== '') {
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
     // Toda corretiva é urgente (prazo de 3h pra chegada): avisa técnicos de
     // corretiva e gestores no Telegram. O resultado volta pra tela dizer a
     // quem chegou — ou por que não chegou.
-    const aviso = tipo === 'corretiva' ? await avisarCorretiva('os_corretiva_aberta', os) : undefined;
+    const aviso = tipo === 'corretiva' ? await avisarCorretiva('os_corretiva_aberta', os, { ignorarId: isTecnico(session.role) ? session.id : undefined }) : undefined;
     return NextResponse.json({ success: true, os, ...(aviso ? { aviso } : {}) });
   } catch (e) {
     console.error('Erro ao criar OS:', e);

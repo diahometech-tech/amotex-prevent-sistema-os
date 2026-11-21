@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import type { NextRequest } from 'next/server';
 import type { Condominio, OS, UserRole } from './db';
-import { isAdmin, isEscritorio, isScopedToOwnCondominio as isSindico, tecnicoVeOS } from './roles';
+import { isAdmin, isEscritorio, isScopedToOwnCondominio as isSindico, tecnicoVeOS, osEncerrada } from './roles';
 
 export const SESSION_COOKIE = 'amotex_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h (igual ao maxAge do cookie)
@@ -121,6 +121,19 @@ export async function podeVerOS(
   if (isEscritorio(session.role)) return true;
   if (session.role === 'tecnico') return tecnicoVeOS(session.id, os);
   if (session.role === 'sindico') return canAccessCondominio(session, os.condominio_id);
+  return false;
+}
+
+// Leitura de OS: o que podeVerOS permite + histórico do condomínio — o
+// técnico lê (só lê) as OS ENCERRADAS (finalizadas/canceladas) dos condomínios
+// onde tem OS visível. Usar só em rotas GET (OS, fotos/PDF em /uploads);
+// qualquer escrita continua em podeVerOS.
+export async function podeLerOS(
+  session: SessionUser,
+  os: Pick<OS, 'condominio_id' | 'tecnico_id' | 'tipo' | 'status'>
+): Promise<boolean> {
+  if (await podeVerOS(session, os)) return true;
+  if (session.role === 'tecnico' && osEncerrada(os)) return canAccessCondominio(session, os.condominio_id);
   return false;
 }
 

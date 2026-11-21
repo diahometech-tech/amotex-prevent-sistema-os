@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import type { User } from '@/lib/db';
 import { atendeCorretiva } from '@/lib/plantao';
+import { periodoAtendimento } from '@/lib/horario-comercial';
 
 type Tecnico = Pick<User, 'id' | 'nome' | 'papel' | 'especialidade' | 'ativo' | 'de_plantao' | 'telegram_chat_id'>;
 
@@ -51,13 +52,16 @@ export function PlantaoCard({ onChange }: { onChange?: () => void }) {
 
   if (!tecnicos) return null;
   const dePlantao = tecnicos.filter((t) => t.de_plantao);
+  const comercial = periodoAtendimento() === 'comercial';
 
   return (
     <Card className="p-4 flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider">Plantão agora</p>
         <p className="text-xs text-amx-muted">
-          {dePlantao.length > 0
+          {comercial
+            ? 'Agora é horário comercial (seg–sex 8h–18h, sáb 8h–16h): o aviso vai para todos os técnicos de corretiva. O plantonista marcado vale fora desse horário.'
+            : dePlantao.length > 0
             ? 'Aviso de corretiva vai para quem está de plantão, os gestores e a secretária.'
             : 'Ninguém marcado: aviso de corretiva vai para todos os técnicos.'}
         </p>
