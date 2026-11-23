@@ -3,6 +3,7 @@ import { Database } from '@/lib/db';
 import { getSessionFromRequest, canAccessCondominio, podeVerOS } from '@/lib/auth';
 import { podeEditarEquipamento, podeOperarCampo, osEncerrada } from '@/lib/roles';
 import { itemDeEquipamento } from '@/lib/os-checklist-inicial';
+import { lerInspecaoObrigatoria } from '@/lib/inspecao-equipamento';
 import { validarEquipamento } from '@/lib/equipamento-campos';
 import { saveFotoEquipamentoDataUrl } from '@/lib/uploads';
 
@@ -91,13 +92,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
     let checklistItem;
     if (os) {
-      checklistItem = await Database.createChecklistItem(itemDeEquipamento(os, equipamento));
+      const inspecao = await lerInspecaoObrigatoria();
+      checklistItem = await Database.createChecklistItem(itemDeEquipamento(os, equipamento, inspecao[os.tipo]));
       // O planejamento mensal cria todas as preventivas do mês com o parque
       // vazio: as outras OS abertas do condomínio também precisam do item novo,
       // senão a regra de foto por equipamento só valeria na OS do cadastro.
       for (const outra of await Database.getOSsByCondominio(id)) {
         if (outra.id === os.id || osEncerrada(outra)) continue;
-        await Database.createChecklistItem(itemDeEquipamento(outra, equipamento));
+        await Database.createChecklistItem(itemDeEquipamento(outra, equipamento, inspecao[outra.tipo]));
       }
     }
     return NextResponse.json({ success: true, equipamento, checklistItem });

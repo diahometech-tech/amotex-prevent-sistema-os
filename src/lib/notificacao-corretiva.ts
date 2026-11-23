@@ -18,7 +18,7 @@ import { notifyN8n, webhookConfigurado } from './notify';
 import { fmtHora, slaChegada } from './os-sla';
 import type { ResultadoAviso } from './aviso';
 import { escaparMarkdown } from './telegram-texto';
-import { escolherDestinatarios, plantonistas } from './plantao';
+import { escolherDestinatarios, plantonistasEm } from './plantao';
 import { enderecoCompleto } from './endereco';
 import { enviarPushUsuarios, usuariosComPush } from './push';
 
@@ -40,7 +40,8 @@ export type { ResultadoAviso };
 // plantão x atribuição) está em src/lib/plantao.ts. `tecnicoId` = OS já tem
 // técnico: o aviso vai só pra ele.
 export async function destinatariosCorretiva(tecnicoId?: string | null, agora?: Date) {
-  return escolherDestinatarios(await Database.getUsers(), { tecnicoId, agora });
+  const [users, escala] = await Promise.all([Database.getUsers(), Database.getPlantaoEscala()]);
+  return escolherDestinatarios(users, { tecnicoId, agora, escala });
 }
 
 function linkOs(osId: string): string | undefined {
@@ -164,10 +165,11 @@ export async function avisarCorretiva(
   opcoes: OpcoesAvisoCorretiva = {}
 ): Promise<ResultadoAviso> {
   if (os.tipo !== 'corretiva') return { enviado: false, destinatarios: 0, motivo: 'não é corretiva' };
-  const [condominio, tecnico, usuarios] = await Promise.all([
+  const [condominio, tecnico, usuarios, escala] = await Promise.all([
     Database.getCondominioById(os.condominio_id),
     os.tecnico_id ? Database.getUserById(os.tecnico_id) : Promise.resolve(null),
     Database.getUsers(),
+    Database.getPlantaoEscala(),
   ]);
   if (!condominio) return { enviado: false, destinatarios: 0, motivo: 'condomínio não encontrado' };
 
@@ -175,13 +177,15 @@ export async function avisarCorretiva(
   // sem ela, recalcula pelo momento em que a OS abriu (não o de agora).
   // Aberta/atribuída com técnico: só ele (+ gestores e secretária).
   const assumida = evento === 'os_corretiva_assumida';
+  const momento = assumida ? new Date(os.criado_em) : new Date();
   const comApp = await usuariosComPush();
   // Sem o webhook do n8n o Telegram não existe: ninguém conta como "com Telegram".
   const telegramAtivo = webhookConfigurado();
   const usuariosCanal = telegramAtivo ? usuarios : usuarios.map((u) => ({ ...u, telegram_chat_id: undefined }));
   const escolha = escolherDestinatarios(usuariosCanal, {
     tecnicoId: assumida ? null : os.tecnico_id,
-    agora: assumida ? new Date(os.criado_em) : undefined,
+    agora: momento,
+    escala,
     comApp,
   });
   const { periodo, motivo: porQue, atribuido } = escolha;
@@ -228,7 +232,7 @@ export async function avisarCorretiva(
       : mensagemCorretivaAberta(os, condominio, tecnico, plantao, ctx);
 
   // Texto de cada um com o motivo dele (só abertura/atribuição muda por pessoa).
-  const idsPlantao = new Set(plantonistas(usuarios).map((u) => u.id));
+  const idsPlantao = new Set(plantonistasEm(momento, escala, usuarios).usuarios.map((u) => u.id));
   const paraDe = (u: User): ContextoAviso['para'] => {
     if (evento === 'os_corretiva_assumida') return undefined;
     if (u.id === atribuido?.id) return 'tecnico';

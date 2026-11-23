@@ -36,6 +36,8 @@ export interface Condominio {
   cidade?: string;
   uf?: string;
   cep?: string;
+  // Região (src/lib/regioes.ts): agrupa o planejamento e a rota do dia. Ausente = sem região (vai por último).
+  regiao?: string;
   // Quem cuida do condomínio do lado do cliente (síndico/administradora).
   responsavel_nome?: string;
   responsavel_telefone?: string;
@@ -58,7 +60,7 @@ export type IndiceReajuste = 'igpm' | 'ipca' | 'inpc' | 'fixo';
 // Campos de cadastro/contrato do condomínio — lista única usada pelo INSERT
 // e pelo UPDATE do Postgres e pela rota PATCH (o que o cliente pode mandar).
 export const CONDOMINIO_CAMPOS_CADASTRO = [
-  'cnpj', 'razao_social', 'bairro', 'cidade', 'uf', 'cep',
+  'cnpj', 'razao_social', 'bairro', 'cidade', 'uf', 'cep', 'regiao',
   'responsavel_nome', 'responsavel_telefone', 'responsavel_email', 'emails_cobranca',
   'valor_mensal_centavos', 'dia_vencimento', 'contrato_inicio', 'reajuste_indice', 'reajuste_percentual_fixo',
   'preventivas_por_mes', 'ativo', 'desativado_em', 'observacoes',
@@ -114,6 +116,18 @@ export interface Reajuste {
   enviado_em?: string;
   decidido_em?: string;
   observacao?: string;
+  criado_em: string;
+}
+
+// Escala de plantão (22/11): uma linha = alguém de plantão naquele intervalo.
+// Pode haver mais de uma pessoa no mesmo intervalo. `inicio`/`fim` são
+// instantes (ISO, UTC). Quem manda é plantonistasEm (src/lib/plantao.ts).
+export interface PlantaoEscala {
+  id: string;
+  usuario_id: string;
+  inicio: string;
+  fim: string;
+  criado_por: string;
   criado_em: string;
 }
 
@@ -382,6 +396,13 @@ export interface DbBackend {
   updateUser(id: string, updates: Partial<User>): Promise<User | null>;
   deleteUser(id: string): Promise<boolean>;
 
+  // Escala de plantão
+  getPlantaoEscala(): Promise<PlantaoEscala[]>;
+  getPlantaoEscalaById(id: string): Promise<PlantaoEscala | null>;
+  insertPlantaoEscala(p: PlantaoEscala): Promise<void>;
+  updatePlantaoEscala(id: string, updates: Partial<PlantaoEscala>): Promise<PlantaoEscala | null>;
+  deletePlantaoEscala(id: string): Promise<boolean>;
+
   // Alerta
   getAlertas(): Promise<Alerta[]>;
   getAlertaById(id: string): Promise<Alerta | null>;
@@ -498,6 +519,7 @@ function emptyDB() {
     ajustes: [] as AjusteValor[],
     reajustes: [] as Reajuste[],
     configuracoes: [] as Configuracao[],
+    plantao_escala: [] as PlantaoEscala[],
     push_inscricoes: [] as PushInscricao[],
   };
 }
@@ -712,10 +734,38 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     const before = db.users.length;
     db.users = db.users.filter((u) => u.id !== id);
+    db.plantao_escala = db.plantao_escala.filter((p) => p.usuario_id !== id);
     db.push_inscricoes = db.push_inscricoes.filter((p) => p.usuario_id !== id);
     const removed = db.users.length < before;
     if (removed) writeLocalDB(db);
     return removed;
+  },
+
+  async getPlantaoEscala() {
+    return [...readLocalDB().plantao_escala].sort((a, b) => a.inicio.localeCompare(b.inicio));
+  },
+  async getPlantaoEscalaById(id) {
+    return readLocalDB().plantao_escala.find((p) => p.id === id) || null;
+  },
+  async insertPlantaoEscala(p) {
+    const db = readLocalDB();
+    db.plantao_escala.push(p);
+    writeLocalDB(db);
+  },
+  async updatePlantaoEscala(id, updates) {
+    const db = readLocalDB();
+    const i = db.plantao_escala.findIndex((p) => p.id === id);
+    if (i === -1) return null;
+    db.plantao_escala[i] = { ...db.plantao_escala[i], ...stripUndefined(updates) };
+    writeLocalDB(db);
+    return db.plantao_escala[i];
+  },
+  async deletePlantaoEscala(id) {
+    const db = readLocalDB();
+    const antes = db.plantao_escala.length;
+    db.plantao_escala = db.plantao_escala.filter((p) => p.id !== id);
+    if (db.plantao_escala.length < antes) writeLocalDB(db);
+    return db.plantao_escala.length < antes;
   },
 
   async getAlertas() { return readLocalDB().alertas; },
@@ -1122,6 +1172,17 @@ export class Database {
   }
 
   static updateUser(id: string, updates: Partial<User>) { return backend().updateUser(id, updates); }
+
+  // ----- Escala de plantão -----
+  static getPlantaoEscala() { return backend().getPlantaoEscala(); }
+  static getPlantaoEscalaById(id: string) { return backend().getPlantaoEscalaById(id); }
+  static async createPlantaoEscala(data: Pick<PlantaoEscala, 'usuario_id' | 'inicio' | 'fim' | 'criado_por'>): Promise<PlantaoEscala> {
+    const p: PlantaoEscala = { ...data, id: randomUUID(), criado_em: new Date().toISOString() };
+    await backend().insertPlantaoEscala(p);
+    return p;
+  }
+  static updatePlantaoEscala(id: string, updates: Partial<PlantaoEscala>) { return backend().updatePlantaoEscala(id, updates); }
+  static deletePlantaoEscala(id: string) { return backend().deletePlantaoEscala(id); }
   static deleteUser(id: string) { return backend().deleteUser(id); }
 
   static async getUsersByRole(papel: UserRole): Promise<User[]> {
@@ -1193,7 +1254,7 @@ export class Database {
   static getOSById(id: string) { return backend().getOSById(id); }
   static getOSsByCondominio(condominioId: string) { return backend().getOSsByCondominio(condominioId); }
 
-  static async createOS(data: Partial<OS>): Promise<OS> {
+  static async createOS(data: Partial<OS>, ator?: string): Promise<OS> {
     const os: OS = {
       id: randomUUID(),
       condominio_id: data.condominio_id || '',
@@ -1216,7 +1277,7 @@ export class Database {
     };
     await backend().insertOS(os);
     await this.createAuditLog({
-      entidade: 'os', entidade_id: os.id, acao: 'CRIADA', ator: data.origem === 'hermes_automatica' ? 'hermes' : 'usuario',
+      entidade: 'os', entidade_id: os.id, acao: 'CRIADA', ator: data.origem === 'hermes_automatica' ? 'hermes' : ator || 'usuario',
       detalhe: { tipo: os.tipo, origem: os.origem, ...(os.os_origem_id ? { os_origem_id: os.os_origem_id } : {}) },
     });
     return os;
@@ -1261,7 +1322,7 @@ export class Database {
   // assinaturas. A regra mora em pendenciasFinalizacao (src/lib/os-finalizacao.ts),
   // a mesma função que a tela usa pra travar o botão — não duplicar aqui.
   // Assinatura enviada no mesmo PATCH do finalizar já conta.
-  static async finalizarOS(id: string, updates: Partial<OS>): Promise<OS | null> {
+  static async finalizarOS(id: string, updates: Partial<OS>, ator?: string): Promise<OS | null> {
     const atual = await backend().getOSById(id);
     if (!atual) return null;
     const [checklist, fotos] = await Promise.all([backend().getChecklistByOS(id), backend().getFotosByOS(id)]);
@@ -1269,7 +1330,7 @@ export class Database {
     if (pendencias.length > 0) throw new FinalizacaoBloqueadaError(pendencias);
     const os = await backend().updateOS(id, { ...updates, status: 'finalizada', saida_em: new Date().toISOString() });
     if (os) {
-      await this.createAuditLog({ entidade: 'os', entidade_id: id, acao: 'FINALIZADA', ator: 'usuario' });
+      await this.createAuditLog({ entidade: 'os', entidade_id: id, acao: 'FINALIZADA', ator: ator || 'usuario' });
     }
     return os;
   }

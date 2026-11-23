@@ -35,6 +35,9 @@ interface Dados {
   cobrancas: Cobranca[];
   resumo: ResumoMes;
   aGerar: number;
+  vencidas: number;
+  diasVencidas: number[];
+  vencimentoSugerido: string;
   semValor: { id: string; nome: string }[];
   condominios: CondLite[];
 }
@@ -73,6 +76,8 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
   const [busca, setBusca] = useState('');
   const [pagando, setPagando] = useState<Cobranca | null>(null);
   const [editando, setEditando] = useState<Cobranca | null>(null);
+  const [escolhendoVenc, setEscolhendoVenc] = useState(false);
+  const [ajustandoLote, setAjustandoLote] = useState(false);
 
   const carregar = useCallback(async (c: string) => {
     setErro('');
@@ -110,7 +115,8 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
       });
   }, [dados, filtro, busca, condPorId]);
 
-  const gerar = async () => {
+  // vencimentoVencidas: 'manter' ou data YYYY-MM-DD (só vale se alguma nasce vencida).
+  const gerar = async (vencimentoVencidas?: string) => {
     setBusy(true);
     setMsg('');
     setErro('');
@@ -118,7 +124,7 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
       const res = await fetch('/api/financeiro/cobrancas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ competencia }),
+        body: JSON.stringify({ competencia, vencimento_vencidas: vencimentoVencidas }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -146,6 +152,10 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
     return true;
   };
 
+  // Em aberto e ainda não pagas: o que o ajuste de vencimento em lote pode tocar.
+  const ajustaveis = useMemo(() => linhas.filter(({ st }) => st === 'pendente' || st === 'enviada' || st === 'atrasada').map(({ c }) => c), [linhas]);
+  const podeAjustarLote = podeAcaoCobranca(role, 'ajustar_vencimento');
+
   const r = dados?.resumo;
   const chips: [Filtro, string, number | undefined][] = [
     ['abertas', 'Em aberto', r ? r.pendentes + r.atrasadas : undefined],
@@ -163,7 +173,7 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
         <Button size="sm" variant="secondary" onClick={() => setCompetencia(somarMeses(competencia, 1))} aria-label="Próximo mês">›</Button>
         <h2 className="text-white text-base normal-case tracking-normal font-semibold ml-1">{rotuloCompetencia(competencia, true)}</h2>
         {dados && dados.aGerar > 0 && (
-          <Button size="sm" onClick={gerar} disabled={busy} className="sm:ml-auto">
+          <Button size="sm" onClick={() => (dados.vencidas > 0 ? setEscolhendoVenc(true) : gerar())} disabled={busy} className="sm:ml-auto">
             {busy ? 'Gerando...' : dados.cobrancas.length ? `Gerar ${dados.aGerar} cobrança${dados.aGerar > 1 ? 's' : ''} que falta${dados.aGerar > 1 ? 'm' : ''}` : `Gerar cobranças do mês (${dados.aGerar})`}
           </Button>
         )}
@@ -202,6 +212,9 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
                 {l}{n !== undefined ? ` · ${n}` : ''}
               </button>
             ))}
+            {podeAjustarLote && ajustaveis.length > 0 && (
+              <Button size="sm" variant="secondary" onClick={() => setAjustandoLote(true)}>Ajustar vencimento ({ajustaveis.length})</Button>
+            )}
             <Input id="fin-busca" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar condomínio ou CNPJ" className="w-full sm:w-64 sm:ml-auto py-1.5 text-xs" />
           </div>
 
@@ -260,6 +273,44 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
         </>
       )}
 
+      <Modal open={escolhendoVenc} onClose={() => setEscolhendoVenc(false)} maxWidth="max-w-md">
+        {dados && (
+          <VencimentoVencidasForm
+            vencidas={dados.vencidas}
+            dias={dados.diasVencidas}
+            hoje={dados.hoje}
+            sugerido={dados.vencimentoSugerido}
+            onClose={() => setEscolhendoVenc(false)}
+            onConfirmar={async (v) => { setEscolhendoVenc(false); await gerar(v); }}
+          />
+        )}
+      </Modal>
+
+      <Modal open={ajustandoLote} onClose={() => setAjustandoLote(false)} maxWidth="max-w-md">
+        {dados && (
+          <AjusteLoteForm
+            quantidade={ajustaveis.length}
+            hoje={dados.hoje}
+            sugerido={dados.vencimentoSugerido}
+            onClose={() => setAjustandoLote(false)}
+            onConfirmar={async (vencimento) => {
+              setErro('');
+              const res = await fetch('/api/financeiro/cobrancas', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ acao: 'ajustar_vencimento', ids: ajustaveis.map((c) => c.id), vencimento }),
+              });
+              const d = await res.json().catch(() => ({}));
+              setAjustandoLote(false);
+              if (res.ok) {
+                setMsg(`Vencimento de ${d.ajustadas} cobrança${d.ajustadas !== 1 ? 's' : ''} ajustado para ${dataBR(vencimento)}.`);
+                await carregar(competencia);
+              } else setErro(d.error || 'Falha ao ajustar o vencimento.');
+            }}
+          />
+        )}
+      </Modal>
+
       <Modal open={!!pagando} onClose={() => setPagando(null)} maxWidth="max-w-md">
         {pagando && (
           <PagamentoForm
@@ -293,6 +344,84 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
         )}
       </Modal>
     </div>
+  );
+}
+
+// Gerar depois do dia de vencimento: pergunta antes qual data usar nas que já
+// nasceriam vencidas (senão o mês inteiro aparece "atrasado" de cara).
+function VencimentoVencidasForm({
+  vencidas, dias, hoje, sugerido, onClose, onConfirmar,
+}: {
+  vencidas: number;
+  dias: number[];
+  hoje: string;
+  sugerido: string;
+  onClose: () => void;
+  onConfirmar: (vencimento: string) => void;
+}) {
+  const [modo, setModo] = useState<'data' | 'manter'>('data');
+  const [data, setData] = useState(sugerido);
+  const diaTxt = dias.length === 1 ? `dia ${dias[0]}` : `dias ${dias.join(', ')}`;
+  const invalida = modo === 'data' && (!data || data < hoje);
+  return (
+    <>
+      <ModalHeader title="Gerar cobranças" subtitle="Vencimento já passou" onClose={onClose} />
+      <div className="p-5 flex flex-col gap-4">
+        <p className="text-sm text-white">
+          {vencidas} cobrança{vencidas > 1 ? 's' : ''} vence{vencidas > 1 ? 'm' : ''} antes de hoje ({diaTxt}). Qual vencimento usar para {vencidas > 1 ? 'elas' : 'ela'}?
+        </p>
+        <label className="flex items-center gap-2 text-sm text-white">
+          <input type="radio" name="venc-modo" checked={modo === 'data'} onChange={() => setModo('data')} />
+          Usar uma nova data
+        </label>
+        {modo === 'data' && (
+          <Field label="Novo vencimento" hint="Vale só para as cobranças novas que já nasceriam vencidas.">
+            <Input id="gerar-venc" type="date" min={hoje} value={data} onChange={(e) => setData(e.target.value)} />
+          </Field>
+        )}
+        <label className="flex items-center gap-2 text-sm text-white">
+          <input type="radio" name="venc-modo" checked={modo === 'manter'} onChange={() => setModo('manter')} />
+          Manter o dia do contrato (ficam atrasadas)
+        </label>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button type="button" disabled={invalida} onClick={() => onConfirmar(modo === 'manter' ? 'manter' : data)}>Gerar cobranças</Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Ajuste em lote: muda o vencimento das cobranças em aberto que estão na lista.
+function AjusteLoteForm({
+  quantidade, hoje, sugerido, onClose, onConfirmar,
+}: {
+  quantidade: number;
+  hoje: string;
+  sugerido: string;
+  onClose: () => void;
+  onConfirmar: (vencimento: string) => Promise<void>;
+}) {
+  const [data, setData] = useState(sugerido);
+  const [busy, setBusy] = useState(false);
+  return (
+    <>
+      <ModalHeader title="Ajustar vencimento" subtitle={`${quantidade} cobrança${quantidade > 1 ? 's' : ''} em aberto`} onClose={onClose} />
+      <div className="p-5 flex flex-col gap-4">
+        <p className="text-sm text-white">
+          O vencimento de {quantidade} cobrança{quantidade > 1 ? 's' : ''} em aberto (a lista que está na tela) vai mudar para a data abaixo. Cobrança paga ou isenta não é alterada.
+        </p>
+        <Field label="Novo vencimento">
+          <Input id="lote-venc" type="date" min={hoje} value={data} onChange={(e) => setData(e.target.value)} />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button type="button" disabled={!data || busy} onClick={async () => { setBusy(true); await onConfirmar(data); setBusy(false); }}>
+            {busy ? 'Ajustando...' : `Confirmar para ${quantidade}`}
+          </Button>
+        </div>
+      </div>
+    </>
   );
 }
 

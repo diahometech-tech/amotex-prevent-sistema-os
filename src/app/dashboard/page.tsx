@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { PlantaoCard } from '@/components/equipe/PlantaoCard';
+import { CapacidadeCard } from '@/components/os/CapacidadeCard';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,7 +13,7 @@ import { OSModal } from '@/components/os/OSModal';
 import { computeOsPrioridade, compararPorPrioridade, resumoRotasPorCondominio } from '@/lib/os-priority';
 import { hojeISO, montarRotaDoDia } from '@/lib/os-agenda';
 import { resumoSla } from '@/lib/os-sla';
-import { podeGerirPlantao } from '@/lib/roles';
+import { isAdmin, podeGerirPlantao } from '@/lib/roles';
 import type { Alerta, Condominio, EventoAlerta, OS } from '@/lib/db';
 
 // Shape devolvido por GET /api/alertas: reservatorio/condominio já
@@ -178,12 +179,12 @@ function DashboardContent() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-8 pt-6 pb-4 border-b border-amx-line">
+      <div className="px-4 sm:px-8 pt-6 pb-4 border-b border-amx-line">
         <h1 className="text-[22px] font-semibold text-white normal-case tracking-normal">Dashboard</h1>
         <p className="text-[13px] text-amx-muted mt-1">Visão consolidada de OS, alertas e rotas</p>
       </div>
 
-      <div className="flex-1 overflow-auto px-8 py-6">
+      <div className="flex-1 overflow-auto px-4 sm:px-8 py-6">
         {error && (
           <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2 mb-4">{error}</p>
         )}
@@ -193,6 +194,9 @@ function DashboardContent() {
             <PlantaoCard />
           </div>
         )}
+
+        {/* Capacidade da equipe: só o gestor (a API também recusa os outros). */}
+        {isAdmin(user?.role) && <CapacidadeCard />}
 
         {/* KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

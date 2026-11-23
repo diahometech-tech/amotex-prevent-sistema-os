@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Field, Input } from '@/components/ui/Form';
+import { Field, Input, Toggle } from '@/components/ui/Form';
+import { InspecaoEquipamentoConfig } from '@/components/os/InspecaoEquipamentoConfig';
+import { diasUteisPreventiva } from '@/lib/os-agenda';
 import { painelPreventivasMes } from '@/lib/painel-preventivas-mes';
 import type { OS } from '@/lib/db';
 
@@ -16,13 +18,17 @@ export function PainelPreventivasMes({
   oss,
   tecnicoNome,
   hoje,
+  ehGestor = false,
 }: {
+  ehGestor?: boolean;
   oss: OS[];
   tecnicoNome: (id?: string) => string | undefined;
   hoje: string;
 }) {
   const [meta, setMeta] = useState('');
   const [metaSalva, setMetaSalva] = useState<number | null>(null);
+  const [sabado, setSabado] = useState(false);
+  const [salvandoSabado, setSalvandoSabado] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
@@ -34,6 +40,7 @@ export function PainelPreventivasMes({
         if (vivo && d?.meta) {
           setMeta(String(d.meta));
           setMetaSalva(d.meta);
+          setSabado(!!d.planejar_sabado);
         }
       })
       .catch(() => {});
@@ -71,8 +78,33 @@ export function PainelPreventivasMes({
     }
   };
 
+  // "Planejar preventivas aos sábados" salva na hora, sem botão (vale pro
+  // planejamento, a reorganização e o próximo dia útil).
+  const mudarSabado = async (valor: boolean) => {
+    setSalvandoSabado(true);
+    setMsg(null);
+    try {
+      const res = await fetch('/api/os/preventivas/meta', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planejar_sabado: valor }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setSabado(!!data.planejar_sabado);
+        setMsg({ ok: true, texto: valor ? 'Sábado entra no planejamento das preventivas.' : 'Sábado fora do planejamento. Domingo nunca entra.' });
+      } else {
+        setMsg({ ok: false, texto: data.error || 'Não foi possível salvar.' });
+      }
+    } catch {
+      setMsg({ ok: false, texto: 'Erro de conexão.' });
+    } finally {
+      setSalvandoSabado(false);
+    }
+  };
+
   const mes = hoje.slice(0, 7);
-  const painel = useMemo(() => painelPreventivasMes(oss, mes, hoje), [oss, mes, hoje]);
+  const painel = useMemo(() => painelPreventivasMes(oss, mes, hoje, diasUteisPreventiva(sabado)), [oss, mes, hoje, sabado]);
   const nomeMes = `${MESES[Number(mes.slice(5)) - 1]} de ${mes.slice(0, 4)}`;
   const ritmo = (r: number | null) => (r === null ? '—' : String(r).replace('.', ','));
 
@@ -99,6 +131,17 @@ export function PainelPreventivasMes({
         </Button>
         {msg && <p className={`text-xs font-semibold ${msg.ok ? 'text-amx-green' : 'text-amx-red-hover'}`}>{msg.texto}</p>}
       </div>
+      <div className="mt-3">
+        <Toggle
+          checked={sabado}
+          onChange={mudarSabado}
+          disabled={salvandoSabado}
+          label="Planejar preventivas aos sábados"
+          hint="Desligado: só segunda a sexta. Domingo nunca. Vale para o planejamento do mês, as sobras e o próximo dia útil."
+        />
+      </div>
+
+      {ehGestor && <InspecaoEquipamentoConfig />}
 
       <p className="font-heading text-[11px] font-semibold tracking-wider text-amx-muted mt-5 mb-2">
         PREVENTIVAS DE {nomeMes.toUpperCase()} · {painel.diasUteisRestantes} dia{painel.diasUteisRestantes !== 1 ? 's' : ''} útei

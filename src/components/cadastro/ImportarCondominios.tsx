@@ -32,7 +32,7 @@ async function lerArquivoTexto(file: File): Promise<string> {
 }
 
 function baixarModelo() {
-  const exemplo = 'Condomínio Exemplo;11.222.333/0001-81;Rua das Flores, 100;Administradora X;500,00;10;financeiro@adm.com.br;Maria Souza;11988880000;maria@adm.com.br;15/03/2024;IGP-M;;mensal;José da Silva;11999990000;Maria Souza;11988880000;';
+  const exemplo = 'Condomínio Exemplo;11.222.333/0001-81;Rua das Flores, 100;01310-100;Centro;Administradora X;500,00;10;financeiro@adm.com.br;Maria Souza;11988880000;maria@adm.com.br;15/03/2024;IGP-M;;mensal;José da Silva;11999990000;Maria Souza;11988880000;';
   const csv = `﻿${CABECALHO_MODELO.join(';')}\r\n${exemplo}\r\n`;
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
@@ -113,12 +113,12 @@ export function ImportarCondominios({ onClose, onImported }: { onClose: () => vo
             <div className="text-[13px] text-amx-muted flex flex-col gap-1.5">
               <p>
                 Uma linha por condomínio, com <b className="text-white">nome</b> ou <b className="text-white">CNPJ</b>. Também aceita
-                endereço, administradora, valor mensal, dia de vencimento, e-mails de cobrança, responsável, início do contrato,
+                endereço, CEP, região, administradora, valor mensal, dia de vencimento, e-mails de cobrança, responsável, início do contrato,
                 índice de reajuste e zelador/síndico. A planilha de cobranças da Amotex já serve do jeito que está.
               </p>
               <p>
                 <b className="text-white">CNPJ já cadastrado é atualizado</b> com as colunas preenchidas: é assim que a planilha de
-                levantamento de contratos volta pro sistema. Telefone de zelador/síndico vira contato de WhatsApp.
+                levantamento de contratos volta pro sistema. Telefone de zelador/síndico vira contato de WhatsApp. Condomínio novo sem a coluna Região recebe a região sugerida pelo CEP.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">

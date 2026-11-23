@@ -19,7 +19,8 @@
 //   Dashboard       sim    sim (sem financeiro)       não                      não
 //   OS              todas  todas: abrir, atribuir,    só as dele + corretivas  não (vê no Painel)
 //                          reagendar, cancelar        sem técnico
-//   Plantão         sim    sim                        não                      não
+//   Plantão         sim    sim (monta a escala)       só vê quem está de       não
+//                                                     plantão e a própria escala
 //   Rotas           sim    sim + planejar             só a própria             não
 //   Condomínios     sim    ver; editar contatos;      só os das suas OS        não
 //                          contrato só leitura
@@ -74,6 +75,7 @@ export function isScopedToOwnCondominio(role?: UserRole): boolean {
 
 export type Modulo =
   | 'dashboard'
+  | 'plantao'
   | 'os'
   | 'rotas'
   | 'condominios'
@@ -84,6 +86,7 @@ export type Modulo =
 
 const MODULOS: Record<Modulo, UserRole[]> = {
   dashboard: ['admin', 'secretaria'],
+  plantao: ['admin', 'secretaria', 'tecnico'],
   os: ['admin', 'secretaria', 'tecnico'],
   rotas: ['admin', 'secretaria', 'tecnico'],
   condominios: ['admin', 'secretaria', 'tecnico'],
@@ -110,6 +113,7 @@ export function moduloDaRota(pathname: string): Modulo | null {
   if (pathname === '/') return 'os';
   const prefixos: [string, Modulo][] = [
     ['/dashboard', 'dashboard'],
+    ['/plantao', 'plantao'],
     ['/rotas', 'rotas'],
     ['/condominios', 'condominios'],
     ['/painel', 'painel'],
@@ -156,7 +160,7 @@ export function podePlanejarPreventivas(role?: UserRole): boolean {
   return isEscritorio(role);
 }
 
-// Marcar quem está de plantão.
+// Marcar quem está de plantão e montar a escala (o técnico só consulta).
 export function podeGerirPlantao(role?: UserRole): boolean {
   return isEscritorio(role);
 }
@@ -196,7 +200,7 @@ export function abasFinanceiro(role?: UserRole): AbaFinanceiro[] {
   if (role === 'secretaria') return ['cobrancas'];
   return [];
 }
-export const ACOES_COBRANCA_SECRETARIA = ['marcar_enviada', 'registrar_pagamento', 'anexar_comprovante'] as const;
+export const ACOES_COBRANCA_SECRETARIA = ['marcar_enviada', 'registrar_pagamento', 'anexar_comprovante', 'ajustar_vencimento'] as const;
 export function podeAcaoCobranca(role: UserRole | undefined, acao: string): boolean {
   if (role === 'admin') return true;
   if (role === 'secretaria') return (ACOES_COBRANCA_SECRETARIA as readonly string[]).includes(acao);
