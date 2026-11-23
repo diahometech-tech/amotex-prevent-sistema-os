@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { getSessionFromRequest, canAccessCondominio, condominioParaPapel, filtrarOSVisiveis } from '@/lib/auth';
+import { getSessionFromRequest, canAccessCondominio, condominioParaPapel, filtrarOSVisiveis, osParaPapel } from '@/lib/auth';
 import { podeEditarCondominio, podeVerReservatorios } from '@/lib/roles';
 import { validarCadastro } from '@/lib/financeiro/cadastro';
 import { hojeISO } from '@/lib/os-agenda';
@@ -25,7 +25,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
     Database.getEquipamentosByCondominio(id),
     Database.getOSsByCondominio(id),
   ]);
-  const oss = await filtrarOSVisiveis(session, todasOss);
+  // Localização da chegada/finalização só pro escritório (osParaPapel).
+  const oss = (await filtrarOSVisiveis(session, todasOss)).map((o) => osParaPapel(session.role, o));
   return NextResponse.json({ condominio: condominioParaPapel(session.role, condominio), reservatorios, contatos, equipamentos, oss });
 }
 

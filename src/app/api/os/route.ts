@@ -66,7 +66,7 @@ async function abrirChamadoDoCondominio(session: { id: string; name: string }, b
     solicitante_nome: textoOpcional(body.solicitante_nome)?.slice(0, 120) ?? session.name,
     solicitante_telefone: textoOpcional(body.solicitante_telefone)?.slice(0, 40),
     descricao_problema: descricao,
-  });
+  }, session.name);
   recordFailure(chave, JANELA_CHAMADOS_MS, CHAMADOS_POR_HORA);
   await criarChecklistInicial(os);
   notifyN8n('os_created', os);
