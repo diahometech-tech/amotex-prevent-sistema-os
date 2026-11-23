@@ -36,6 +36,8 @@ export interface Condominio {
   cidade?: string;
   uf?: string;
   cep?: string;
+  // Região (src/lib/regioes.ts): agrupa o planejamento e a rota do dia. Ausente = sem região (vai por último).
+  regiao?: string;
   // Quem cuida do condomínio do lado do cliente (síndico/administradora).
   responsavel_nome?: string;
   responsavel_telefone?: string;
@@ -58,7 +60,7 @@ export type IndiceReajuste = 'igpm' | 'ipca' | 'inpc' | 'fixo';
 // Campos de cadastro/contrato do condomínio — lista única usada pelo INSERT
 // e pelo UPDATE do Postgres e pela rota PATCH (o que o cliente pode mandar).
 export const CONDOMINIO_CAMPOS_CADASTRO = [
-  'cnpj', 'razao_social', 'bairro', 'cidade', 'uf', 'cep',
+  'cnpj', 'razao_social', 'bairro', 'cidade', 'uf', 'cep', 'regiao',
   'responsavel_nome', 'responsavel_telefone', 'responsavel_email', 'emails_cobranca',
   'valor_mensal_centavos', 'dia_vencimento', 'contrato_inicio', 'reajuste_indice', 'reajuste_percentual_fixo',
   'preventivas_por_mes', 'ativo', 'desativado_em', 'observacoes',
@@ -117,9 +119,35 @@ export interface Reajuste {
   criado_em: string;
 }
 
+// Escala de plantão (22/11): uma linha = alguém de plantão naquele intervalo.
+// Pode haver mais de uma pessoa no mesmo intervalo. `inicio`/`fim` são
+// instantes (ISO, UTC). Quem manda é plantonistasEm (src/lib/plantao.ts).
+export interface PlantaoEscala {
+  id: string;
+  usuario_id: string;
+  inicio: string;
+  fim: string;
+  criado_por: string;
+  criado_em: string;
+}
+
 export interface Configuracao {
   chave: string;
   valor: string;
+}
+
+// Aparelho que recebe aviso do app (Web Push). Um usuário pode ter vários
+// (celular e computador); o endpoint é único: se outro usuário entra no mesmo
+// aparelho, a inscrição passa para ele. Ver src/lib/push.ts.
+export interface PushInscricao {
+  id: string;
+  usuario_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent?: string;
+  criado_em: string;
+  ultimo_uso_em?: string;
 }
 
 // Ponto monitorado dentro de um condomínio. nome_sensorlog é a chave de
@@ -384,6 +412,13 @@ export interface DbBackend {
   updateUser(id: string, updates: Partial<User>): Promise<User | null>;
   deleteUser(id: string): Promise<boolean>;
 
+  // Escala de plantão
+  getPlantaoEscala(): Promise<PlantaoEscala[]>;
+  getPlantaoEscalaById(id: string): Promise<PlantaoEscala | null>;
+  insertPlantaoEscala(p: PlantaoEscala): Promise<void>;
+  updatePlantaoEscala(id: string, updates: Partial<PlantaoEscala>): Promise<PlantaoEscala | null>;
+  deletePlantaoEscala(id: string): Promise<boolean>;
+
   // Alerta
   getAlertas(): Promise<Alerta[]>;
   getAlertaById(id: string): Promise<Alerta | null>;
@@ -435,6 +470,14 @@ export interface DbBackend {
   updateReajuste(id: string, updates: Partial<Reajuste>): Promise<Reajuste | null>;
   getConfiguracao(chave: string): Promise<string | null>;
   setConfiguracao(chave: string, valor: string): Promise<void>;
+
+  // Avisos do app (Web Push)
+  upsertPushInscricao(i: PushInscricao): Promise<void>;
+  getPushInscricaoByEndpoint(endpoint: string): Promise<PushInscricao | null>;
+  getPushInscricoesByUsuarios(usuarioIds: string[]): Promise<PushInscricao[]>;
+  getUsuarioIdsComPush(): Promise<string[]>;
+  deletePushInscricaoByEndpoint(endpoint: string): Promise<boolean>;
+  tocarPushInscricao(id: string): Promise<void>;
 
   // Auditoria
   getAuditLogs(): Promise<AuditLog[]>;
@@ -492,6 +535,8 @@ function emptyDB() {
     ajustes: [] as AjusteValor[],
     reajustes: [] as Reajuste[],
     configuracoes: [] as Configuracao[],
+    plantao_escala: [] as PlantaoEscala[],
+    push_inscricoes: [] as PushInscricao[],
   };
 }
 
@@ -705,9 +750,38 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     const before = db.users.length;
     db.users = db.users.filter((u) => u.id !== id);
+    db.plantao_escala = db.plantao_escala.filter((p) => p.usuario_id !== id);
+    db.push_inscricoes = db.push_inscricoes.filter((p) => p.usuario_id !== id);
     const removed = db.users.length < before;
     if (removed) writeLocalDB(db);
     return removed;
+  },
+
+  async getPlantaoEscala() {
+    return [...readLocalDB().plantao_escala].sort((a, b) => a.inicio.localeCompare(b.inicio));
+  },
+  async getPlantaoEscalaById(id) {
+    return readLocalDB().plantao_escala.find((p) => p.id === id) || null;
+  },
+  async insertPlantaoEscala(p) {
+    const db = readLocalDB();
+    db.plantao_escala.push(p);
+    writeLocalDB(db);
+  },
+  async updatePlantaoEscala(id, updates) {
+    const db = readLocalDB();
+    const i = db.plantao_escala.findIndex((p) => p.id === id);
+    if (i === -1) return null;
+    db.plantao_escala[i] = { ...db.plantao_escala[i], ...stripUndefined(updates) };
+    writeLocalDB(db);
+    return db.plantao_escala[i];
+  },
+  async deletePlantaoEscala(id) {
+    const db = readLocalDB();
+    const antes = db.plantao_escala.length;
+    db.plantao_escala = db.plantao_escala.filter((p) => p.id !== id);
+    if (db.plantao_escala.length < antes) writeLocalDB(db);
+    return db.plantao_escala.length < antes;
   },
 
   async getAlertas() { return readLocalDB().alertas; },
@@ -881,6 +955,43 @@ const jsonBackend: DbBackend = {
   async setConfiguracao(chave, valor) {
     const db = readLocalDB();
     db.configuracoes = [...db.configuracoes.filter((c) => c.chave !== chave), { chave, valor }];
+    writeLocalDB(db);
+  },
+
+  // ----- Avisos do app (Web Push) -----
+  async upsertPushInscricao(i) {
+    const db = readLocalDB();
+    const antiga = db.push_inscricoes.find((p) => p.endpoint === i.endpoint);
+    db.push_inscricoes = [
+      ...db.push_inscricoes.filter((p) => p.endpoint !== i.endpoint),
+      // Mesmo aparelho: mantém o id e a data de criação, troca dono e chaves.
+      antiga ? { ...i, id: antiga.id, criado_em: antiga.criado_em } : i,
+    ];
+    writeLocalDB(db);
+  },
+  async getPushInscricaoByEndpoint(endpoint) {
+    return readLocalDB().push_inscricoes.find((p) => p.endpoint === endpoint) ?? null;
+  },
+  async getPushInscricoesByUsuarios(usuarioIds) {
+    const ids = new Set(usuarioIds);
+    return readLocalDB().push_inscricoes.filter((p) => ids.has(p.usuario_id));
+  },
+  async getUsuarioIdsComPush() {
+    return [...new Set(readLocalDB().push_inscricoes.map((p) => p.usuario_id))];
+  },
+  async deletePushInscricaoByEndpoint(endpoint) {
+    const db = readLocalDB();
+    const antes = db.push_inscricoes.length;
+    db.push_inscricoes = db.push_inscricoes.filter((p) => p.endpoint !== endpoint);
+    const removida = db.push_inscricoes.length < antes;
+    if (removida) writeLocalDB(db);
+    return removida;
+  },
+  async tocarPushInscricao(id) {
+    const db = readLocalDB();
+    const p = db.push_inscricoes.find((x) => x.id === id);
+    if (!p) return;
+    p.ultimo_uso_em = new Date().toISOString();
     writeLocalDB(db);
   },
 
@@ -1077,6 +1188,17 @@ export class Database {
   }
 
   static updateUser(id: string, updates: Partial<User>) { return backend().updateUser(id, updates); }
+
+  // ----- Escala de plantão -----
+  static getPlantaoEscala() { return backend().getPlantaoEscala(); }
+  static getPlantaoEscalaById(id: string) { return backend().getPlantaoEscalaById(id); }
+  static async createPlantaoEscala(data: Pick<PlantaoEscala, 'usuario_id' | 'inicio' | 'fim' | 'criado_por'>): Promise<PlantaoEscala> {
+    const p: PlantaoEscala = { ...data, id: randomUUID(), criado_em: new Date().toISOString() };
+    await backend().insertPlantaoEscala(p);
+    return p;
+  }
+  static updatePlantaoEscala(id: string, updates: Partial<PlantaoEscala>) { return backend().updatePlantaoEscala(id, updates); }
+  static deletePlantaoEscala(id: string) { return backend().deletePlantaoEscala(id); }
   static deleteUser(id: string) { return backend().deleteUser(id); }
 
   static async getUsersByRole(papel: UserRole): Promise<User[]> {
@@ -1148,7 +1270,7 @@ export class Database {
   static getOSById(id: string) { return backend().getOSById(id); }
   static getOSsByCondominio(condominioId: string) { return backend().getOSsByCondominio(condominioId); }
 
-  static async createOS(data: Partial<OS>): Promise<OS> {
+  static async createOS(data: Partial<OS>, ator?: string): Promise<OS> {
     const os: OS = {
       id: randomUUID(),
       condominio_id: data.condominio_id || '',
@@ -1172,7 +1294,7 @@ export class Database {
     };
     await backend().insertOS(os);
     await this.createAuditLog({
-      entidade: 'os', entidade_id: os.id, acao: 'CRIADA', ator: data.origem === 'hermes_automatica' ? 'hermes' : 'usuario',
+      entidade: 'os', entidade_id: os.id, acao: 'CRIADA', ator: data.origem === 'hermes_automatica' ? 'hermes' : ator || 'usuario',
       detalhe: { tipo: os.tipo, origem: os.origem, ...(os.canal_abertura ? { canal: os.canal_abertura } : {}), ...(os.os_origem_id ? { os_origem_id: os.os_origem_id } : {}) },
     });
     return os;
@@ -1217,7 +1339,7 @@ export class Database {
   // assinaturas. A regra mora em pendenciasFinalizacao (src/lib/os-finalizacao.ts),
   // a mesma função que a tela usa pra travar o botão — não duplicar aqui.
   // Assinatura enviada no mesmo PATCH do finalizar já conta.
-  static async finalizarOS(id: string, updates: Partial<OS>): Promise<OS | null> {
+  static async finalizarOS(id: string, updates: Partial<OS>, ator?: string): Promise<OS | null> {
     const atual = await backend().getOSById(id);
     if (!atual) return null;
     const [checklist, fotos] = await Promise.all([backend().getChecklistByOS(id), backend().getFotosByOS(id)]);
@@ -1225,7 +1347,7 @@ export class Database {
     if (pendencias.length > 0) throw new FinalizacaoBloqueadaError(pendencias);
     const os = await backend().updateOS(id, { ...updates, status: 'finalizada', saida_em: new Date().toISOString() });
     if (os) {
-      await this.createAuditLog({ entidade: 'os', entidade_id: id, acao: 'FINALIZADA', ator: 'usuario' });
+      await this.createAuditLog({ entidade: 'os', entidade_id: id, acao: 'FINALIZADA', ator: ator || 'usuario' });
     }
     return os;
   }
@@ -1285,6 +1407,19 @@ export class Database {
   static updateReajuste(id: string, updates: Partial<Reajuste>) { return backend().updateReajuste(id, updates); }
   static getConfiguracao(chave: string) { return backend().getConfiguracao(chave); }
   static setConfiguracao(chave: string, valor: string) { return backend().setConfiguracao(chave, valor); }
+
+  // ----- Avisos do app (Web Push) -----
+  static async salvarPushInscricao(data: Omit<PushInscricao, 'id' | 'criado_em' | 'ultimo_uso_em'>): Promise<PushInscricao> {
+    const agora = new Date().toISOString();
+    const i: PushInscricao = { ...data, id: randomUUID(), criado_em: agora, ultimo_uso_em: agora };
+    await backend().upsertPushInscricao(i);
+    return i;
+  }
+  static getPushInscricaoByEndpoint(endpoint: string) { return backend().getPushInscricaoByEndpoint(endpoint); }
+  static getPushInscricoesByUsuarios(usuarioIds: string[]) { return backend().getPushInscricoesByUsuarios(usuarioIds); }
+  static getUsuarioIdsComPush() { return backend().getUsuarioIdsComPush(); }
+  static deletePushInscricaoByEndpoint(endpoint: string) { return backend().deletePushInscricaoByEndpoint(endpoint); }
+  static tocarPushInscricao(id: string) { return backend().tocarPushInscricao(id); }
 
   // ----- Foto -----
   static getFotosByOS(osId: string) { return backend().getFotosByOS(osId); }

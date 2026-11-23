@@ -171,6 +171,25 @@ CREATE TABLE IF NOT EXISTS audit_log (
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS configuracao (
+  chave TEXT PRIMARY KEY,
+  valor TEXT NOT NULL
+);
+
+-- Aparelhos que recebem aviso do app (Web Push). Endpoint único: se outro
+-- usuário entra no mesmo aparelho, a inscrição passa para ele.
+CREATE TABLE IF NOT EXISTS push_inscricao (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  user_agent TEXT,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ultimo_uso_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_push_inscricao_usuario ON push_inscricao(usuario_id);
+
 CREATE INDEX IF NOT EXISTS idx_reservatorio_condominio ON reservatorio(condominio_id);
 CREATE INDEX IF NOT EXISTS idx_contato_condominio ON contato(condominio_id);
 CREATE INDEX IF NOT EXISTS idx_equipamento_condominio ON equipamento(condominio_id);
@@ -182,3 +201,19 @@ CREATE INDEX IF NOT EXISTS idx_foto_os ON foto(os_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_foto_client_id ON foto(client_id) WHERE client_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_os_origem ON os(os_origem_id);
 CREATE INDEX IF NOT EXISTS idx_escalonamento_alerta ON escalonamento(alerta_id);
+
+-- Região do condomínio (22/11): agrupa o planejamento e a rota do dia. Opcional.
+ALTER TABLE condominio ADD COLUMN IF NOT EXISTS regiao TEXT;
+
+-- Escala de plantão (22/11): uma linha = alguém de plantão no intervalo.
+-- Pode haver mais de uma pessoa no mesmo intervalo.
+CREATE TABLE IF NOT EXISTS plantao_escala (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  inicio TIMESTAMPTZ NOT NULL,
+  fim TIMESTAMPTZ NOT NULL,
+  criado_por TEXT NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (fim > inicio)
+);
+CREATE INDEX IF NOT EXISTS idx_plantao_escala_periodo ON plantao_escala(inicio, fim);

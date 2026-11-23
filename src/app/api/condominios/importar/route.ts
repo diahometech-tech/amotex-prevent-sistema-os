@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, type Condominio } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/auth';
+import { regiaoPorCep } from '@/lib/regioes';
 import { chaveNome, cnpjDaLinha, MAX_LINHAS_IMPORTACAO, validarLinha } from '@/lib/importacao-condominios';
 
 // POST /api/condominios/importar — cadastro em lote a partir da planilha.
@@ -16,6 +17,7 @@ import { chaveNome, cnpjDaLinha, MAX_LINHAS_IMPORTACAO, validarLinha } from '@/l
 //   linha recusada (há "Panorama" em bairros diferentes). Nenhum → cria.
 //   Sem isso, a planilha de levantamento (que não tem endereço) duplicava
 //   condomínio sem CNPJ, e preencher o CNPJ depois criava um segundo.
+// - Coluna "CEP" e "Região": a região só é sugerida pelo CEP em condomínio novo.
 // - Zelador/síndico com telefone viram contatos de WhatsApp nível 1 e 2 (a
 //   cadeia de aviso do Hermes), sem duplicar telefone já cadastrado.
 
@@ -87,7 +89,10 @@ export async function POST(request: NextRequest) {
         if (!condominio) continue;
         atualizados.push(condominio.nome);
       } else {
-        condominio = await Database.createCondominio({ ...dados, monitoramento_ativo: false });
+        // Condomínio novo sem "Região" na planilha: o CEP sugere (quem já existe
+        // não é mexido, pra não desfazer uma região trocada à mão).
+        const regiao = dados.regiao ?? regiaoPorCep(dados.cep);
+        condominio = await Database.createCondominio({ ...dados, ...(regiao ? { regiao } : {}), monitoramento_ativo: false });
         todos.push(condominio);
         criados.push(condominio.nome);
       }

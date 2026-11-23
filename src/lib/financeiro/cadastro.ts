@@ -5,6 +5,7 @@ import type { Condominio, IndiceReajuste } from '../db';
 import { cnpjValido, limparCnpj } from './cnpj';
 import { parseReais } from './dinheiro';
 import { normalizarDataProgramada } from '../os-agenda';
+import { normalizarRegiao, REGIOES } from '../regioes';
 
 const INDICES: IndiceReajuste[] = ['igpm', 'ipca', 'inpc', 'fixo'];
 const EMAIL = /^[^\s@;,]+@[^\s@;,]+\.[^\s@;,]+$/;
@@ -13,7 +14,7 @@ export type CadastroCondominio = Partial<
   Pick<
     Condominio,
     | 'nome' | 'endereco' | 'administradora' | 'monitoramento_ativo'
-    | 'cnpj' | 'razao_social' | 'bairro' | 'cidade' | 'uf' | 'cep'
+    | 'cnpj' | 'razao_social' | 'bairro' | 'cidade' | 'uf' | 'cep' | 'regiao'
     | 'responsavel_nome' | 'responsavel_telefone' | 'responsavel_email' | 'emails_cobranca'
     | 'valor_mensal_centavos' | 'dia_vencimento' | 'contrato_inicio' | 'reajuste_indice' | 'reajuste_percentual_fixo'
     | 'preventivas_por_mes' | 'ativo' | 'observacoes'
@@ -63,6 +64,14 @@ export function validarCadastro(body: Record<string, unknown>): { dados: Cadastr
       const c = String(body.cep).replace(/\D/g, '');
       if (c.length !== 8) return { dados: {}, erro: 'CEP inválido.' };
       d.cep = `${c.slice(0, 5)}-${c.slice(5)}`;
+    }
+  }
+  if (body.regiao !== undefined) {
+    if (limpar('regiao')) d.regiao = null;
+    else {
+      const r = normalizarRegiao(body.regiao);
+      if (!r) return { dados: {}, erro: `Região inválida. Use: ${REGIOES.join(', ')}.` };
+      d.regiao = r;
     }
   }
   if (body.responsavel_telefone !== undefined) {

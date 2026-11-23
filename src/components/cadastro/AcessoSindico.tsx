@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Field, Input } from '@/components/ui/Form';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CopiarTexto } from '@/components/financeiro/CopiarTexto';
 import { normalizeSearch } from '@/lib/text';
 import type { Condominio, Contato } from '@/lib/db';
@@ -59,6 +60,8 @@ export function AcessoSindico({ condominio, contatos }: { condominio: Condominio
   const [criando, setCriando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
+  // Quem está na janela de confirmação de "Gerar nova senha".
+  const [confirmando, setConfirmando] = useState<UsuarioSindico | null>(null);
 
   const contatoSindico = contatos.find((c) => c.papel === 'sindico' && c.ativo);
   const [form, setForm] = useState({ nome: '', login: '', senha: '' });
@@ -125,7 +128,9 @@ export function AcessoSindico({ condominio, contatos }: { condominio: Condominio
     }
   };
 
-  const novaSenha = async (u: UsuarioSindico) => {
+  // Só roda depois do "Gerar nova senha" da janela de confirmação. Devolve o
+  // erro (texto) pra janela ficar aberta mostrando-o; sem retorno = deu certo.
+  const novaSenha = async (u: UsuarioSindico): Promise<string | void> => {
     const senha = gerarSenha();
     setErro('');
     setMensagem(null);
@@ -136,14 +141,12 @@ export function AcessoSindico({ condominio, contatos }: { condominio: Condominio
         body: JSON.stringify({ senha, ...(u.ativo ? {} : { ativo: true }) }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        if (!u.ativo) setSindicos((prev) => prev.map((s) => (s.id === u.id ? { ...s, ativo: true } : s)));
-        setMensagem(mensagemAcesso(u.nome, u.login, senha, condominio.nome));
-      } else {
-        setErro(data.error || 'Não foi possível gerar a nova senha.');
-      }
+      if (!res.ok) return data.error || 'Não foi possível gerar a nova senha.';
+      if (!u.ativo) setSindicos((prev) => prev.map((s) => (s.id === u.id ? { ...s, ativo: true } : s)));
+      setMensagem(mensagemAcesso(u.nome, u.login, senha, condominio.nome));
+      setConfirmando(null);
     } catch {
-      setErro('Erro de conexão ao gerar a nova senha.');
+      return 'Erro de conexão ao gerar a nova senha.';
     }
   };
 
@@ -174,7 +177,7 @@ export function AcessoSindico({ condominio, contatos }: { condominio: Condominio
               {!u.ativo && <Badge tone="neutral">Inativo</Badge>}
               <button
                 type="button"
-                onClick={() => novaSenha(u)}
+                onClick={() => setConfirmando(u)}
                 className="text-amx-blue-light hover:text-white underline underline-offset-2"
               >
                 {u.ativo ? 'Gerar nova senha' : 'Reativar com nova senha'}
@@ -207,6 +210,21 @@ export function AcessoSindico({ condominio, contatos }: { condominio: Condominio
       )}
 
       {erro && <p className="text-xs font-semibold text-amx-red-hover mt-3">{erro}</p>}
+
+      <ConfirmDialog
+        open={!!confirmando}
+        titulo="Gerar nova senha"
+        confirmarLabel="Gerar nova senha"
+        cancelarLabel="Cancelar"
+        perigo
+        onConfirm={() => (confirmando ? novaSenha(confirmando) : undefined)}
+        onClose={() => setConfirmando(null)}
+      >
+        <p>
+          Gerar nova senha para <b className="text-white">{confirmando?.nome.split(' ')[0]}</b>? A senha atual dele para de funcionar na hora.
+        </p>
+        {confirmando && !confirmando.ativo && <p>O acesso também volta a ficar ativo.</p>}
+      </ConfirmDialog>
 
       {mensagem && (
         <div className="mt-3 flex flex-col gap-2">

@@ -1,5 +1,5 @@
 {
-  "atualizado": "2026-11-22",
+  "atualizado": "2026-11-23",
   "papeis": [
     {
       "papel": "admin",
@@ -19,10 +19,24 @@
           "titulo": "Dashboard e plantão",
           "passos": [
             "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
-            "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
+            "Em Plantão agora você vê quem está de plantão e de onde vem: \"pela escala, até dom 08:00\" ou \"marcado à mão\". A escala (menu Escala de plantão) manda; sem ninguém na escala naquele horário, vale a marcação à mão: clique no nome do técnico para marcá-lo (fica verde) e de novo para desmarcar.",
+            "Trocar plantonista agora: escolha o técnico na lista do card e clique em Trocar. Ele assume na hora, até o fim do plantão atual, e quem estava de plantão sai. A escala de depois continua como estava.",
+            "Só entra de plantão quem recebe aviso: Telegram cadastrado ou avisos do app ligados no celular. Sem nenhum dos dois, o sistema recusa e explica o que falta.",
             "Horário comercial e plantão: de segunda a sexta, das 8h às 18h, e no sábado, das 8h às 16h, é horário comercial. Fora disso, e no domingo o dia todo, é plantão. Em horário comercial, o aviso de corretiva sem técnico vai para todos os técnicos de corretiva, para os gestores e para a secretária; quem estiver mais perto assume a OS. No plantão, vai só para o plantonista marcado (mais gestores e secretária). Sem ninguém marcado de plantão, vai para todos os técnicos de corretiva e o sistema avisa isso na tela de quem abriu a OS.",
-            "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Cadastre o ID do Telegram dela em Usuários.",
-            "Os quadros mostram corretivas fora do prazo, chegada em até 3h, OS abertas, pendências críticas, alertas e a rota do dia."
+            "O selo SEM TELEGRAM NEM APP indica que a pessoa não recebe nenhum aviso. Cadastre o ID do Telegram dela em Usuários ou peça para ela ligar os avisos no app do celular.",
+            "Os quadros mostram corretivas fora do prazo, chegada em até 3h, OS abertas, pendências críticas, alertas e a rota do dia.",
+            "Capacidade da equipe: no Dashboard, o gráfico mostra quantas visitas de preventiva cada técnico faz por dia útil (média real das últimas 4 e 8 semanas), as visitas que o mês exige, a capacidade do mês, quantos condomínios cabem com a equipe de hoje e quantos técnicos a meta da carteira pede. Com menos de 2 semanas de histórico aparece o aviso \"Poucos dados ainda\" e a conta usa a meta por técnico/dia."
+          ]
+        },
+        {
+          "titulo": "Escala de plantão",
+          "passos": [
+            "Abra Escala de plantão no menu. No alto, Plantão agora mostra quem está de plantão; abaixo, os períodos das próximas semanas.",
+            "Adicionar período: escolha o técnico, o início e o fim e clique em Adicionar período. Pode haver mais de uma pessoa no mesmo horário.",
+            "Gerar rodízio: toque nos técnicos na ordem em que vão se revezar, escolha o dia e a hora da troca (por exemplo, segunda às 08:00), a duração (7 dias) e quantas semanas. Clique em Ver prévia, confira e clique em Criar. Rodar de novo não duplica: o que já existe para a mesma pessoa é pulado.",
+            "Editar ou excluir: Editar muda técnico, início e fim de um período que ainda não começou. Excluir só vale para período futuro. Quem já está de plantão: use Mudar o fim (para encerrar agora, ponha o horário de agora).",
+            "A escala manda: em qualquer horário coberto por um período, o aviso de corretiva vai para quem está nele (mais gestores e secretária). Sem período cobrindo, vale a marcação à mão do card Plantão agora. Em horário comercial o aviso continua indo para todos os técnicos.",
+            "Todos os horários são de São Paulo. Só entra na escala técnico de corretiva, ativo e com Telegram cadastrado ou avisos do app ligados."
           ]
         },
         {
@@ -32,8 +46,8 @@
             "Escolha o condomínio e o tipo: Preventiva (visita programada) ou Corretiva (chamado de defeito).",
             "Na corretiva, descreva o problema relatado (obrigatório) e informe quem chamou e o telefone. Toda corretiva é urgente: o técnico tem até 3h para chegar.",
             "Escolha a data da visita (define em que dia a OS aparece na rota) e, se já souber, o técnico responsável.",
-            "Clique em Criar OS. Na corretiva, os técnicos e gestores recebem o aviso no Telegram.",
-            "Se aparecer Aviso NÃO enviado, ninguém foi avisado pelo Telegram: ligue para o técnico."
+            "Clique em Criar OS. Na corretiva, os técnicos e gestores recebem o aviso no Telegram e, quem ligou os avisos no app, também na barra de notificações do celular.",
+            "Se aparecer Aviso NÃO enviado, ninguém foi avisado (nem pelo Telegram, nem pelo app): ligue para o técnico."
           ]
         },
         {
@@ -46,6 +60,10 @@
             "OS finalizada tem o link Baixar PDF da OS.",
             "Na linha Gestão, Cancelar OS encerra uma OS em aberto que não vai mais acontecer. O motivo é obrigatório e fica registrado.",
             "Apagar OS remove a OS de vez, com fotos. Use só para OS aberta por engano ou de teste.",
+            "O Histórico da OS conta o que aconteceu em frases, com dia e hora de São Paulo. Exemplos: Ana (secretária) trocou o técnico de Yuri para Mateus; Status: Aberta → Em andamento; Chegada registrada às 10:32; OS finalizada por Mateus.",
+            "Os selos da OS mostram só a situação (Aberta, Em andamento, Finalizada ou Cancelada). Prioridade só aparece nas OS em aberto.",
+            "Os números dos filtros Todas, Preventiva e Corretiva seguem a situação escolhida (por exemplo, Em aberto) e mudam sozinhos ao criar, assumir, mudar o status ou finalizar uma OS.",
+            "Na OS cancelada, o checklist não marca nenhum item como pendente.",
             "A OS aberta pelo síndico mostra Aberta pelo condomínio. O síndico só abre corretiva do próprio condomínio, até 5 por hora, e pode cancelar o chamado até o técnico chegar (sem limite antes do a caminho; só nos primeiros 5 minutos depois dele). Depois disso, o cancelamento é por aqui.",
             "O técnico avisa Estou a caminho e Cheguei no local; o condomínio vê no Painel. Em Localização da visita, na OS, você vê onde estava o celular na chegada e na finalização (ver no mapa). O síndico não vê a localização."
           ]
@@ -53,17 +71,21 @@
         {
           "titulo": "Rotas e planejamento de preventivas",
           "passos": [
-            "Em Rotas você vê as visitas do dia, agrupadas por condomínio. Use as setas para mudar o dia e Hoje para voltar.",
+            "Em Rotas você vê as visitas do dia, agrupadas por condomínio e ordenadas por região e CEP (a região aparece em cada parada; condomínio sem região vem por último; corretiva urgente sobe para o topo). Use as setas para mudar o dia e Hoje para voltar.",
             "Filtre por técnico para ver a rota de cada um.",
+            "Filtre por região para ver só a zona que interessa (Centro, Zona Norte, Zona Sul, Zona Leste, Zona Oeste, Grande SP, Outra ou Sem região).",
             "Para montar o mês, clique em Planejar preventivas do mês, escolha o mês e clique em Ver prévia.",
             "Confira a distribuição por dia e por técnico. Só então clique em Criar OS preventivas.",
             "Rodar de novo no mesmo mês não duplica: quem já tem preventiva no mês fica de fora.",
+            "O planejamento agrupa por região: quem já fez preventiva antes volta no mesmo dia do mês; os novos vão para o dia e o técnico que já têm visita da mesma região, sem misturar regiões no mesmo dia quando dá. Na prévia aparece a região de cada visita. A reorganização das sobras também mantém a fila do dia agrupada por região.",
             "Técnico só de Corretiva não entra no planejamento de preventivas.",
             "Meta por técnico/dia: em Rotas, o campo Meta por técnico/dia (padrão 5) define quantas preventivas cada técnico faz por dia, de segunda a sexta. Altere o número e clique em Salvar meta; vale para os próximos planejamentos e reorganizações.",
+            "Planejar preventivas aos sábados: ao lado da meta, o interruptor liga o sábado como dia de preventiva (padrão desligado; domingo nunca entra). Vale para o planejamento do mês, para a reorganização das sobras e para o próximo dia útil. A mudança salva na hora.",
             "Sobras vão sozinhas para o dia seguinte: o que o técnico não fez fica na frente da fila do próximo dia útil e o resto da fila desliza, sem passar da meta por dia. Corretivas não mudam de data.",
             "Reorganizar agora: em Rotas, clique em Reorganizar agora, confira a prévia do que muda de dia e clique em Aplicar. Rodar duas vezes no mesmo dia não muda nada. Durante o expediente, o que já é de hoje continua em hoje; as visitas abertas de hoje só passam para o próximo dia útil na reorganização das 5h. A fila nunca passa para o mês seguinte: o que não cabe na meta fica no último dia útil do mês, acima dela, e aparece marcado na prévia.",
             "Todo dia às 5h a reorganização roda sozinha, chamada pelo n8n em POST /api/integracoes/reorganizar-rotas com o cabeçalho X-Amotex-Secret (o mesmo segredo do webhook). O workflow do n8n ainda precisa ser criado: agende uma chamada diária às 5h, sem corpo. Cada visita remarcada fica registrada no histórico da OS como Reagendada automática.",
-            "Painel do mês: no alto de Rotas, a tabela mostra por técnico e no total as preventivas do mês: feitas, faltam e o ritmo necessário por dia útil restante para fechar o mês."
+            "Painel do mês: no alto de Rotas, a tabela mostra por técnico e no total as preventivas do mês: feitas, faltam e o ritmo necessário por dia útil restante para fechar o mês.",
+            "Inspeção dos equipamentos obrigatória: em Rotas, logo abaixo da meta, há dois interruptores, Preventiva (padrão Ligado) e Corretiva (padrão Desligado). Ligado: cada equipamento do condomínio vira um item obrigatório do checklist. Só você altera. Vale para as OS criadas daí em diante; as que já existem não mudam."
           ]
         },
         {
@@ -71,10 +93,12 @@
           "passos": [
             "Em Condomínios, clique em + Novo Condomínio. Digite o CNPJ e toque em Buscar: nome e endereço vêm da Receita.",
             "Preencha o contrato: valor mensal, dia de vencimento, início do contrato, índice de reajuste e preventivas por mês.",
-            "Para cadastrar vários de uma vez, use Importar planilha.",
+            "No endereço, digite o CEP: o sistema sugere a Região (Centro, Zona Norte, Zona Sul, Zona Leste, Zona Oeste, Grande SP ou Outra). Você pode trocar. A região organiza a rota e o planejamento das preventivas.",
+            "Para cadastrar vários de uma vez, use Importar planilha. A planilha aceita as colunas CEP e Região; sem a região, o condomínio novo recebe a sugerida pelo CEP.",
             "Na página do condomínio: Editar, Ver painel, ajustes temporários de valor e as abas Reservatórios, Contatos e Equipamentos.",
             "Em Acesso do síndico ao painel, clique em + Criar acesso. O sistema gera a senha e monta a mensagem pronta: clique em Copiar mensagem e envie ao síndico.",
             "Cliente que saiu: Editar e desmarque Contrato ativo (mantém o histórico). Apagar condomínio é só para cadastro de teste ou feito por engano e pede para digitar o nome.",
+            "No cadastro, Monitoramento ativo mostra Ligado ou Desligado por escrito. Em condomínio novo ele começa Desligado; ligue só quando houver sensor funcionando.",
             "O técnico pode cadastrar e corrigir contato (nome, papel e telefone) dos condomínios das OS dele, pelo bloco Contatos do condomínio da OS. Excluir contato e mudar a ordem de chamada continuam aqui com você e com a secretária. Os papéis agora incluem Gerente e Portaria."
           ]
         },
@@ -83,10 +107,11 @@
           "passos": [
             "Em Usuários, preencha Nome, Login, Senha inicial e Papel (Técnico, Síndico, Secretária ou Gestor).",
             "Para técnico, escolha a especialidade: Corretiva e preventiva, só Corretiva (urgências) ou só Preventiva (rota mensal).",
-            "Informe o ID do Telegram para a pessoa receber os avisos de corretiva.",
+            "Informe o ID do Telegram para a pessoa receber os avisos de corretiva. O selo APP, ao lado do selo do Telegram, mostra quem ligou os avisos no app do celular; quem tem um dos dois recebe o aviso.",
             "Para a secretária, escolha o papel Secretária. Informe o ID do Telegram dela para receber os avisos de corretiva junto com os gestores.",
             "Clique em + Criar acesso e passe o login e a senha para a pessoa.",
-            "Na lista: Editar, Resetar senha, Desativar e Excluir. Quem saiu da equipe deve ser Desativado: o nome continua nas OS que atendeu."
+            "Na lista: Editar, Resetar senha, Desativar e Excluir. Quem saiu da equipe deve ser Desativado: o nome continua nas OS que atendeu.",
+            "Ao gerar uma nova senha (Resetar senha, ou Gerar nova senha em Acesso do síndico), o sistema pergunta antes: a senha atual da pessoa para de funcionar na hora. Só depois de confirmar a nova senha vale."
           ]
         },
         {
@@ -94,6 +119,8 @@
           "passos": [
             "Painel: receita mensal dos contratos, condomínios ativos, recebido no mês, inadimplência e cadastros incompletos.",
             "Cobranças: escolha o mês e clique em Gerar cobranças do mês (uma por condomínio ativo, com o valor do contrato).",
+            "Se algumas cobranças já nascem vencidas (por exemplo, gerar o mês no dia 19 com vencimento dia 10), o sistema avisa antes: \"N cobranças vencem antes de hoje. Qual vencimento usar para elas?\". Escolha uma nova data (já vem hoje + 5 dias) ou Manter o dia do contrato (ficam atrasadas). A escolha vale só para as cobranças novas; as que já existem não mudam.",
+            "Para mudar o vencimento de cobranças que já existem, filtre a lista, clique em Ajustar vencimento, escolha a data e confirme. Só mudam as cobranças em aberto da lista; paga e isenta ficam como estão.",
             "Quando o condomínio pagar, clique em Registrar pagamento: data, valor, forma de pagamento e o comprovante (PDF ou foto).",
             "Use os filtros Em aberto, Atrasadas, Pagas e Isentas e a busca por nome ou CNPJ.",
             "Reajustes: mostra os índices (IGP-M, IPCA, INPC) e os contratos que fazem aniversário nos próximos 30 dias.",
@@ -107,9 +134,20 @@
             "Gestor: vê e faz tudo.",
             "Secretária: vê Dashboard, Ordens de Serviço, Rotas, Condomínios, Painel do Síndico, Financeiro (só a aba Cobranças) e Ajuda. Abre OS, atribui técnico, reagenda, cancela, marca o plantão e planeja as preventivas. Edita contatos dos condomínios e vê o contrato só para leitura.",
             "A secretária não vai a campo (chegada no local, checklist, fotos, assinaturas e finalizar são do técnico). Também não apaga OS, não cadastra nem edita condomínio, não cria acesso de síndico, não vê Usuários e só usa a aba Cobranças do Financeiro.",
-            "Na Cobranças, a secretária gera o mês, marca como enviada, registra pagamento e anexa comprovante. Isentar, reabrir e editar valor são só do gestor.",
+            "Na Cobranças, a secretária gera o mês, marca como enviada, registra pagamento, anexa comprovante e ajusta o vencimento de cobranças em aberto. Isentar, reabrir e editar valor são só do gestor.",
             "Técnico: vê só as OS dele e as corretivas sem técnico, só a rota dele e só os condomínios das OS que vê.",
             "Síndico: vê só o Painel do Condomínio dele e a Ajuda."
+          ]
+        },
+        {
+          "titulo": "Instalar o app e ligar os avisos no celular",
+          "passos": [
+            "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
+            "No iPhone, abra o sistema no Safari, toque em Compartilhar (o quadrado com a seta) e em Adicionar à Tela de Início. Depois abra o app pelo ícone na tela inicial. No iPhone, os avisos só funcionam por esse ícone (iOS 16.4 ou mais novo).",
+            "Abra o menu (no celular, o botão Menu no topo) e toque em Avisos neste celular. Quando o celular perguntar, permita as notificações. O menu passa a mostrar Ligado.",
+            "Para conferir, toque em Enviar aviso de teste: a notificação aparece em instantes.",
+            "Para parar de receber neste celular, toque de novo em Avisos neste celular. Se o navegador bloqueou as notificações, libere nas configurações do site.",
+            "Cada celular liga os avisos por conta própria. Se outra pessoa entrar no mesmo aparelho e ligar, os avisos passam a ser dela."
           ]
         }
       ],
@@ -120,7 +158,7 @@
         },
         {
           "pergunta": "O técnico disse que não recebeu o aviso da corretiva.",
-          "resposta": "Confira em Usuários se ele tem ID do Telegram e se está de plantão. Enquanto isso, ligue para ele."
+          "resposta": "Confira em Usuários se ele tem ID do Telegram ou o selo APP e se está de plantão. Enquanto isso, ligue para ele. Peça para ele ligar os avisos no app, no menu."
         },
         {
           "pergunta": "O síndico esqueceu a senha.",
@@ -133,6 +171,10 @@
         {
           "pergunta": "Um condomínio cancelou o contrato.",
           "resposta": "Abra o condomínio, clique em Editar e desmarque Contrato ativo. Não use Apagar condomínio."
+        },
+        {
+          "pergunta": "Não consigo colocar um técnico de plantão.",
+          "resposta": "Se aparecer \"Cadastre o Telegram de fulano em Usuários antes de colocá-lo de plantão\", abra Usuários, edite o técnico e preencha o ID do Telegram. Sem ele a pessoa não receberia o aviso. Quem já estava de plantão sem Telegram continua aparecendo com o selo SEM TELEGRAM."
         }
       ]
     },
@@ -156,8 +198,8 @@
             "Escolha o condomínio e o tipo: Corretiva (chamado de defeito) ou Preventiva (visita programada).",
             "Na corretiva por telefone, preencha quem ligou (solicitante), o telefone e o problema relatado. O problema é obrigatório.",
             "Escolha o técnico responsável, se já souber. Sem técnico, a OS fica livre para algum técnico assumir.",
-            "Clique em Criar OS. Na corretiva, o sistema avisa técnicos e gestores no Telegram.",
-            "Se aparecer Aviso NÃO enviado, ninguém foi avisado pelo Telegram. Se aparecer o recado para avisar por telefone, ligue para o técnico de plantão."
+            "Clique em Criar OS. Na corretiva, o sistema avisa técnicos e gestores no Telegram e, para quem ligou os avisos no app, na barra de notificações do celular.",
+            "Se aparecer Aviso NÃO enviado, ninguém foi avisado (nem pelo Telegram, nem pelo app). Se aparecer o recado para avisar por telefone, ligue para o técnico de plantão."
           ]
         },
         {
@@ -173,7 +215,8 @@
           "passos": [
             "Abra a OS em Ordens de Serviço.",
             "Mude a data da visita ou o técnico responsável. Salva sozinho, não tem botão Salvar.",
-            "Ao atribuir ou trocar o técnico de uma corretiva, o aviso no Telegram vai só para esse técnico, para os gestores e para você. Os outros técnicos e o plantão não são avisados. Se aparecer o recado de que ele está sem Telegram, ligue para ele."
+            "Ao atribuir ou trocar o técnico de uma corretiva, o aviso no Telegram vai só para esse técnico, para os gestores e para você. No app do celular, o aviso vai só para o técnico. Os outros técnicos e o plantão não são avisados. Se aparecer o recado de que ele está sem Telegram nem app, ligue para ele.",
+            "Tudo o que muda na OS (troca de técnico, remarcação, status, chegada) aparece em frases na aba Histórico, com nome de quem fez e a hora."
           ]
         },
         {
@@ -188,22 +231,28 @@
           "titulo": "Plantão",
           "passos": [
             "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
-            "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
+            "Em Plantão agora (Dashboard) você vê quem está de plantão e de onde vem: \"pela escala, até dom 08:00\" ou \"marcado à mão\". A escala manda; sem ninguém na escala naquele horário, vale a marcação à mão: clique no nome do técnico para marcá-lo (fica verde) e de novo para desmarcar.",
+            "Trocar plantonista agora: escolha o técnico na lista do card e clique em Trocar. Ele assume na hora, até o fim do plantão atual.",
+            "Escala de plantão (menu): Adicionar período (técnico, início e fim), Gerar rodízio (técnicos na ordem, dia e hora da troca, duração e semanas; confira a prévia e clique em Criar) e Editar ou Excluir período que ainda não começou. Para encerrar um plantão em andamento, use Mudar o fim.",
+            "Só entra de plantão quem recebe aviso: Telegram cadastrado ou avisos do app ligados no celular. Se o sistema recusar, peça para a pessoa ligar os avisos no app ou avise o gestor para cadastrar o Telegram.",
             "Horário comercial e plantão: de segunda a sexta, das 8h às 18h, e no sábado, das 8h às 16h, é horário comercial. Fora disso, e no domingo o dia todo, é plantão. Em horário comercial, o aviso de corretiva sem técnico vai para todos os técnicos de corretiva, para os gestores e para você. No plantão, vai só para o plantonista marcado, para os gestores e para você. Sem ninguém marcado de plantão, vai para todos os técnicos de corretiva e o sistema avisa na tela.",
             "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Avise o gestor para cadastrar o ID dela.",
-            "Reagendar a visita é com você e com o gestor: o técnico não muda a data e liga para o escritório. Se aparecer o recado de aviso não enviado ou plantonista sem Telegram, ligue para a pessoa."
+            "Reagendar a visita é com você e com o gestor: o técnico não muda a data e liga para o escritório. Se aparecer o recado de aviso não enviado ou plantonista sem Telegram nem app, ligue para a pessoa."
           ]
         },
         {
           "titulo": "Rotas do dia e preventivas do mês",
           "passos": [
-            "Em Rotas você vê as visitas do dia, agrupadas por condomínio. Use as setas para mudar o dia e Hoje para voltar.",
+            "Em Rotas você vê as visitas do dia, agrupadas por condomínio e ordenadas por região e CEP (a região aparece em cada parada; condomínio sem região vem por último; corretiva urgente sobe para o topo). Use as setas para mudar o dia e Hoje para voltar.",
             "Escolha um técnico no filtro para ver a rota dele.",
+            "Escolha uma região no filtro para ver só a zona que interessa.",
             "Para montar o mês, clique em Planejar preventivas do mês, escolha o mês e clique em Ver prévia.",
             "Confira a distribuição por dia e por técnico. Só então clique em Criar OS preventivas.",
             "Rodar de novo no mesmo mês não duplica: quem já tem preventiva no mês fica de fora.",
+            "O planejamento agrupa por região: os condomínios novos vão para o dia e o técnico que já têm visita da mesma região, sem misturar regiões no mesmo dia quando dá.",
             "Você não marca visita como feita. Isso é do técnico, quando chega ao condomínio.",
             "Meta por técnico/dia: em Rotas, o campo Meta por técnico/dia (padrão 5) define quantas preventivas cada técnico faz por dia, de segunda a sexta. Altere o número e clique em Salvar meta; vale para os próximos planejamentos e reorganizações.",
+            "Planejar preventivas aos sábados: ao lado da meta, o interruptor liga o sábado como dia de preventiva (padrão desligado; domingo nunca entra). Vale para o planejamento do mês, para a reorganização das sobras e para o próximo dia útil. A mudança salva na hora.",
             "Sobras vão sozinhas para o dia seguinte: o que o técnico não fez fica na frente da fila do próximo dia útil e o resto da fila desliza, sem passar da meta por dia. Corretivas não mudam de data.",
             "Reorganizar agora: em Rotas, clique em Reorganizar agora, confira a prévia do que muda de dia e clique em Aplicar. Rodar duas vezes no mesmo dia não muda nada. Durante o expediente, o que já é de hoje continua em hoje; as visitas abertas de hoje só passam para o próximo dia útil na reorganização das 5h. A fila nunca passa para o mês seguinte: o que não cabe na meta fica no último dia útil do mês, acima dela, e aparece marcado na prévia.",
             "Painel do mês: no alto de Rotas, a tabela mostra por técnico e no total as preventivas do mês: feitas, faltam e o ritmo necessário por dia útil restante para fechar o mês.",
@@ -241,17 +290,30 @@
           "passos": [
             "Abra Financeiro. Você vê só a aba Cobranças.",
             "Escolha o mês e clique em Gerar cobranças do mês (uma por condomínio ativo, com o valor do contrato).",
+            "Se algumas cobranças já nascem vencidas (por exemplo, gerar o mês no dia 19 com vencimento dia 10), o sistema avisa antes: \"N cobranças vencem antes de hoje. Qual vencimento usar para elas?\". Escolha uma nova data (já vem hoje + 5 dias) ou Manter o dia do contrato (ficam atrasadas). A escolha vale só para as cobranças novas.",
+            "Para mudar o vencimento de cobranças em aberto, filtre a lista, clique em Ajustar vencimento, escolha a data e confirme. Cobrança paga ou isenta não muda.",
             "Depois de mandar a cobrança, clique em Marcar enviada.",
             "Quando o condomínio pagar, clique em Registrar pagamento: data, valor, forma de pagamento e o comprovante (PDF ou foto).",
             "Para guardar ou trocar um comprovante depois, numa cobrança paga, clique em Anexar comprovante (ou Trocar comprovante, se já tem um), escolha o arquivo e clique em Enviar. Ver comprovante abre o arquivo já guardado.",
             "Isentar, reabrir e editar o valor de uma cobrança são com o gestor."
+          ]
+        },
+        {
+          "titulo": "Instalar o app e ligar os avisos no celular",
+          "passos": [
+            "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
+            "No iPhone, abra o sistema no Safari, toque em Compartilhar (o quadrado com a seta) e em Adicionar à Tela de Início. Depois abra o app pelo ícone na tela inicial. No iPhone, os avisos só funcionam por esse ícone (iOS 16.4 ou mais novo).",
+            "Abra o menu (no celular, o botão Menu no topo) e toque em Avisos neste celular. Quando o celular perguntar, permita as notificações. O menu passa a mostrar Ligado.",
+            "Para conferir, toque em Enviar aviso de teste: a notificação aparece em instantes.",
+            "Para parar de receber neste celular, toque de novo em Avisos neste celular. Se o navegador bloqueou as notificações, libere nas configurações do site.",
+            "Cada celular liga os avisos por conta própria. Se outra pessoa entrar no mesmo aparelho e ligar, os avisos passam a ser dela."
           ]
         }
       ],
       "situacoes": [
         {
           "pergunta": "O técnico não recebeu o aviso.",
-          "resposta": "Ligue para ele agora. Depois peça ao gestor para conferir o ID do Telegram dele em Usuários e veja em Dashboard quem está de plantão."
+          "resposta": "Ligue para ele agora. Depois peça ao gestor para conferir o ID do Telegram dele (ou o selo APP) em Usuários e veja em Dashboard quem está de plantão."
         },
         {
           "pergunta": "O síndico ligou perguntando da visita.",
@@ -264,6 +326,10 @@
         {
           "pergunta": "Não acho um botão que o gestor usa.",
           "resposta": "O botão é só do gestor ou do técnico, por isso não aparece para você. Peça ao gestor para fazer, ou para ajustar o seu perfil se for algo da sua rotina."
+        },
+        {
+          "pergunta": "Não consigo colocar um técnico de plantão.",
+          "resposta": "Se aparecer \"Cadastre o Telegram de fulano em Usuários antes de colocá-lo de plantão\", avise o gestor: só ele cadastra o ID do Telegram em Usuários. Sem ele a pessoa não receberia o aviso."
         }
       ]
     },
@@ -285,6 +351,7 @@
           "passos": [
             "Ordens de Serviço mostra só as suas OS e as corretivas que ainda estão sem técnico.",
             "Rotas mostra só a sua rota.",
+            "Escala de plantão mostra quem está de plantão agora e a sua própria escala. Só consulta: quem monta a escala é o gestor ou a secretária.",
             "Condomínios mostra só os condomínios das OS que você vê.",
             "O menu tem ainda a Ajuda. O resto é com o gestor e a secretária."
           ]
@@ -293,6 +360,7 @@
           "titulo": "Minha rota do dia",
           "passos": [
             "Abra Rotas no menu. A tela mostra só as suas visitas, sob o título Minha rota.",
+            "As paradas vêm ordenadas por região e CEP, com a região escrita em cada condomínio, para você fazer o que fica perto em sequência. Corretiva urgente sobe para o topo.",
             "Use as setas para ver os próximos dias.",
             "Ao chegar no condomínio, clique em Cheguei no local (na rota ou dentro da OS). Fica registrado \"Chegou às\" com a hora. Sem sinal, a chegada fica guardada no aparelho com a hora do toque e sobe sozinha quando a internet voltar.",
             "No alto da rota aparece quantas visitas você já fez no dia, por exemplo 3 de 5 feitas hoje.",
@@ -331,11 +399,19 @@
         {
           "titulo": "Corretiva urgente",
           "passos": [
-            "Você recebe o aviso de corretiva no Telegram com o condomínio, o problema e o horário limite de chegada. O aviso diz por que chegou a você: \"Horário comercial\" (todos os técnicos recebem; quem estiver mais perto assume), \"Plantão\" (você está de plantão) ou \"Atribuída a você\" (o escritório passou a OS para você).",
+            "Você recebe o aviso de corretiva no Telegram e, se ligou os avisos no app, também na barra de notificações do celular. O aviso traz o condomínio, o problema e o horário limite de chegada. Ele diz por que chegou a você: \"Horário comercial\" (todos os técnicos recebem; quem estiver mais perto assume), \"Plantão\" (você está de plantão) ou \"Atribuída a você\" (o escritório passou a OS para você). Ao tocar na notificação, a OS abre direto.",
             "Abra a OS em Ordens de Serviço e clique em Assumir esta OS. Assim os outros técnicos sabem que você vai.",
             "Ao sair, toque em Estou a caminho. Ao chegar, toque em Cheguei no local (e permita a localização). Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
             "Para chegar, use Google Maps ou Waze e Ligar no bloco Local da OS.",
             "O condomínio também pode abrir o chamado pelo Painel dele. Nesse caso a OS mostra Aberta pelo condomínio. Se o condomínio cancelar, você recebe o aviso no Telegram."
+          ]
+        },
+        {
+          "titulo": "Escala de plantão",
+          "passos": [
+            "Abra Escala de plantão no menu. Em Plantão agora aparece quem está de plantão e até quando (\"pela escala, até dom 08:00\" ou \"marcado à mão\").",
+            "Em Minha escala você vê os seus próximos plantões, com início e fim. Você não edita: para trocar um plantão, fale com o gestor ou com a secretária.",
+            "Para ser colocado de plantão é preciso ter o Telegram cadastrado. Se não tiver, peça ao gestor."
           ]
         },
         {
@@ -354,7 +430,8 @@
             "Aba Fotos: são as fotos gerais do serviço. Na corretiva sem equipamento, tire aqui uma foto antes e uma depois.",
             "Se tirar uma foto errada, no Checklist toque no X da miniatura; na aba Fotos, toque em Remover. Depois tire de novo.",
             "Aba Assinaturas: assine no quadro e toque em Confirmar assinatura. Para o condomínio, escreva o nome de quem vai assinar (documento é opcional), peça para a pessoa assinar no quadro e toque em Confirmar. O nome vem preenchido com o zelador cadastrado: se quem assinou foi outra pessoa, troque o nome. Errou? Toque em Corrigir nome. Sem o nome, a OS não finaliza.",
-            "Precisa mudar o dia da visita? Ligue para o escritório. Só o gestor e a secretária reagendam."
+            "Precisa mudar o dia da visita? Ligue para o escritório. Só o gestor e a secretária reagendam.",
+            "Na aba Histórico da OS você vê, em frases, quem fez o quê e quando. Em OS cancelada, o checklist não mostra pendência."
           ]
         },
         {
@@ -363,6 +440,17 @@
             "O botão Finalizar OS só libera quando estiver tudo completo. Abaixo dele aparece a lista do que ainda falta.",
             "Com tudo feito, clique em Finalizar OS. O celular pede a sua localização de novo (permita; se negar, a OS finaliza do mesmo jeito).",
             "A OS finalizada gera o PDF (Baixar PDF da OS), que o síndico também vê no painel dele."
+          ]
+        },
+        {
+          "titulo": "Instalar o app e ligar os avisos no celular",
+          "passos": [
+            "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
+            "No iPhone, abra o sistema no Safari, toque em Compartilhar (o quadrado com a seta) e em Adicionar à Tela de Início. Depois abra o app pelo ícone na tela inicial. No iPhone, os avisos só funcionam por esse ícone (iOS 16.4 ou mais novo).",
+            "Abra o menu (no celular, o botão Menu no topo) e toque em Avisos neste celular. Quando o celular perguntar, permita as notificações. O menu passa a mostrar Ligado.",
+            "Para conferir, toque em Enviar aviso de teste: a notificação aparece em instantes.",
+            "Para parar de receber neste celular, toque de novo em Avisos neste celular. Se o navegador bloqueou as notificações, libere nas configurações do site.",
+            "Cada celular liga os avisos por conta própria. Se outra pessoa entrar no mesmo aparelho e ligar, os avisos passam a ser dela."
           ]
         }
       ],
@@ -389,7 +477,7 @@
         },
         {
           "pergunta": "Não recebi o aviso no Telegram.",
-          "resposta": "Peça ao gestor para conferir seu ID do Telegram em Usuários. Enquanto isso, acompanhe as OS abertas no sistema."
+          "resposta": "Confira se os avisos estão ligados no app (menu, Avisos neste celular: Ligado) e use Enviar aviso de teste. Peça também ao gestor para conferir seu ID do Telegram em Usuários. Enquanto isso, acompanhe as OS abertas no sistema."
         },
         {
           "pergunta": "Não vejo uma OS que me falaram.",
@@ -419,7 +507,17 @@
             "Ao entrar, você já cai no Painel do Condomínio. O menu só tem Painel e Ajuda.",
             "No topo: quantidade de equipamentos, manutenções no mês, tempo médio de resposta (até a chegada do técnico) e a próxima visita.",
             "Em Histórico de atendimentos, cada mês lista as visitas, preventivas e corretivas.",
-            "Clique em Fotos para ver as fotos de antes e depois do serviço e em PDF para baixar o relatório da visita."
+            "Clique em Fotos para ver as fotos de antes e depois do serviço e em PDF para baixar o relatório da visita.",
+            "Ao abrir uma OS finalizada, o checklist mostra primeiro o que foi feito. Os itens que não se aplicaram ficam recolhidos em Itens que não se aplicaram; toque para ver."
+          ]
+        },
+        {
+          "titulo": "Instalar o app e ligar os avisos no celular",
+          "passos": [
+            "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
+            "No iPhone, abra o sistema no Safari, toque em Compartilhar (o quadrado com a seta) e em Adicionar à Tela de Início. Depois abra o app pelo ícone na tela inicial. No iPhone, os avisos só funcionam por esse ícone (iOS 16.4 ou mais novo).",
+            "Na tela Ajuda, o botão Copiar link do app copia o endereço do sistema para você enviar a outra pessoa, como o zelador.",
+            "Depois de instalar, abra o menu e ligue Avisos neste celular. Você recebe um aviso quando o técnico sai para o condomínio, quando ele chega e quando o serviço é finalizado. No iPhone, o aviso só funciona com o app instalado na tela de início."
           ]
         },
         {

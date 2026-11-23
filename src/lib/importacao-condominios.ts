@@ -30,7 +30,7 @@ export interface LinhaCondominio {
 
 // Colunas de cadastro aceitas, como chegam do CSV (strings), antes do validador.
 type CampoCadastro =
-  | 'nome' | 'cnpj' | 'endereco' | 'bairro' | 'cidade' | 'uf' | 'cep' | 'administradora'
+  | 'nome' | 'cnpj' | 'endereco' | 'bairro' | 'cidade' | 'uf' | 'cep' | 'regiao' | 'administradora'
   | 'valor_mensal' | 'dia_vencimento' | 'emails_cobranca'
   | 'responsavel_nome' | 'responsavel_telefone' | 'responsavel_email'
   | 'contrato_inicio' | 'reajuste_indice' | 'reajuste_percentual_fixo' | 'preventivas_por_mes' | 'observacoes';
@@ -44,6 +44,7 @@ const ALIASES: Record<string, Campo> = {
   cnpj: 'cnpj',
   endereco: 'endereco', enderecocompleto: 'endereco',
   bairro: 'bairro', cidade: 'cidade', municipio: 'cidade', uf: 'uf', estado: 'uf', cep: 'cep',
+  regiao: 'regiao', zona: 'regiao',
   administradora: 'administradora',
   valormensal: 'valor_mensal', valormensalr: 'valor_mensal', valor: 'valor_mensal', valordocontrato: 'valor_mensal',
   diavencimento: 'dia_vencimento', diadevencimento: 'dia_vencimento', vencimento: 'dia_vencimento',
@@ -63,7 +64,7 @@ const ALIASES: Record<string, Campo> = {
 };
 
 export const CABECALHO_MODELO = [
-  'nome', 'cnpj', 'endereco', 'administradora', 'valor_mensal', 'dia_vencimento', 'emails_cobranca',
+  'nome', 'cnpj', 'endereco', 'cep', 'regiao', 'administradora', 'valor_mensal', 'dia_vencimento', 'emails_cobranca',
   'responsavel_nome', 'responsavel_telefone', 'responsavel_email', 'contrato_inicio', 'reajuste_indice',
   'reajuste_percentual_fixo', 'preventivas_por_mes', 'zelador_nome', 'zelador_telefone', 'sindico_nome', 'sindico_telefone', 'observacoes',
 ];
@@ -194,7 +195,7 @@ export function validarLinha(
   if (!s('nome') && !s('cnpj')) return { linha, motivo: 'sem nome do condomínio' };
 
   const corpo: Record<string, unknown> = {};
-  for (const k of ['nome', 'cnpj', 'endereco', 'bairro', 'cidade', 'uf', 'cep', 'administradora', 'valor_mensal', 'dia_vencimento',
+  for (const k of ['nome', 'cnpj', 'endereco', 'bairro', 'cidade', 'uf', 'cep', 'regiao', 'administradora', 'valor_mensal', 'dia_vencimento',
     'emails_cobranca', 'responsavel_nome', 'responsavel_telefone', 'responsavel_email', 'observacoes'] as const) {
     if (s(k)) corpo[k] = s(k);
   }

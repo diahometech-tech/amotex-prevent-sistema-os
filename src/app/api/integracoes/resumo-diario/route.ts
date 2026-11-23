@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { Database } from '@/lib/db';
 import { resumoDiarioGestor } from '@/lib/financeiro/resumo-diario';
 import { hojeISO } from '@/lib/os-agenda';
-import { plantonistas } from '@/lib/plantao';
+import { plantonistasEm } from '@/lib/plantao';
 
 // GET /api/integracoes/resumo-diario — chamado pelo n8n (workflow agendado,
 // todo dia de manhã), não por gente. Autenticado pelo mesmo segredo do
@@ -17,12 +17,13 @@ export async function GET(request: NextRequest) {
   const b = Buffer.from(segredo);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
 
-  const [condominios, cobrancas, reajustes, oss, users] = await Promise.all([
+  const [condominios, cobrancas, reajustes, oss, users, escala] = await Promise.all([
     Database.getCondominios(), Database.getCobrancas(), Database.getReajustes(), Database.getOSs(), Database.getUsers(),
+    Database.getPlantaoEscala(),
   ]);
   const { mensagem, temAlgo } = resumoDiarioGestor({
     hoje: hojeISO(), agora: Date.now(), condominios, cobrancas, reajustes, oss,
-    plantao: plantonistas(users).map((u) => u.nome),
+    plantao: plantonistasEm(new Date(), escala, users).usuarios.map((u) => u.nome),
   });
   const destinatarios = users
     .filter((u) => u.ativo && u.papel === 'admin' && u.telegram_chat_id)

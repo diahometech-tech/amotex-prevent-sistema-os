@@ -3,7 +3,7 @@
 // de Rotas) e pela rotina diária das 5h (n8n).
 import { Database } from './db';
 import { hojeISO } from './os-agenda';
-import { lerMetaVisitas } from './meta-visitas';
+import { lerDiasUteisPreventiva, lerMetaVisitas } from './meta-visitas';
 import { preventivaAberta, reorganizarFila, type MovimentoFila, type OpcoesFila } from './reorganizar-fila';
 
 export interface MovimentoDetalhado extends MovimentoFila {
@@ -13,9 +13,11 @@ export interface MovimentoDetalhado extends MovimentoFila {
 }
 
 export async function calcularReorganizacao(hoje: string = hojeISO(), opcoes: OpcoesFila = {}): Promise<{ meta: number; movimentos: MovimentoDetalhado[] }> {
-  const [oss, condominios, users, meta] = await Promise.all([
-    Database.getOSs(), Database.getCondominios(), Database.getUsers(), lerMetaVisitas(),
+  const [oss, condominios, users, meta, diasUteis] = await Promise.all([
+    Database.getOSs(), Database.getCondominios(), Database.getUsers(), lerMetaVisitas(), lerDiasUteisPreventiva(),
   ]);
+  // Região/CEP de cada condomínio: a fila do dia sai agrupada por região.
+  const geo = new Map(condominios.map((c) => [c.id, { nome: c.nome, regiao: c.regiao, cep: c.cep }]));
   const nomeCondominio = new Map(condominios.map((c) => [c.id, c.nome]));
   const nomeTecnico = new Map(users.map((u) => [u.id, u.nome]));
   const porId = new Map(oss.map((o) => [o.id, o]));
@@ -24,7 +26,7 @@ export async function calcularReorganizacao(hoje: string = hojeISO(), opcoes: Op
 
   const movimentos: MovimentoDetalhado[] = [];
   for (const t of tecnicos) {
-    for (const m of reorganizarFila(oss, t, hoje, meta, undefined, opcoes)) {
+    for (const m of reorganizarFila(oss, t, hoje, meta, diasUteis, { ...opcoes, geo })) {
       const os = porId.get(m.os_id)!;
       movimentos.push({
         ...m,

@@ -85,6 +85,15 @@ export function montarRotaDoDia(oss: OS[], dia: string, hoje: string = hojeISO()
 // reorganização da fila usam esta constante.
 export const DIAS_UTEIS_PREVENTIVA: readonly number[] = [1, 2, 3, 4, 5];
 
+// Com "Planejar preventivas aos sábados" ligado (configuração, 22/11), o
+// sábado também entra. Domingo nunca. Quem planeja/reorganiza lê a
+// configuração (meta-visitas.ts) e passa o resultado destas funções.
+export const DIAS_UTEIS_COM_SABADO: readonly number[] = [1, 2, 3, 4, 5, 6];
+
+export function diasUteisPreventiva(sabado: boolean): readonly number[] {
+  return sabado ? DIAS_UTEIS_COM_SABADO : DIAS_UTEIS_PREVENTIVA;
+}
+
 /** A data (YYYY-MM-DD) cai num dia útil da preventiva? */
 export function ehDiaUtil(iso: string, diasUteis: readonly number[] = DIAS_UTEIS_PREVENTIVA): boolean {
   const [a, m, d] = iso.split('-').map(Number);

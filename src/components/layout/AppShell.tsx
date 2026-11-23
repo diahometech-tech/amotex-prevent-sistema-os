@@ -10,6 +10,8 @@ import { Spinner } from '@/components/ui/EmptyState';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { TrocarSenhaModal } from './TrocarSenhaModal';
 import { FilaEnvioAviso } from './FilaEnvioAviso';
+import { AppCelularMenu } from './AppCelularMenu';
+import { AppCelularContext, useAppCelularEstado, type AppCelular } from '@/lib/useAppCelular';
 
 export interface AmxUser {
   id: string;
@@ -42,6 +44,7 @@ const GRUPOS: { titulo: string; itens: NavItem[] }[] = [
     itens: [
       { href: '/', label: 'Ordens de Serviço', icon: 'os', modulo: 'os' },
       { href: '/rotas', label: 'Rotas', icon: 'rotas', modulo: 'rotas' },
+      { href: '/plantao', label: 'Escala de plantão', icon: 'relogio', modulo: 'plantao' },
       { href: '/dashboard', label: 'Dashboard', icon: 'dashboard', modulo: 'dashboard' },
     ],
   },
@@ -119,12 +122,14 @@ function MenuConteudo({
   user,
   pathname,
   compacto,
+  app,
   onTrocarSenha,
   onSair,
 }: {
   user: AmxUser;
   pathname: string;
   compacto: boolean;
+  app: AppCelular;
   onTrocarSenha: () => void;
   onSair: () => void;
 }) {
@@ -181,6 +186,7 @@ function MenuConteudo({
             <div className="text-xs text-amx-muted">{ROLE_LABELS[user.role]}</div>
           </div>
         )}
+        <AppCelularMenu app={app} compacto={compacto} mostrarAvisos botaoClasse={botaoRodape} />
         <button
           type="button"
           onClick={onTrocarSenha}
@@ -228,6 +234,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useIdleLogout(10);
 
   const pathname = usePathname();
+  const app = useAppCelularEstado();
   const [user, setUser] = useState<AmxUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -377,6 +384,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <UserContext.Provider value={user}>
+      <AppCelularContext.Provider value={app}>
       {/* shrink-0: evita o mesmo bug de fundo cortado do admin/usuarios
           original (ver comentário lá) — este componente é montado direto
           como filho de <body className="flex flex-col"> em layout.tsx. */}
@@ -419,6 +427,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             user={user}
             pathname={pathname}
             compacto={recolhido}
+            app={app}
             onTrocarSenha={() => setTrocarSenha(true)}
             onSair={handleLogout}
           />
@@ -469,6 +478,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 user={user}
                 pathname={pathname}
                 compacto={false}
+                app={app}
                 onTrocarSenha={() => {
                   devolverFoco.current = false;
                   setGaveta(false);
@@ -486,6 +496,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <TrocarSenhaModal open={trocarSenha} onClose={() => setTrocarSenha(false)} nome={user.name} />
+      </AppCelularContext.Provider>
     </UserContext.Provider>
   );
 }
