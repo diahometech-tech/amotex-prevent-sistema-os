@@ -755,7 +755,8 @@ export function OSModal({
                   ['checklist', `Checklist${checklist.length ? ` (${checklist.length})` : ''}`],
                   ['fotos', 'Fotos'],
                   ['assinaturas', 'Assinaturas'],
-                  ['historico', 'Histórico'],
+                  // Síndico não vê o histórico interno (o servidor nem manda os logs).
+                  ...(user?.role === 'sindico' ? [] : [['historico', 'Histórico'] as [Tab, string]]),
                   // Técnico consulta as OS anteriores do local (só leitura).
                   ...(ehTecnico ? [['condominio', 'Histórico do condomínio'] as [Tab, string]] : []),
                 ] as [Tab, string][]
