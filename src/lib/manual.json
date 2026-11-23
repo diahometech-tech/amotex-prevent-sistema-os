@@ -98,6 +98,8 @@
           "passos": [
             "Painel: receita mensal dos contratos, condomínios ativos, recebido no mês, inadimplência e cadastros incompletos.",
             "Cobranças: escolha o mês e clique em Gerar cobranças do mês (uma por condomínio ativo, com o valor do contrato).",
+            "Se algumas cobranças já nascem vencidas (por exemplo, gerar o mês no dia 19 com vencimento dia 10), o sistema avisa antes: \"N cobranças vencem antes de hoje. Qual vencimento usar para elas?\". Escolha uma nova data (já vem hoje + 5 dias) ou Manter o dia do contrato (ficam atrasadas). A escolha vale só para as cobranças novas; as que já existem não mudam.",
+            "Para mudar o vencimento de cobranças que já existem, filtre a lista, clique em Ajustar vencimento, escolha a data e confirme. Só mudam as cobranças em aberto da lista; paga e isenta ficam como estão.",
             "Quando o condomínio pagar, clique em Registrar pagamento: data, valor, forma de pagamento e o comprovante (PDF ou foto).",
             "Use os filtros Em aberto, Atrasadas, Pagas e Isentas e a busca por nome ou CNPJ.",
             "Reajustes: mostra os índices (IGP-M, IPCA, INPC) e os contratos que fazem aniversário nos próximos 30 dias.",
@@ -111,7 +113,7 @@
             "Gestor: vê e faz tudo.",
             "Secretária: vê Dashboard, Ordens de Serviço, Rotas, Condomínios, Painel do Síndico, Financeiro (só a aba Cobranças) e Ajuda. Abre OS, atribui técnico, reagenda, cancela, marca o plantão e planeja as preventivas. Edita contatos dos condomínios e vê o contrato só para leitura.",
             "A secretária não vai a campo (chegada no local, checklist, fotos, assinaturas e finalizar são do técnico). Também não apaga OS, não cadastra nem edita condomínio, não cria acesso de síndico, não vê Usuários e só usa a aba Cobranças do Financeiro.",
-            "Na Cobranças, a secretária gera o mês, marca como enviada, registra pagamento e anexa comprovante. Isentar, reabrir e editar valor são só do gestor.",
+            "Na Cobranças, a secretária gera o mês, marca como enviada, registra pagamento, anexa comprovante e ajusta o vencimento de cobranças em aberto. Isentar, reabrir e editar valor são só do gestor.",
             "Técnico: vê só as OS dele e as corretivas sem técnico, só a rota dele e só os condomínios das OS que vê.",
             "Síndico: vê só o Painel do Condomínio dele e a Ajuda."
           ]
@@ -237,6 +239,8 @@
           "passos": [
             "Abra Financeiro. Você vê só a aba Cobranças.",
             "Escolha o mês e clique em Gerar cobranças do mês (uma por condomínio ativo, com o valor do contrato).",
+            "Se algumas cobranças já nascem vencidas (por exemplo, gerar o mês no dia 19 com vencimento dia 10), o sistema avisa antes: \"N cobranças vencem antes de hoje. Qual vencimento usar para elas?\". Escolha uma nova data (já vem hoje + 5 dias) ou Manter o dia do contrato (ficam atrasadas). A escolha vale só para as cobranças novas.",
+            "Para mudar o vencimento de cobranças em aberto, filtre a lista, clique em Ajustar vencimento, escolha a data e confirme. Cobrança paga ou isenta não muda.",
             "Depois de mandar a cobrança, clique em Marcar enviada.",
             "Quando o condomínio pagar, clique em Registrar pagamento: data, valor, forma de pagamento e o comprovante (PDF ou foto).",
             "Para guardar ou trocar um comprovante depois, numa cobrança paga, clique em Anexar comprovante (ou Trocar comprovante, se já tem um), escolha o arquivo e clique em Enviar. Ver comprovante abre o arquivo já guardado.",
