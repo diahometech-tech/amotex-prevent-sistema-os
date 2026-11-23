@@ -1193,7 +1193,7 @@ export class Database {
   static getOSById(id: string) { return backend().getOSById(id); }
   static getOSsByCondominio(condominioId: string) { return backend().getOSsByCondominio(condominioId); }
 
-  static async createOS(data: Partial<OS>): Promise<OS> {
+  static async createOS(data: Partial<OS>, ator?: string): Promise<OS> {
     const os: OS = {
       id: randomUUID(),
       condominio_id: data.condominio_id || '',
@@ -1216,7 +1216,7 @@ export class Database {
     };
     await backend().insertOS(os);
     await this.createAuditLog({
-      entidade: 'os', entidade_id: os.id, acao: 'CRIADA', ator: data.origem === 'hermes_automatica' ? 'hermes' : 'usuario',
+      entidade: 'os', entidade_id: os.id, acao: 'CRIADA', ator: data.origem === 'hermes_automatica' ? 'hermes' : ator || 'usuario',
       detalhe: { tipo: os.tipo, origem: os.origem, ...(os.os_origem_id ? { os_origem_id: os.os_origem_id } : {}) },
     });
     return os;
@@ -1261,7 +1261,7 @@ export class Database {
   // assinaturas. A regra mora em pendenciasFinalizacao (src/lib/os-finalizacao.ts),
   // a mesma função que a tela usa pra travar o botão — não duplicar aqui.
   // Assinatura enviada no mesmo PATCH do finalizar já conta.
-  static async finalizarOS(id: string, updates: Partial<OS>): Promise<OS | null> {
+  static async finalizarOS(id: string, updates: Partial<OS>, ator?: string): Promise<OS | null> {
     const atual = await backend().getOSById(id);
     if (!atual) return null;
     const [checklist, fotos] = await Promise.all([backend().getChecklistByOS(id), backend().getFotosByOS(id)]);
@@ -1269,7 +1269,7 @@ export class Database {
     if (pendencias.length > 0) throw new FinalizacaoBloqueadaError(pendencias);
     const os = await backend().updateOS(id, { ...updates, status: 'finalizada', saida_em: new Date().toISOString() });
     if (os) {
-      await this.createAuditLog({ entidade: 'os', entidade_id: id, acao: 'FINALIZADA', ator: 'usuario' });
+      await this.createAuditLog({ entidade: 'os', entidade_id: id, acao: 'FINALIZADA', ator: ator || 'usuario' });
     }
     return os;
   }

@@ -11,6 +11,20 @@ import { vinculosDaOS } from '@/lib/os-vinculos';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+async function pessoasDoHistorico(logs: { ator: string; detalhe?: unknown }[], tecnicoId?: string) {
+  const ids = new Set<string>(tecnicoId ? [tecnicoId] : []);
+  const nomes = new Set<string>();
+  for (const l of logs) {
+    nomes.add(l.ator);
+    const d = l.detalhe as { de?: unknown; para?: unknown } | undefined;
+    for (const v of [d?.de, d?.para]) if (typeof v === 'string' && v) ids.add(v);
+  }
+  const usuarios = await Database.getUsers();
+  return usuarios
+    .filter((u) => ids.has(u.id) || nomes.has(u.nome))
+    .map((u) => ({ id: u.id, nome: u.nome, papel: u.papel }));
+}
+
 export async function GET(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
@@ -33,6 +47,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     Database.getAuditLogsByEntidade('os', id),
     vinculosDaOS(os, session),
   ]);
+  const semHistorico = isScopedToOwnCondominio(session.role) || !(await podeVerOS(session, os));
   // Contrato do condomínio só pro escritório; auditoria (logs) não vai pro
   // síndico — ele vê a OS pelo Painel, não o histórico interno.
   return NextResponse.json({
@@ -43,7 +58,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     condominio: condominio ? condominioParaPapel(session.role, condominio) : condominio,
     // Auditoria (IP, destinatários de aviso) não vai pro síndico nem pro técnico
     // que só LÊ a OS de outro (histórico do condomínio).
-    logs: isScopedToOwnCondominio(session.role) || !(await podeVerOS(session, os)) ? [] : logs,
+    logs: semHistorico ? [] : logs,
+    // Nomes e papéis de quem aparece no histórico (ator, técnicos de/para),
+    // pra tela escrever "Ana (secretária) trocou o técnico de Yuri para Mateus".
+    pessoas: semHistorico ? [] : await pessoasDoHistorico(logs, os.tecnico_id),
     vinculos,
   });
 }
@@ -198,10 +216,19 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       updates.assinatura_tecnico_url = url;
     }
 
+    // Histórico: "Chegada registrada às 10:32". Só quando a chegada é nova.
+    const registrarChegada = async (atual: { entrada_em?: string } | null) => {
+      if (!atual || original.entrada_em || !updates.entrada_em) return;
+      await Database.createAuditLog({
+        entidade: 'os', entidade_id: id, acao: 'CHEGADA_REGISTRADA', ator: session.name,
+        detalhe: { em: updates.entrada_em },
+      });
+    };
+
     if (finalizar) {
       let os;
       try {
-        os = await Database.finalizarOS(id, updates);
+        os = await Database.finalizarOS(id, updates, session.name);
       } catch (e) {
         // finalizarOS só lança de propósito FinalizacaoBloqueadaError (trava
         // de qualidade — ver src/lib/os-finalizacao.ts), cujas pendências são
@@ -248,11 +275,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         pdfError = 'OS finalizada, mas houve erro ao gerar o PDF.';
       }
 
+      await registrarChegada(os);
       notifyN8n('os_finalizada', os);
       return NextResponse.json({ success: true, os, ...(pdfError ? { pdfError } : {}) });
     }
 
     const os = await Database.updateOS(id, updates);
+    await registrarChegada(os);
     if (updates.status && updates.status !== original.status) {
       await Database.createAuditLog({
         entidade: 'os', entidade_id: id, acao: 'STATUS_ALTERADO', ator: session.name,

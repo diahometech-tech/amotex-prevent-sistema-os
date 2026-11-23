@@ -418,7 +418,7 @@ function RotasContent() {
           <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2 mb-4">{error}</p>
         )}
 
-        {podePlanejarPreventivas(user.role) && <PainelPreventivasMes oss={oss} tecnicoNome={tecnicoNome} hoje={hoje} />}
+        {podePlanejarPreventivas(user.role) && <PainelPreventivasMes oss={oss} tecnicoNome={tecnicoNome} hoje={hoje} ehGestor={user.role === 'admin'} />}
 
         {gruposDoDia.length === 0 ? (
           progresso && progresso.total > 0 ? (

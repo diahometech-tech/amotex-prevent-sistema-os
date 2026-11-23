@@ -72,6 +72,7 @@ function UsuariosContent() {
   const [novaSenha, setNovaSenha] = useState('');
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState('');
+  const [confirmandoReset, setConfirmandoReset] = useState(false);
 
   const condominioNome = (id?: string) => condominios.find((c) => c.id === id)?.nome;
 
@@ -145,8 +146,16 @@ function UsuariosContent() {
     }
   };
 
-  const handleResetSenha = async (e: React.FormEvent) => {
+  // O botão "Salvar" do formulário só abre a janela de confirmação; a API é
+  // chamada em handleResetSenha, depois do "Gerar nova senha".
+  const pedirConfirmacaoReset = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!resetTarget || !novaSenha) return;
+    setConfirmandoReset(true);
+  };
+
+  const handleResetSenha = async () => {
+    setConfirmandoReset(false);
     if (!resetTarget || !novaSenha) return;
     setResetting(true);
     setResetError('');
@@ -471,7 +480,7 @@ function UsuariosContent() {
 
       <Modal open={!!resetTarget} onClose={() => setResetTarget(null)} maxWidth="max-w-sm">
         <ModalHeader title={`Redefinir senha — ${resetTarget?.login ?? ''}`} onClose={() => setResetTarget(null)} />
-        <form onSubmit={handleResetSenha} className="p-5 flex flex-col gap-4">
+        <form onSubmit={pedirConfirmacaoReset} className="p-5 flex flex-col gap-4">
           <Field label="Nova senha" required>
             <Input
               type="text"
@@ -492,6 +501,20 @@ function UsuariosContent() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmandoReset}
+        titulo="Gerar nova senha"
+        confirmarLabel="Gerar nova senha"
+        cancelarLabel="Cancelar"
+        perigo
+        onConfirm={handleResetSenha}
+        onClose={() => setConfirmandoReset(false)}
+      >
+        <p>
+          Gerar nova senha para <b className="text-white">{resetTarget?.nome.split(' ')[0]}</b>? A senha atual dele para de funcionar na hora.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

@@ -5,14 +5,16 @@
 // acrescentar itens na hora — o roteiro é guiado, não travado.
 import { Database, type ChecklistItem, type Equipamento, type OS } from './db';
 import { CHECKLIST_PADRAO } from './checklist-padrao';
+import { lerInspecaoObrigatoria } from './inspecao-equipamento';
 
 export async function criarChecklistInicial(os: Pick<OS, 'id' | 'tipo' | 'condominio_id'>): Promise<void> {
   for (const item of CHECKLIST_PADRAO[os.tipo]) {
     await Database.createChecklistItem({ os_id: os.id, descricao: item.descricao, obrigatorio: item.obrigatorio });
   }
   const equipamentos = await Database.getEquipamentosByCondominio(os.condominio_id);
+  const obrigatoria = (await lerInspecaoObrigatoria())[os.tipo];
   for (const eq of equipamentos) {
-    await Database.createChecklistItem(itemDeEquipamento(os, eq));
+    await Database.createChecklistItem(itemDeEquipamento(os, eq, obrigatoria));
   }
 }
 
@@ -21,7 +23,9 @@ export async function criarChecklistInicial(os: Pick<OS, 'id' | 'tipo' | 'condom
 // (1ª vistoria), pro item novo ficar idêntico aos que a OS já nasce com.
 export function itemDeEquipamento(
   os: Pick<OS, 'id' | 'tipo'>,
-  eq: Pick<Equipamento, 'id' | 'tipo' | 'identificacao' | 'modelo'>
+  eq: Pick<Equipamento, 'id' | 'tipo' | 'identificacao' | 'modelo'>,
+  // Configuração do gestor por tipo de OS (src/lib/inspecao-equipamento.ts).
+  obrigatoria: boolean
 ): Pick<ChecklistItem, 'os_id' | 'equipamento_id' | 'descricao' | 'obrigatorio'> {
   const detalhe = [eq.identificacao, eq.modelo].filter(Boolean).join(' · ');
   return {
@@ -30,8 +34,8 @@ export function itemDeEquipamento(
     // Identificação primeiro: com várias bombas iguais no prédio, é ela que
     // diz ao técnico qual é qual.
     descricao: `Inspecionar ${eq.tipo}${detalhe ? ` (${detalhe})` : ''}`,
-    // Na corretiva o foco é o defeito chamado — inspecionar cada
-    // equipamento do prédio fica como item opcional, não trava o fechamento.
-    obrigatorio: os.tipo === 'preventiva',
+    // Padrão: obrigatória na preventiva, opcional na corretiva (o foco é o
+    // defeito chamado). O gestor muda isso por tipo de OS.
+    obrigatorio: obrigatoria,
   };
 }
