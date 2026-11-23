@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SignaturePad } from '@/components/os/SignaturePad';
 import { FotoUpload } from '@/components/os/FotoUpload';
 import { HistoricoPanel } from '@/components/os/HistoricoPanel';
+import type { PessoaHistorico } from '@/lib/os-historico';
 import { HistoricoCondominio } from '@/components/os/HistoricoCondominio';
 import { useAmxUser } from '@/components/layout/AppShell';
 import { isEscritorio, podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeEditarEquipamento, podeOperarCampo, podeVerModulo } from '@/lib/roles';
@@ -75,6 +76,7 @@ export function OSModal({
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [fotos, setFotos] = useState<Foto[]>([]);
   const [historico, setHistorico] = useState<AuditLog[]>([]);
+  const [pessoas, setPessoas] = useState<PessoaHistorico[]>([]);
   const [vinculos, setVinculos] = useState<VinculosOS | null>(null);
   // Endereço e contatos do local (bloco "Local": mapa e ligar).
   const [condominio, setCondominio] = useState<Partial<Condominio> | null>(null);
@@ -123,6 +125,24 @@ export function OSModal({
     [osId]
   );
 
+  // O histórico muda com o que a pessoa faz na própria tela: ao abrir a aba,
+  // busca de novo (senão mostraria só o que existia quando a OS abriu).
+  useEffect(() => {
+    if (tab !== 'historico') return;
+    let cancelled = false;
+    fetch(`/api/os/${osId}`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setHistorico(data.logs || []);
+        setPessoas(data.pessoas || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, osId]);
+
   // GET /api/os/:id já retorna os, checklist, fotos e histórico (logs) num
   // único payload (ver src/app/api/os/[id]/route.ts) — não existem rotas
   // GET separadas por aba, então uma chamada só basta.
@@ -137,6 +157,7 @@ export function OSModal({
           setChecklist(data.checklist || []);
           setFotos(data.fotos || []);
           setHistorico(data.logs || []);
+          setPessoas(data.pessoas || []);
           setVinculos(data.vinculos || null);
           setCondominio(data.condominio || null);
           setContatos(data.contatos || []);
@@ -757,6 +778,8 @@ export function OSModal({
                 items={checklist}
                 readOnly={!campoLiberado || isClosed}
                 onAlternar={alternarChecklistItem}
+                osStatus={os.status}
+                visaoSindico={user?.role === 'sindico'}
                 onAdd={addChecklistItem}
                 fotoObrigatoria={new Set(equipamentosObrigatorios(os, checklist).map((i) => i.equipamento_id))}
                 fotosEquip={fotos.filter((f) => f.equipamento_id)}
@@ -886,7 +909,7 @@ export function OSModal({
               </div>
             )}
 
-            {tab === 'historico' && <HistoricoPanel logs={historico} />}
+            {tab === 'historico' && <HistoricoPanel logs={historico} pessoas={pessoas} />}
 
             {tab === 'condominio' && ehTecnico && (
               <HistoricoCondominio condominioId={os.condominio_id} osAtualId={os.id} onAbrir={setOsAnteriorId} />
@@ -1149,7 +1172,8 @@ function OsSummary({ os }: { os: OS }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Badge tone={os.tipo === 'corretiva' ? 'red' : 'info'}>{OS_TIPO_LABELS[os.tipo]}</Badge>
-      <Badge tone={prioridade.tone}>{prioridade.label}</Badge>
+      {/* Um selo só de situação: encerrada mostra o status, não "Encerrada" + "Finalizada". */}
+      {os.status !== 'finalizada' && os.status !== 'cancelada' && <Badge tone={prioridade.tone}>{prioridade.label}</Badge>}
       <Badge tone={os.status === 'finalizada' ? 'success' : 'neutral'}>{OS_STATUS_LABELS[os.status]}</Badge>
       {os.origem === 'hermes_automatica' && <Badge tone="navy"><span className="inline-flex items-center gap-1"><Icon name="sensor" size={12} />Aberta automaticamente pelo Hermes</span></Badge>}
     </div>
@@ -1322,9 +1346,14 @@ function ChecklistTab({
   temEquipamentos,
   onCadastrarEquip,
   onRemoverEquip,
+  osStatus,
+  visaoSindico,
 }: {
   items: ChecklistItem[];
   readOnly: boolean;
+  osStatus: OS['status'];
+  /** Síndico lendo: numa OS finalizada, o que não se aplicou fica recolhido. */
+  visaoSindico: boolean;
   onAlternar: (item: ChecklistItem) => void;
   onAdd: (descricao: string, obrigatorio: boolean) => void;
   fotoObrigatoria: Set<string>;
@@ -1341,6 +1370,18 @@ function ChecklistTab({
   const [novaDescricao, setNovaDescricao] = useState('');
   const [novoObrigatorio, setNovoObrigatorio] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [mostrarNaoAplicados, setMostrarNaoAplicados] = useState(false);
+
+  // OS encerrada não tem pendência: nem finalizada (o que ficou sem marcar não
+  // travou nada) nem cancelada (ninguém ia fazer). Sem borda nem "OBRIG." vermelho.
+  const encerrada = osStatus === 'finalizada' || osStatus === 'cancelada';
+  // Síndico numa OS finalizada: marcados primeiro; o que não se aplicou e não era
+  // obrigatório fica atrás de um "Itens que não se aplicaram (n)".
+  const resumirParaSindico = visaoSindico && osStatus === 'finalizada';
+  const naoAplicaram = resumirParaSindico ? items.filter((i) => !i.concluido && !i.obrigatorio) : [];
+  const principais = resumirParaSindico
+    ? [...items.filter((i) => !naoAplicaram.includes(i))].sort((a, b) => Number(b.concluido) - Number(a.concluido))
+    : items;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1352,25 +1393,10 @@ function ChecklistTab({
     setAdding(false);
   };
 
-  return (
-    <div className="flex flex-col gap-3">
-      {podeCadastrarEquip && temEquipamentos === false && (
-        <div className="flex flex-col gap-3 rounded-lg border border-amx-red bg-amx-panel px-4 py-4">
-          <p className="text-sm font-semibold text-white">Este condomínio ainda não tem equipamentos cadastrados.</p>
-          <p className="text-xs text-amx-muted">Cadastre antes de começar o serviço: cada equipamento vai pedir foto antes e depois.</p>
-          <Button type="button" variant="primary" onClick={onCadastrarEquip} className="w-full sm:w-auto py-3 text-sm">
-            Cadastrar equipamento
-          </Button>
-        </div>
-      )}
-      {items.length === 0 ? (
-        <EmptyState title="Checklist vazio" description="Nenhum item cadastrado para esta OS ainda." />
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {items.map((item) => {
+  const renderItem = (item: ChecklistItem) => {
             // Item obrigatório e pendente ganha borda vermelha — é ele que
             // está travando o botão "Finalizar OS" (ver podeFinalizar acima).
-            const bloqueando = item.obrigatorio && !item.concluido;
+            const bloqueando = !encerrada && item.obrigatorio && !item.concluido;
             return (
               <li
                 key={item.id}
@@ -1403,7 +1429,7 @@ function ChecklistTab({
                 >
                   {item.descricao}
                 </span>
-                {item.obrigatorio && !item.concluido && (
+                {!encerrada && item.obrigatorio && !item.concluido && (
                   <span className="font-heading text-[9px] font-semibold text-amx-red tracking-wider shrink-0">OBRIG.</span>
                 )}
                 {item.equipamento_id && (
@@ -1431,8 +1457,40 @@ function ChecklistTab({
                   )}
               </li>
             );
-          })}
-        </ul>
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {podeCadastrarEquip && temEquipamentos === false && (
+        <div className="flex flex-col gap-3 rounded-lg border border-amx-red bg-amx-panel px-4 py-4">
+          <p className="text-sm font-semibold text-white">Este condomínio ainda não tem equipamentos cadastrados.</p>
+          <p className="text-xs text-amx-muted">Cadastre antes de começar o serviço: cada equipamento vai pedir foto antes e depois.</p>
+          <Button type="button" variant="primary" onClick={onCadastrarEquip} className="w-full sm:w-auto py-3 text-sm">
+            Cadastrar equipamento
+          </Button>
+        </div>
+      )}
+      {items.length === 0 ? (
+        <EmptyState title="Checklist vazio" description="Nenhum item cadastrado para esta OS ainda." />
+      ) : (
+        <>
+          <ul className="flex flex-col gap-2">
+            {principais.map((item) => renderItem(item))}
+          </ul>
+          {naoAplicaram.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setMostrarNaoAplicados((v) => !v)}
+                aria-expanded={mostrarNaoAplicados}
+                className="self-start text-xs font-semibold text-amx-muted hover:text-white underline underline-offset-2"
+              >
+                Itens que não se aplicaram ({naoAplicaram.length})
+              </button>
+              {mostrarNaoAplicados && <ul className="flex flex-col gap-2">{naoAplicaram.map((item) => renderItem(item))}</ul>}
+            </div>
+          )}
+        </>
       )}
 
       {podeCadastrarEquip && temEquipamentos !== false && (

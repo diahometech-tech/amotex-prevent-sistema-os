@@ -1,5 +1,5 @@
 {
-  "atualizado": "2026-11-20",
+  "atualizado": "2026-11-22",
   "papeis": [
     {
       "papel": "admin",
@@ -45,7 +45,11 @@
             "Na primeira visita a um condomínio novo, o técnico cadastra os equipamentos direto pela OS. Cada equipamento vira um item Inspecionar no checklist. Foto é obrigatória só na corretiva (antes e depois); na preventiva é opcional.",
             "OS finalizada tem o link Baixar PDF da OS.",
             "Na linha Gestão, Cancelar OS encerra uma OS em aberto que não vai mais acontecer. O motivo é obrigatório e fica registrado.",
-            "Apagar OS remove a OS de vez, com fotos. Use só para OS aberta por engano ou de teste."
+            "Apagar OS remove a OS de vez, com fotos. Use só para OS aberta por engano ou de teste.",
+            "O Histórico da OS conta o que aconteceu em frases, com dia e hora de São Paulo. Exemplos: Ana (secretária) trocou o técnico de Yuri para Mateus; Status: Aberta → Em andamento; Chegada registrada às 10:32; OS finalizada por Mateus.",
+            "Os selos da OS mostram só a situação (Aberta, Em andamento, Finalizada ou Cancelada). Prioridade só aparece nas OS em aberto.",
+            "Os números dos filtros Todas, Preventiva e Corretiva seguem a situação escolhida (por exemplo, Em aberto) e mudam sozinhos ao criar, assumir, mudar o status ou finalizar uma OS.",
+            "Na OS cancelada, o checklist não marca nenhum item como pendente."
           ]
         },
         {
@@ -61,7 +65,8 @@
             "Sobras vão sozinhas para o dia seguinte: o que o técnico não fez fica na frente da fila do próximo dia útil e o resto da fila desliza, sem passar da meta por dia. Corretivas não mudam de data.",
             "Reorganizar agora: em Rotas, clique em Reorganizar agora, confira a prévia do que muda de dia e clique em Aplicar. Rodar duas vezes no mesmo dia não muda nada. Durante o expediente, o que já é de hoje continua em hoje; as visitas abertas de hoje só passam para o próximo dia útil na reorganização das 5h. A fila nunca passa para o mês seguinte: o que não cabe na meta fica no último dia útil do mês, acima dela, e aparece marcado na prévia.",
             "Todo dia às 5h a reorganização roda sozinha, chamada pelo n8n em POST /api/integracoes/reorganizar-rotas com o cabeçalho X-Amotex-Secret (o mesmo segredo do webhook). O workflow do n8n ainda precisa ser criado: agende uma chamada diária às 5h, sem corpo. Cada visita remarcada fica registrada no histórico da OS como Reagendada automática.",
-            "Painel do mês: no alto de Rotas, a tabela mostra por técnico e no total as preventivas do mês: feitas, faltam e o ritmo necessário por dia útil restante para fechar o mês."
+            "Painel do mês: no alto de Rotas, a tabela mostra por técnico e no total as preventivas do mês: feitas, faltam e o ritmo necessário por dia útil restante para fechar o mês.",
+            "Inspeção dos equipamentos obrigatória: em Rotas, logo abaixo da meta, há dois interruptores, Preventiva (padrão Ligado) e Corretiva (padrão Desligado). Ligado: cada equipamento do condomínio vira um item obrigatório do checklist. Só você altera. Vale para as OS criadas daí em diante; as que já existem não mudam."
           ]
         },
         {
@@ -72,7 +77,8 @@
             "Para cadastrar vários de uma vez, use Importar planilha.",
             "Na página do condomínio: Editar, Ver painel, ajustes temporários de valor e as abas Reservatórios, Contatos e Equipamentos.",
             "Em Acesso do síndico ao painel, clique em + Criar acesso. O sistema gera a senha e monta a mensagem pronta: clique em Copiar mensagem e envie ao síndico.",
-            "Cliente que saiu: Editar e desmarque Contrato ativo (mantém o histórico). Apagar condomínio é só para cadastro de teste ou feito por engano e pede para digitar o nome."
+            "Cliente que saiu: Editar e desmarque Contrato ativo (mantém o histórico). Apagar condomínio é só para cadastro de teste ou feito por engano e pede para digitar o nome.",
+            "No cadastro, Monitoramento ativo mostra Ligado ou Desligado por escrito. Em condomínio novo ele começa Desligado; ligue só quando houver sensor funcionando."
           ]
         },
         {
@@ -83,7 +89,8 @@
             "Informe o ID do Telegram para a pessoa receber os avisos de corretiva.",
             "Para a secretária, escolha o papel Secretária. Informe o ID do Telegram dela para receber os avisos de corretiva junto com os gestores.",
             "Clique em + Criar acesso e passe o login e a senha para a pessoa.",
-            "Na lista: Editar, Resetar senha, Desativar e Excluir. Quem saiu da equipe deve ser Desativado: o nome continua nas OS que atendeu."
+            "Na lista: Editar, Resetar senha, Desativar e Excluir. Quem saiu da equipe deve ser Desativado: o nome continua nas OS que atendeu.",
+            "Ao gerar uma nova senha (Resetar senha, ou Gerar nova senha em Acesso do síndico), o sistema pergunta antes: a senha atual da pessoa para de funcionar na hora. Só depois de confirmar a nova senha vale."
           ]
         },
         {
@@ -170,7 +177,8 @@
           "passos": [
             "Abra a OS em Ordens de Serviço.",
             "Mude a data da visita ou o técnico responsável. Salva sozinho, não tem botão Salvar.",
-            "Ao atribuir ou trocar o técnico de uma corretiva, o aviso no Telegram vai só para esse técnico, para os gestores e para você. Os outros técnicos e o plantão não são avisados. Se aparecer o recado de que ele está sem Telegram, ligue para ele."
+            "Ao atribuir ou trocar o técnico de uma corretiva, o aviso no Telegram vai só para esse técnico, para os gestores e para você. Os outros técnicos e o plantão não são avisados. Se aparecer o recado de que ele está sem Telegram, ligue para ele.",
+            "Tudo o que muda na OS (troca de técnico, remarcação, status, chegada) aparece em frases na aba Histórico, com nome de quem fez e a hora."
           ]
         },
         {
@@ -331,7 +339,8 @@
             "Aba Fotos: são as fotos gerais do serviço. Na corretiva sem equipamento, tire aqui uma foto antes e uma depois.",
             "Se tirar uma foto errada, no Checklist toque no X da miniatura; na aba Fotos, toque em Remover. Depois tire de novo.",
             "Aba Assinaturas: assine no quadro e toque em Confirmar assinatura. Para o condomínio, escreva o nome de quem vai assinar (documento é opcional), peça para a pessoa assinar no quadro e toque em Confirmar. O nome vem preenchido com o zelador cadastrado: se quem assinou foi outra pessoa, troque o nome. Errou? Toque em Corrigir nome. Sem o nome, a OS não finaliza.",
-            "Precisa mudar o dia da visita? Ligue para o escritório. Só o gestor e a secretária reagendam."
+            "Precisa mudar o dia da visita? Ligue para o escritório. Só o gestor e a secretária reagendam.",
+            "Na aba Histórico da OS você vê, em frases, quem fez o quê e quando. Em OS cancelada, o checklist não mostra pendência."
           ]
         },
         {
@@ -392,7 +401,8 @@
             "Ao entrar, você já cai no Painel do Condomínio. O menu só tem Painel e Ajuda.",
             "No topo: quantidade de equipamentos, manutenções no mês, tempo médio de resposta (até a chegada do técnico) e a próxima visita.",
             "Em Histórico de atendimentos, cada mês lista as visitas, preventivas e corretivas.",
-            "Clique em Fotos para ver as fotos de antes e depois do serviço e em PDF para baixar o relatório da visita."
+            "Clique em Fotos para ver as fotos de antes e depois do serviço e em PDF para baixar o relatório da visita.",
+            "Ao abrir uma OS finalizada, o checklist mostra primeiro o que foi feito. Os itens que não se aplicaram ficam recolhidos em Itens que não se aplicaram; toque para ver."
           ]
         }
       ],

@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       const os = await Database.createOS({
         condominio_id: item.condominio_id, tipo: 'preventiva', origem: 'manual',
         tecnico_id: item.tecnico_id, data_programada: item.data,
-      });
+      }, session.name);
       await criarChecklistInicial(os);
     }
     await Database.createAuditLog({

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Field, Input } from '@/components/ui/Form';
+import { InspecaoEquipamentoConfig } from '@/components/os/InspecaoEquipamentoConfig';
 import { painelPreventivasMes } from '@/lib/painel-preventivas-mes';
 import type { OS } from '@/lib/db';
 
@@ -16,7 +17,9 @@ export function PainelPreventivasMes({
   oss,
   tecnicoNome,
   hoje,
+  ehGestor = false,
 }: {
+  ehGestor?: boolean;
   oss: OS[];
   tecnicoNome: (id?: string) => string | undefined;
   hoje: string;
@@ -99,6 +102,8 @@ export function PainelPreventivasMes({
         </Button>
         {msg && <p className={`text-xs font-semibold ${msg.ok ? 'text-amx-green' : 'text-amx-red-hover'}`}>{msg.texto}</p>}
       </div>
+
+      {ehGestor && <InspecaoEquipamentoConfig />}
 
       <p className="font-heading text-[11px] font-semibold tracking-wider text-amx-muted mt-5 mb-2">
         PREVENTIVAS DE {nomeMes.toUpperCase()} · {painel.diasUteisRestantes} dia{painel.diasUteisRestantes !== 1 ? 's' : ''} útei
