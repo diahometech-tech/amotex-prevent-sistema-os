@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import type { NextRequest } from 'next/server';
 import type { Condominio, OS, UserRole } from './db';
+import { tecnicoAtendeCondominio } from './contato-acesso';
 import { isAdmin, isEscritorio, isScopedToOwnCondominio as isSindico, tecnicoVeOS, osEncerrada } from './roles';
 
 export const SESSION_COOKIE = 'amotex_session';
@@ -167,6 +168,29 @@ export function condominioParaPapel<T extends Partial<Condominio>>(role: UserRol
   const copia: Partial<Condominio> = { ...c };
   for (const k of CAMPOS_CONTRATO) delete copia[k];
   return copia as T;
+}
+
+// Localização (chegada/finalização) só o escritório recebe — síndico e técnico
+// recebem a OS sem as coordenadas. Usar em toda resposta que devolve OS.
+const CAMPOS_LOCALIZACAO: (keyof OS)[] = [
+  'chegada_lat', 'chegada_lng', 'chegada_precisao_m',
+  'finalizacao_lat', 'finalizacao_lng', 'finalizacao_precisao_m',
+];
+export function osParaPapel<T extends Partial<OS>>(role: UserRole, os: T): T {
+  if (isEscritorio(role)) return os;
+  const copia: Partial<OS> = { ...os };
+  for (const k of CAMPOS_LOCALIZACAO) delete copia[k];
+  return copia as T;
+}
+
+// Contato do condomínio em campo: gestor e secretária sempre; técnico só se
+// tem OS atribuída a ele no condomínio (aberta, ou finalizada nos últimos 30
+// dias — ver src/lib/contato-acesso.ts). Qualquer outro papel, não.
+export async function podeEditarContatosDoCondominio(session: SessionUser, condominioId: string): Promise<boolean> {
+  if (isEscritorio(session.role)) return true;
+  if (session.role !== 'tecnico' || !condominioId) return false;
+  const { Database } = await import('./db');
+  return tecnicoAtendeCondominio(session.id, await Database.getOSsByCondominio(condominioId));
 }
 
 // ===== Senhas (bcrypt) =====

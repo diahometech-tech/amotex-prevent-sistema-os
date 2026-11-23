@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, FinalizacaoBloqueadaError } from '@/lib/db';
 import { hojeISO, normalizarDataProgramada } from '@/lib/os-agenda';
-import { getSessionFromRequest, getClientIp, podeVerOS, podeLerOS, condominioParaPapel } from '@/lib/auth';
-import { isScopedToOwnCondominio, podeAgendarOS, podeApagarOS, podeCancelarOS, podeOperarCampo } from '@/lib/roles';
+import { getSessionFromRequest, getClientIp, podeVerOS, podeLerOS, condominioParaPapel, osParaPapel } from '@/lib/auth';
+import { isScopedToOwnCondominio, isTecnico, podeAgendarOS, podeApagarOS, podeCancelarOS, podeMarcarACaminho, podeOperarCampo } from '@/lib/roles';
+import { camposDeLocalizacao, lerLocalizacao } from '@/lib/localizacao';
 import { saveAssinaturaDataUrl, saveOsPdfBuffer } from '@/lib/uploads';
 import { generateOsPdf } from '@/lib/os-pdf';
 import { notifyN8n } from '@/lib/notify';
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   // Contrato do condomínio só pro escritório; auditoria (logs) não vai pro
   // síndico — ele vê a OS pelo Painel, não o histórico interno.
   return NextResponse.json({
-    os, checklist, fotos,
+    os: osParaPapel(session.role, os), checklist, fotos,
     // Contatos ativos do local (zelador etc.): a tela monta os botões "Ligar".
     // Quem vê a OS já pode ver os contatos do condomínio.
     contatos: contatosTodos.filter((c) => c.ativo),
@@ -70,7 +71,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const body = await request.json();
     const {
-      finalizar, cancelar, motivo, assinatura_zelador, assinatura_tecnico,
+      a_caminho, finalizar, cancelar, motivo, assinatura_zelador, assinatura_tecnico,
       assinatura_zelador_nome, assinatura_zelador_documento, ...rest
     } = body;
 
@@ -85,10 +86,44 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const os = await Database.cancelarOS(id, texto.slice(0, 500), session.name);
       if (!os) return NextResponse.json({ error: 'Esta OS já foi finalizada ou cancelada.' }, { status: 409 });
       notifyN8n('os_status_changed', os, { de: original.status });
-      return NextResponse.json({ success: true, os });
+      return NextResponse.json({ success: true, os: osParaPapel(session.role, os) });
     }
     if (rest.status === 'cancelada') {
       return NextResponse.json({ error: 'Use "Cancelar OS" para cancelar.' }, { status: 400 });
+    }
+
+    // "Estou a caminho": só o técnico da OS (ou o escritório, por ele). Antes
+    // da chegada e em OS aberta. Repetir não muda a hora já gravada. A hora do
+    // toque só vem do aparelho sem sinal (fila offline): vale se não é futura
+    // nem anterior à abertura da OS; no envio normal o servidor grava a dele.
+    if (a_caminho) {
+      if (!podeMarcarACaminho(session.role)) {
+        return NextResponse.json({ error: 'Só o técnico da OS marca que está a caminho.' }, { status: 403 });
+      }
+      if (isTecnico(session.role) && original.tecnico_id !== session.id) {
+        return NextResponse.json({ error: 'Assuma a OS antes de avisar que está a caminho.' }, { status: 403 });
+      }
+      if (original.status === 'cancelada') {
+        return NextResponse.json({ error: 'Esta OS foi cancelada.' }, { status: 409 });
+      }
+      if (original.status === 'finalizada' || original.status === 'em_andamento' || original.entrada_em) {
+        return NextResponse.json({ error: 'O técnico já chegou ao local.' }, { status: 409 });
+      }
+      if (original.a_caminho_em) return NextResponse.json({ success: true, os: osParaPapel(session.role, original) });
+      const agora = Date.now();
+      let quando = agora;
+      const enviada = typeof rest.a_caminho_em === 'string' ? Date.parse(rest.a_caminho_em) : NaN;
+      if (!Number.isNaN(enviada) && enviada <= agora && enviada >= new Date(original.criado_em).getTime()) quando = enviada;
+      const tecnico = original.tecnico_id ? await Database.getUserById(original.tecnico_id) : null;
+      const os = await Database.updateOS(id, {
+        a_caminho_em: new Date(quando).toISOString(),
+        a_caminho_por: tecnico?.nome ?? session.name,
+      });
+      await Database.createAuditLog({
+        entidade: 'os', entidade_id: id, acao: 'A_CAMINHO', ator: session.name,
+        detalhe: { tecnico: tecnico?.nome ?? null, ip: getClientIp(request) },
+      });
+      return NextResponse.json({ success: true, os: os ? osParaPapel(session.role, os) : os });
     }
     // Permissão por campo: se o corpo mistura campo e agenda, cada um é
     // checado — qualquer campo não permitido recusa o pedido inteiro.
@@ -145,6 +180,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     // (src/lib/os-sla.ts) conta dela.
     if (updates.status === 'em_andamento' && !original.entrada_em && updates.entrada_em === undefined) {
       updates.entrada_em = new Date().toISOString();
+    }
+    // Localização do celular na chegada (só na primeira, junto com a própria
+    // chegada) e na finalização (a primeira que chegar — assinatura do zelador
+    // ou "Finalizar"). Coordenada inválida é ignorada: nunca barra o registro.
+    if (updates.entrada_em !== undefined && !original.entrada_em && original.chegada_lat == null) {
+      const loc = lerLocalizacao(rest, 'chegada');
+      if (loc) Object.assign(updates, camposDeLocalizacao('chegada', loc));
+    }
+    if ((finalizar || typeof assinatura_zelador === 'string') && podeOperarCampo(session.role) && original.finalizacao_lat == null) {
+      const loc = lerLocalizacao(rest, 'finalizacao');
+      if (loc) Object.assign(updates, camposDeLocalizacao('finalizacao', loc));
     }
     // Chegada numa PREVENTIVA agendada pra OUTRO dia (adiantar a próxima
     // visita, ou fazer uma atrasada): a data dela passa a ser o dia da
@@ -249,7 +295,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
 
       notifyN8n('os_finalizada', os);
-      return NextResponse.json({ success: true, os, ...(pdfError ? { pdfError } : {}) });
+      return NextResponse.json({ success: true, os: osParaPapel(session.role, os), ...(pdfError ? { pdfError } : {}) });
     }
 
     const os = await Database.updateOS(id, updates);
@@ -284,7 +330,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         }
       }
     }
-    return NextResponse.json({ success: true, os, ...(aviso ? { aviso } : {}) });
+    return NextResponse.json({ success: true, os: os ? osParaPapel(session.role, os) : os, ...(aviso ? { aviso } : {}) });
   } catch (e) {
     console.error('Erro ao atualizar OS:', e);
     return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });

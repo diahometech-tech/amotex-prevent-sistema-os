@@ -5,7 +5,8 @@ import { descartarItem, iniciarSincronizacao, ouvirFila, processarFila } from '@
 import { useFilaEnvio } from '@/lib/useFilaEnvio';
 import { Icon } from '@/components/ui/Icon';
 
-function rotulo(n: number, tipo: 'foto' | 'assinatura' | 'chegada'): string {
+function rotulo(n: number, tipo: 'foto' | 'assinatura' | 'chegada' | 'a_caminho'): string {
+  if (tipo === 'a_caminho') return n === 1 ? '1 aviso de "a caminho"' : `${n} avisos de "a caminho"`;
   if (tipo === 'foto') return n === 1 ? '1 foto' : `${n} fotos`;
   if (tipo === 'chegada') return n === 1 ? '1 chegada' : `${n} chegadas`;
   return n === 1 ? '1 assinatura' : `${n} assinaturas`;
@@ -27,7 +28,7 @@ export function FilaEnvioAviso() {
     window.addEventListener('offline', atualizarRede);
     const sair = ouvirFila((e) => {
       if (e.tipo === 'sessao_expirada') setSessaoExpirada(true);
-      if (e.tipo === 'foto_enviada' || e.tipo === 'assinatura_enviada' || e.tipo === 'chegada_enviada') setSessaoExpirada(false);
+      if (e.tipo === 'foto_enviada' || e.tipo === 'assinatura_enviada' || e.tipo === 'chegada_enviada' || e.tipo === 'a_caminho_enviado') setSessaoExpirada(false);
     });
     return () => {
       parar();
@@ -43,11 +44,13 @@ export function FilaEnvioAviso() {
 
   const fotos = aguardando.filter((i) => i.tipo === 'foto').length;
   const chegadas = aguardando.filter((i) => i.tipo === 'chegada').length;
-  const assinaturas = aguardando.length - fotos - chegadas;
+  const aCaminho = aguardando.filter((i) => i.tipo === 'a_caminho').length;
+  const assinaturas = aguardando.length - fotos - chegadas - aCaminho;
   const partes = [
     fotos && rotulo(fotos, 'foto'),
     assinaturas && rotulo(assinaturas, 'assinatura'),
     chegadas && rotulo(chegadas, 'chegada'),
+    aCaminho && rotulo(aCaminho, 'a_caminho'),
   ].filter(Boolean);
 
   const tentarAgora = async () => {
@@ -98,7 +101,7 @@ export function FilaEnvioAviso() {
           <span className="inline-flex items-start gap-1.5">
             <Icon name="alerta" size={16} className="shrink-0 mt-px" />
             <span>
-            {i.tipo === 'foto' ? 'Foto' : i.tipo === 'chegada' ? 'Chegada' : 'Assinatura'} da OS #{i.os_id.slice(0, 6).toUpperCase()} não foi aceita:{' '}
+            {i.tipo === 'foto' ? 'Foto' : i.tipo === 'chegada' ? 'Chegada' : i.tipo === 'a_caminho' ? 'Aviso de "a caminho"' : 'Assinatura'} da OS #{i.os_id.slice(0, 6).toUpperCase()} não foi aceita:{' '}
             {i.erro}
             </span>
           </span>

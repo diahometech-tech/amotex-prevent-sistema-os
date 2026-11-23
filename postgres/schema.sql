@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS reservatorio (
 CREATE TABLE IF NOT EXISTS contato (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   condominio_id UUID NOT NULL REFERENCES condominio(id) ON DELETE CASCADE,
-  papel TEXT NOT NULL CHECK (papel IN ('zelador', 'sindico', 'administradora', 'conservadora', 'plantao')),
+  papel TEXT NOT NULL CHECK (papel IN ('zelador', 'gerente', 'portaria', 'sindico', 'administradora', 'conservadora', 'plantao')),
   nome TEXT NOT NULL,
   canal_preferencial TEXT NOT NULL CHECK (canal_preferencial IN ('telegram', 'whatsapp', 'email')),
   identificador_canal TEXT NOT NULL,
@@ -115,6 +115,15 @@ CREATE TABLE IF NOT EXISTS os (
   descricao_problema TEXT,
   os_origem_id UUID REFERENCES os(id) ON DELETE SET NULL, -- corretiva aberta de dentro da preventiva
   equipamento_id UUID REFERENCES equipamento(id) ON DELETE SET NULL, -- equipamento com defeito
+  canal_abertura TEXT, -- escritorio | tecnico | condominio (nulo = OS antiga)
+  a_caminho_em TIMESTAMPTZ, -- "Estou a caminho" do técnico
+  a_caminho_por TEXT,
+  chegada_lat DOUBLE PRECISION, -- localização do celular (só o escritório vê)
+  chegada_lng DOUBLE PRECISION,
+  chegada_precisao_m DOUBLE PRECISION,
+  finalizacao_lat DOUBLE PRECISION,
+  finalizacao_lng DOUBLE PRECISION,
+  finalizacao_precisao_m DOUBLE PRECISION,
   assinatura_zelador_url TEXT,
   assinatura_zelador_nome TEXT, -- quem assinou pelo condomínio (obrigatório para finalizar)
   assinatura_zelador_documento TEXT, -- RG/CPF livre, opcional

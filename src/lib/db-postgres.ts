@@ -71,7 +71,7 @@ async function runSchemaMigration(): Promise<void> {
     CREATE TABLE IF NOT EXISTS contato (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       condominio_id UUID NOT NULL REFERENCES condominio(id) ON DELETE CASCADE,
-      papel TEXT NOT NULL CHECK (papel IN ('zelador', 'sindico', 'administradora', 'conservadora', 'plantao')),
+      papel TEXT NOT NULL CHECK (papel IN ('zelador', 'gerente', 'portaria', 'sindico', 'administradora', 'conservadora', 'plantao')),
       nome TEXT NOT NULL,
       canal_preferencial TEXT NOT NULL CHECK (canal_preferencial IN ('telegram', 'whatsapp', 'email')),
       identificador_canal TEXT NOT NULL,
@@ -243,6 +243,41 @@ async function runSchemaMigration(): Promise<void> {
     ALTER TABLE os ADD COLUMN IF NOT EXISTS os_origem_id UUID REFERENCES os(id) ON DELETE SET NULL;
     ALTER TABLE os ADD COLUMN IF NOT EXISTS equipamento_id UUID REFERENCES equipamento(id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_os_origem ON os(os_origem_id);
+    -- Condomínio e campo (22/11): chamado aberto pelo síndico, "a caminho" do
+    -- técnico e localização na chegada/finalização. Só colunas novas, nulas
+    -- nas linhas antigas. Sem mexer no CHECK de os.origem.
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS canal_abertura TEXT;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS a_caminho_em TIMESTAMPTZ;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS a_caminho_por TEXT;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS chegada_lat DOUBLE PRECISION;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS chegada_lng DOUBLE PRECISION;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS chegada_precisao_m DOUBLE PRECISION;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS finalizacao_lat DOUBLE PRECISION;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS finalizacao_lng DOUBLE PRECISION;
+    ALTER TABLE os ADD COLUMN IF NOT EXISTS finalizacao_precisao_m DOUBLE PRECISION;
+    -- Contato do condomínio ganha "gerente" e "portaria" (técnico cadastra em
+    -- campo). Não depende do nome do constraint: se nenhum CHECK de papel já
+    -- cita 'portaria', derruba os que citam papel e recria um só. Idempotente.
+    DO $$
+    DECLARE c RECORD;
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'contato'::regclass AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%papel%'
+          AND pg_get_constraintdef(oid) ILIKE '%portaria%'
+      ) THEN
+        FOR c IN
+          SELECT conname FROM pg_constraint
+          WHERE conrelid = 'contato'::regclass AND contype = 'c'
+            AND pg_get_constraintdef(oid) ILIKE '%papel%'
+        LOOP
+          EXECUTE format('ALTER TABLE contato DROP CONSTRAINT %I', c.conname);
+        END LOOP;
+        ALTER TABLE contato ADD CONSTRAINT contato_papel_check
+          CHECK (papel IN ('zelador', 'gerente', 'portaria', 'sindico', 'administradora', 'conservadora', 'plantao'));
+      END IF;
+    END $$;
 
     -- Módulo financeiro (26/10): cadastro/contrato do condomínio, cobranças
     -- mensais, ajustes temporários de valor, reajuste anual, configuração.
@@ -622,13 +657,13 @@ export const pgBackend: DbBackend = {
   },
   async insertOS(os) {
     await q(
-      `INSERT INTO os (id, condominio_id, tipo, origem, alerta_id, status, prioridade, tecnico_id, entrada_em, saida_em, observacao, assinatura_zelador_url, assinatura_tecnico_url, pdf_url, criado_em, data_programada, solicitante_nome, solicitante_telefone, descricao_problema, os_origem_id, equipamento_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+      `INSERT INTO os (id, condominio_id, tipo, origem, alerta_id, status, prioridade, tecnico_id, entrada_em, saida_em, observacao, assinatura_zelador_url, assinatura_tecnico_url, pdf_url, criado_em, data_programada, solicitante_nome, solicitante_telefone, descricao_problema, os_origem_id, equipamento_id, canal_abertura)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
       [os.id, os.condominio_id, os.tipo, os.origem, os.alerta_id ?? null, os.status, os.prioridade, os.tecnico_id ?? null,
        os.entrada_em ?? null, os.saida_em ?? null, os.observacao ?? null,
        os.assinatura_zelador_url ?? null, os.assinatura_tecnico_url ?? null, os.pdf_url ?? null, os.criado_em,
        os.data_programada ?? null, os.solicitante_nome ?? null, os.solicitante_telefone ?? null, os.descricao_problema ?? null,
-       os.os_origem_id ?? null, os.equipamento_id ?? null]
+       os.os_origem_id ?? null, os.equipamento_id ?? null, os.canal_abertura ?? null]
     );
   },
   async updateOS(id, updates) {
@@ -637,6 +672,9 @@ export const pgBackend: DbBackend = {
       'assinatura_zelador_url', 'assinatura_tecnico_url', 'pdf_url',
       'assinatura_zelador_nome', 'assinatura_zelador_documento',
       'data_programada', 'solicitante_nome', 'solicitante_telefone', 'descricao_problema',
+      'a_caminho_em', 'a_caminho_por',
+      'chegada_lat', 'chegada_lng', 'chegada_precisao_m',
+      'finalizacao_lat', 'finalizacao_lng', 'finalizacao_precisao_m',
     ];
     const { sets, vals } = buildSet(allowed, updates);
     if (sets.length === 0) return this.getOSById(id);

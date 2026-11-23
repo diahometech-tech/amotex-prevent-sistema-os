@@ -12,11 +12,14 @@ import { FotoUpload } from '@/components/os/FotoUpload';
 import { HistoricoPanel } from '@/components/os/HistoricoPanel';
 import { HistoricoCondominio } from '@/components/os/HistoricoCondominio';
 import { useAmxUser } from '@/components/layout/AppShell';
-import { isEscritorio, podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeEditarEquipamento, podeOperarCampo, podeVerModulo } from '@/lib/roles';
+import { isEscritorio, podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeEditarContatoEmCampo, podeEditarEquipamento, podeMarcarACaminho, podeOperarCampo, podeVerLocalizacao, podeVerModulo } from '@/lib/roles';
 import { computeOsPrioridade, OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-priority';
 import { pendenciasFinalizacao } from '@/lib/os-finalizacao';
 import { formatarDataCurta } from '@/lib/os-agenda';
-import { textoChegada, slaChegada } from '@/lib/os-sla';
+import { textoChegada, slaChegada, fmtHora } from '@/lib/os-sla';
+import { linkMapaCoordenadas, textoPrecisao } from '@/lib/localizacao';
+import { obterLocalizacao, corpoComLocalizacao } from '@/lib/localizacao-cliente';
+import { tecnicoAtendeCondominio } from '@/lib/contato-acesso';
 import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
 import { useTick } from '@/lib/useTick';
 import { enfileirar, ouvirFila } from '@/lib/fila-envio';
@@ -24,6 +27,7 @@ import { useFilaEnvio } from '@/lib/useFilaEnvio';
 import { fotoReduzidaDataUrl } from '@/lib/imagem-cliente';
 import { equipamentosObrigatorios, nomeEquipamentoDoItem } from '@/lib/os-finalizacao';
 import { LocalDoCondominio } from '@/components/os/LocalDoCondominio';
+import { ContatosDoCondominio } from '@/components/os/ContatosDoCondominio';
 import { EquipamentoForm, type EquipamentoFormData } from '@/components/cadastro/EquipamentoForm';
 import type { AuditLog, ChecklistItem, Condominio, Contato, Equipamento, Foto, OS } from '@/lib/db';
 import type { VinculosOS } from '@/lib/os-vinculos';
@@ -89,6 +93,7 @@ export function OSModal({
   const [salvandoNome, setSalvandoNome] = useState(false);
   const [busyAction, setBusyAction] = useState(false);
   const [registrandoChegada, setRegistrandoChegada] = useState(false);
+  const [avisandoACaminho, setAvisandoACaminho] = useState(false);
   const [corrigindoNome, setCorrigindoNome] = useState(false);
 
   // Fila de envio offline (src/lib/fila-envio.ts): foto e assinatura entram
@@ -100,6 +105,7 @@ export function OSModal({
     fila.flatMap((i) => (i.tipo === 'assinatura' && i.papel === papel && !i.recusado ? [i] : []))[0];
   // Chegada registrada sem sinal: guarda a hora do toque e sobe sozinha.
   const chegadaPendente = fila.find((i) => i.tipo === 'chegada' && !i.recusado);
+  const aCaminhoPendente = fila.find((i) => i.tipo === 'a_caminho' && !i.recusado);
   const aguardandoEnvio = fila.filter((i) => !i.recusado).length;
   const zeladorPendente = assinaturaPendente('zelador');
   const nomeZeladorPadrao = contatos.find((c) => c.papel === 'zelador' && c.ativo)?.nome ?? '';
@@ -115,7 +121,7 @@ export function OSModal({
         if (e.tipo === 'foto_enviada' && e.foto.os_id === osId) {
           setFotos((prev) => (prev.some((f) => f.id === e.foto.id) ? prev : [...prev, e.foto]));
         }
-        if ((e.tipo === 'assinatura_enviada' || e.tipo === 'chegada_enviada') && e.os.id === osId) {
+        if ((e.tipo === 'assinatura_enviada' || e.tipo === 'chegada_enviada' || e.tipo === 'a_caminho_enviado') && e.os.id === osId) {
           setOs(e.os);
           onChangedRef.current(e.os);
         }
@@ -337,6 +343,37 @@ export function OSModal({
     }
   };
 
+  // "Estou a caminho": o condomínio vê no Painel. Sem sinal, entra na fila com
+  // a hora do toque e sobe sozinho.
+  const avisarACaminho = async () => {
+    if (!os) return;
+    setAvisandoACaminho(true);
+    setActionError('');
+    const horaDoToque = new Date().toISOString();
+    try {
+      const res = await fetch(`/api/os/${osId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ a_caminho: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.os) {
+        setOs(data.os);
+        onChanged(data.os);
+      } else {
+        setActionError(data.error || 'Não foi possível avisar que você está a caminho.');
+      }
+    } catch {
+      try {
+        await enfileirar({ tipo: 'a_caminho', os_id: osId, a_caminho_em: horaDoToque });
+      } catch {
+        setActionError('Não foi possível registrar. Tente de novo.');
+      }
+    } finally {
+      setAvisandoACaminho(false);
+    }
+  };
+
   const registrarChegada = async () => {
     if (!os) return;
     setRegistrandoChegada(true);
@@ -344,11 +381,14 @@ export function OSModal({
     // Hora da chegada: o servidor grava a dele (relógio do celular errado não
     // burla o prazo). Só sem sinal vai a hora do aparelho, pela fila.
     const horaDoToque = new Date().toISOString();
+    // Localização do celular (até ~8 s). Negada ou sem sinal: registra a
+    // chegada do mesmo jeito, sem ela.
+    const localizacao = await obterLocalizacao();
     try {
       const res = await fetch(`/api/os/${osId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'em_andamento' }),
+        body: JSON.stringify({ status: 'em_andamento', ...corpoComLocalizacao('chegada', localizacao) }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.os) {
@@ -359,7 +399,7 @@ export function OSModal({
       }
     } catch {
       try {
-        await enfileirar({ tipo: 'chegada', os_id: osId, entrada_em: horaDoToque });
+        await enfileirar({ tipo: 'chegada', os_id: osId, entrada_em: horaDoToque, ...(localizacao ? { localizacao } : {}) });
       } catch {
         setActionError('Não foi possível registrar a chegada. Tente de novo.');
       }
@@ -376,10 +416,12 @@ export function OSModal({
     setBusyAction(true);
     setActionError('');
     try {
+      // Localização do celular na finalização (nunca trava: sem ela, finaliza igual).
+      const localizacao = await obterLocalizacao();
       const res = await fetch(`/api/os/${osId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ finalizar: true }),
+        body: JSON.stringify({ finalizar: true, ...corpoComLocalizacao('finalizacao', localizacao) }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.os) {
@@ -418,9 +460,15 @@ export function OSModal({
     setSavingSignature(papel);
     setActionError('');
     try {
+      // Assinatura do zelador = o técnico ainda está no local: leva a localização da finalização.
+      const localizacao = papel === 'zelador' ? await obterLocalizacao() : null;
       const extra =
         papel === 'zelador'
-          ? { nome: nomeZelador.trim(), ...(docZeladorEdit.trim() ? { documento: docZeladorEdit.trim() } : {}) }
+          ? {
+              nome: nomeZelador.trim(),
+              ...(docZeladorEdit.trim() ? { documento: docZeladorEdit.trim() } : {}),
+              ...(localizacao ? { localizacao } : {}),
+            }
           : {};
       await enfileirar({ tipo: 'assinatura', os_id: osId, papel, data: dataUrl, ...extra });
     } catch {
@@ -446,6 +494,7 @@ export function OSModal({
       if (zeladorPendente) {
         await enfileirar({
           tipo: 'assinatura', os_id: osId, papel: 'zelador', data: zeladorPendente.data, nome,
+          ...(zeladorPendente.tipo === 'assinatura' && zeladorPendente.localizacao ? { localizacao: zeladorPendente.localizacao } : {}),
           ...(docZeladorEdit.trim() ? { documento: docZeladorEdit.trim() } : {}),
         });
         setCorrigindoNome(false);
@@ -547,9 +596,23 @@ export function OSModal({
             onClose={onClose}
           />
           <div className="p-5 flex flex-col gap-4">
-            <OsSummary os={os} />
+            <OsSummary os={os} mostrarCanal={user?.role !== 'sindico'} />
 
             <LocalDoCondominio condominio={condominio} contatos={contatos} os={os} podeCadastrarEndereco={user?.role === 'admin'} />
+
+            {podeEditarContatoEmCampo(user?.role) && (
+              <ContatosDoCondominio
+                condominioId={os.condominio_id}
+                contatos={contatos}
+                podeEditar={
+                  isEscritorio(user?.role) ||
+                  (os.tecnico_id === user?.id && tecnicoAtendeCondominio(user?.id ?? '', [os]))
+                }
+                onChange={setContatos}
+              />
+            )}
+
+            {podeVerLocalizacao(user?.role) && <LocalizacaoDaVisita os={os} />}
 
             {(os.descricao_problema || os.solicitante_nome || os.solicitante_telefone) && (
               <div className="rounded-lg border border-amx-red/40 bg-amx-red/5 px-3.5 py-3 flex flex-col gap-1">
@@ -681,6 +744,24 @@ export function OSModal({
 
             {campoLiberado && !isClosed && (
               <div className="flex items-center gap-2 flex-wrap">
+                {!os.entrada_em && !chegadaPendente && podeMarcarACaminho(user?.role) && (
+                  os.a_caminho_em ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amx-blue-light">
+                      <Icon name="rotas" size={14} />
+                      A caminho desde {fmtHora(new Date(os.a_caminho_em).getTime())}
+                    </span>
+                  ) : aCaminhoPendente && aCaminhoPendente.tipo === 'a_caminho' ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amx-amber">
+                      <Icon name="nuvemEnvio" size={14} />
+                      A caminho desde {fmtHora(new Date(aCaminhoPendente.a_caminho_em).getTime())} (aguardando envio)
+                    </span>
+                  ) : (
+                    <Button size="sm" variant="secondary" onClick={avisarACaminho} disabled={avisandoACaminho || registrandoChegada || busyAction}>
+                      <Icon name="rotas" size={14} />
+                      {avisandoACaminho ? 'Avisando...' : 'Estou a caminho'}
+                    </Button>
+                  )
+                )}
                 {os.entrada_em ? (
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amx-green">
                     <Icon name="check" size={14} />
@@ -694,7 +775,7 @@ export function OSModal({
                 ) : (
                   <Button size="sm" variant="secondary" onClick={registrarChegada} disabled={registrandoChegada || busyAction}>
                     <Icon name="mapa" size={14} />
-                    {registrandoChegada ? 'Registrando...' : 'Cheguei no local'}
+                    {registrandoChegada ? 'Pegando a localização...' : 'Cheguei no local'}
                   </Button>
                 )}
                 <div className="flex flex-col gap-1">
@@ -1125,6 +1206,45 @@ function CorretivasDaPreventiva({
   );
 }
 
+// Onde o celular estava na chegada e na finalização (só gestor e secretária).
+function LocalizacaoDaVisita({ os }: { os: OS }) {
+  const linha = (rotulo: string, quando: string | undefined, lat?: number | null, lng?: number | null, precisao?: number | null) => {
+    if (!quando) return null;
+    const hora = fmtHora(new Date(quando).getTime());
+    if (lat == null || lng == null) {
+      return (
+        <p className="text-[13px] text-amx-muted">
+          {rotulo} às {hora} — sem localização
+        </p>
+      );
+    }
+    return (
+      <p className="text-[13px] text-white">
+        {rotulo} às {hora} —{' '}
+        <a
+          href={linkMapaCoordenadas(lat, lng)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-amx-blue-light hover:text-white underline underline-offset-2"
+        >
+          ver no mapa
+        </a>
+        {textoPrecisao(precisao) && <span className="text-amx-muted"> ({textoPrecisao(precisao)})</span>}
+      </p>
+    );
+  };
+  const chegada = linha('Chegada', os.entrada_em, os.chegada_lat, os.chegada_lng, os.chegada_precisao_m);
+  const fim = linha('Finalização', os.status === 'finalizada' ? os.saida_em : undefined, os.finalizacao_lat, os.finalizacao_lng, os.finalizacao_precisao_m);
+  if (!chegada && !fim) return null;
+  return (
+    <div className="rounded-lg border border-amx-line bg-amx-panel-2/40 px-3.5 py-3 flex flex-col gap-1.5">
+      <p className="font-heading text-[11px] font-semibold tracking-wider text-amx-muted">LOCALIZAÇÃO DA VISITA</p>
+      {chegada}
+      {fim}
+    </div>
+  );
+}
+
 function SlaBox({ os }: { os: OS }) {
   const sla = slaChegada(os);
   if (!sla) return null;
@@ -1144,13 +1264,14 @@ function SlaBox({ os }: { os: OS }) {
   );
 }
 
-function OsSummary({ os }: { os: OS }) {
+function OsSummary({ os, mostrarCanal }: { os: OS; mostrarCanal: boolean }) {
   const prioridade = computeOsPrioridade(os);
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Badge tone={os.tipo === 'corretiva' ? 'red' : 'info'}>{OS_TIPO_LABELS[os.tipo]}</Badge>
       <Badge tone={prioridade.tone}>{prioridade.label}</Badge>
       <Badge tone={os.status === 'finalizada' ? 'success' : 'neutral'}>{OS_STATUS_LABELS[os.status]}</Badge>
+      {mostrarCanal && os.canal_abertura === 'condominio' && <Badge tone="warning">Aberta pelo condomínio</Badge>}
       {os.origem === 'hermes_automatica' && <Badge tone="navy"><span className="inline-flex items-center gap-1"><Icon name="sensor" size={12} />Aberta automaticamente pelo Hermes</span></Badge>}
     </div>
   );

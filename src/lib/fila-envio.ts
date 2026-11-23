@@ -21,11 +21,17 @@
 //   não duplica (ver src/app/api/os/[id]/fotos/route.ts).
 // - Assinatura: só vale a última de cada papel por OS (id fixo, sobrescreve).
 // - Chegada ("Cheguei no local") sem sinal: guarda a hora do toque; o servidor
-//   só aceita essa hora se a OS ainda não tem chegada.
+//   só aceita essa hora se a OS ainda não tem chegada. Leva junto a
+//   localização do celular, quando houve.
+// - "Estou a caminho" sem sinal: guarda a hora do toque (o servidor só aceita
+//   se a OS ainda não tem chegada nem cancelamento).
+// - Assinatura do zelador leva a localização da finalização, quando houve.
 //
 // Se o IndexedDB não estiver disponível (aba anônima de alguns navegadores),
 // a fila funciona só em memória: ainda reenvia enquanto a aba estiver aberta.
 import type { Foto, OS } from './db';
+import type { Localizacao } from './localizacao';
+import { corpoComLocalizacao } from './localizacao-cliente';
 
 export type ItemFila =
   | {
@@ -49,6 +55,7 @@ export type ItemFila =
       // Só na assinatura do zelador: quem assinou (viaja junto, mesmo offline).
       nome?: string;
       documento?: string;
+      localizacao?: Localizacao;
       criado_em: string;
       tentativas: number;
       erro?: string;
@@ -61,6 +68,18 @@ export type ItemFila =
       // Hora do aparelho no toque em "Cheguei no local" (o prazo de 3h da
       // corretiva conta daqui, mesmo que o envio demore).
       entrada_em: string;
+      localizacao?: Localizacao;
+      criado_em: string;
+      tentativas: number;
+      erro?: string;
+      recusado?: boolean;
+    }
+  | {
+      id: string;
+      tipo: 'a_caminho';
+      os_id: string;
+      // Hora do aparelho no toque em "Estou a caminho".
+      a_caminho_em: string;
       criado_em: string;
       tentativas: number;
       erro?: string;
@@ -74,6 +93,7 @@ export type EventoFila =
   | { tipo: 'foto_enviada'; item: ItemFila; foto: Foto }
   | { tipo: 'assinatura_enviada'; item: ItemFila; os: OS }
   | { tipo: 'chegada_enviada'; item: ItemFila; os: OS }
+  | { tipo: 'a_caminho_enviado'; item: ItemFila; os: OS }
   | { tipo: 'sessao_expirada' };
 
 const DB_NOME = 'amotex-fila-envio';
@@ -191,8 +211,9 @@ function novoId(): string {
 
 type NovoItem =
   | { tipo: 'foto'; os_id: string; momento: 'antes' | 'depois'; equipamento_id?: string; data: string }
-  | { tipo: 'assinatura'; os_id: string; papel: 'tecnico' | 'zelador'; data: string; nome?: string; documento?: string }
-  | { tipo: 'chegada'; os_id: string; entrada_em: string };
+  | { tipo: 'assinatura'; os_id: string; papel: 'tecnico' | 'zelador'; data: string; nome?: string; documento?: string; localizacao?: Localizacao }
+  | { tipo: 'chegada'; os_id: string; entrada_em: string; localizacao?: Localizacao }
+  | { tipo: 'a_caminho'; os_id: string; a_caminho_em: string };
 
 /** Guarda no aparelho e já tenta mandar. Devolve o item gravado. */
 export async function enfileirar(novo: NovoItem): Promise<ItemFila> {
@@ -202,7 +223,9 @@ export async function enfileirar(novo: NovoItem): Promise<ItemFila> {
       ? { ...novo, ...base, id: novoId() }
       : novo.tipo === 'chegada'
         ? { ...novo, ...base, id: `chegada-${novo.os_id}` }
-        : // Assinatura: id fixo por OS + papel — a nova substitui a que ainda não subiu.
+        : novo.tipo === 'a_caminho'
+          ? { ...novo, ...base, id: `a-caminho-${novo.os_id}` }
+          : // Assinatura: id fixo por OS + papel — a nova substitui a que ainda não subiu.
           { ...novo, ...base, id: `assinatura-${novo.os_id}-${novo.papel}` };
   await gravar(item);
   emitir({ tipo: 'mudou' });
@@ -237,10 +260,13 @@ async function enviar(item: ItemFila): Promise<Resultado> {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(
               item.tipo === 'chegada'
-                ? { entrada_em: item.entrada_em, status: 'em_andamento' }
-                : item.papel === 'tecnico'
-                  ? { assinatura_tecnico: item.data }
-                  : {
+                ? { entrada_em: item.entrada_em, status: 'em_andamento', ...corpoComLocalizacao('chegada', item.localizacao ?? null) }
+                : item.tipo === 'a_caminho'
+                  ? { a_caminho: true, a_caminho_em: item.a_caminho_em }
+                  : item.papel === 'tecnico'
+                    ? { assinatura_tecnico: item.data }
+                    : {
+                      ...corpoComLocalizacao('finalizacao', item.localizacao ?? null),
                       assinatura_zelador: item.data,
                       ...(item.nome ? { assinatura_zelador_nome: item.nome } : {}),
                       ...(item.documento ? { assinatura_zelador_documento: item.documento } : {}),
@@ -257,6 +283,7 @@ async function enviar(item: ItemFila): Promise<Resultado> {
     if (item.tipo === 'foto' && json.foto) emitir({ tipo: 'foto_enviada', item, foto: json.foto });
     if (item.tipo === 'assinatura' && json.os) emitir({ tipo: 'assinatura_enviada', item, os: json.os });
     if (item.tipo === 'chegada' && json.os) emitir({ tipo: 'chegada_enviada', item, os: json.os });
+    if (item.tipo === 'a_caminho' && json.os) emitir({ tipo: 'a_caminho_enviado', item, os: json.os });
     return 'ok';
   }
   if (res.status === 401) {

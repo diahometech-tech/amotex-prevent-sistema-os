@@ -145,7 +145,7 @@ export interface Reservatorio {
 export interface Contato {
   id: string;
   condominio_id: string;
-  papel: 'zelador' | 'sindico' | 'administradora' | 'conservadora' | 'plantao';
+  papel: 'zelador' | 'gerente' | 'portaria' | 'sindico' | 'administradora' | 'conservadora' | 'plantao';
   nome: string;
   canal_preferencial: 'telegram' | 'whatsapp' | 'email';
   identificador_canal: string;
@@ -237,6 +237,8 @@ export type OsOrigem = 'manual' | 'hermes_automatica';
 export type OsStatus = 'aberta' | 'em_andamento' | 'finalizada' | 'cancelada';
 export type OsPrioridade = 'alta' | 'media' | 'baixa';
 
+export type CanalAbertura = 'escritorio' | 'tecnico' | 'condominio';
+
 export interface OS {
   id: string;
   condominio_id: string;
@@ -261,6 +263,20 @@ export interface OS {
   // preventiva de origem e o equipamento com defeito. Ausentes nas demais.
   os_origem_id?: string;
   equipamento_id?: string;
+  // Por onde a OS entrou (22/11): escritório, técnico em campo ou o próprio
+  // condomínio (chamado pelo Painel). Ausente = OS anterior a esta coluna.
+  canal_abertura?: CanalAbertura;
+  // "Estou a caminho" (técnico): hora do toque e nome de quem estava indo.
+  a_caminho_em?: string;
+  a_caminho_por?: string;
+  // Localização do celular na chegada e na finalização (nunca bloqueia: sem
+  // permissão ou sem sinal ficam ausentes). Precisão em metros. Só o escritório vê.
+  chegada_lat?: number;
+  chegada_lng?: number;
+  chegada_precisao_m?: number;
+  finalizacao_lat?: number;
+  finalizacao_lng?: number;
+  finalizacao_precisao_m?: number;
   assinatura_zelador_url?: string;
   // Quem assinou pelo condomínio (nome obrigatório para finalizar; documento
   // RG/CPF livre, opcional). OS assinadas antes deste campo ficam sem nome.
@@ -1151,12 +1167,13 @@ export class Database {
       descricao_problema: data.descricao_problema,
       os_origem_id: data.os_origem_id,
       equipamento_id: data.equipamento_id,
+      canal_abertura: data.canal_abertura,
       criado_em: new Date().toISOString(),
     };
     await backend().insertOS(os);
     await this.createAuditLog({
       entidade: 'os', entidade_id: os.id, acao: 'CRIADA', ator: data.origem === 'hermes_automatica' ? 'hermes' : 'usuario',
-      detalhe: { tipo: os.tipo, origem: os.origem, ...(os.os_origem_id ? { os_origem_id: os.os_origem_id } : {}) },
+      detalhe: { tipo: os.tipo, origem: os.origem, ...(os.canal_abertura ? { canal: os.canal_abertura } : {}), ...(os.os_origem_id ? { os_origem_id: os.os_origem_id } : {}) },
     });
     return os;
   }
@@ -1165,7 +1182,7 @@ export class Database {
 
   // Cancelar mantém a OS (sai das abertas, fica no histórico com o motivo).
   // Só OS em aberto/andamento; finalizada tem PDF e assinatura, não se cancela.
-  static async cancelarOS(id: string, motivo: string, ator: string): Promise<OS | null> {
+  static async cancelarOS(id: string, motivo: string, ator: string, extra: Record<string, unknown> = {}): Promise<OS | null> {
     const os = await backend().getOSById(id);
     if (!os || os.status === 'finalizada' || os.status === 'cancelada') return null;
     const nota = `Cancelada por ${ator}: ${motivo}`;
@@ -1176,7 +1193,7 @@ export class Database {
     });
     await this.createAuditLog({
       entidade: 'os', entidade_id: id, acao: 'CANCELADA', ator,
-      detalhe: { de: os.status, motivo },
+      detalhe: { de: os.status, motivo, ...extra },
     });
     return atualizada;
   }

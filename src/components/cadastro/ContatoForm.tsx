@@ -78,6 +78,8 @@ export function ContatoForm({
               ...form,
               papel: e.target.value as
                 | 'zelador'
+                | 'gerente'
+                | 'portaria'
                 | 'sindico'
                 | 'administradora'
                 | 'conservadora'
@@ -87,6 +89,8 @@ export function ContatoForm({
           disabled={busy}
         >
           <option value="zelador">Zelador</option>
+          <option value="gerente">Gerente</option>
+          <option value="portaria">Portaria</option>
           <option value="sindico">Síndico</option>
           <option value="administradora">Administradora</option>
           <option value="conservadora">Conservadora</option>
