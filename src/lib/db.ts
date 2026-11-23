@@ -122,6 +122,20 @@ export interface Configuracao {
   valor: string;
 }
 
+// Aparelho que recebe aviso do app (Web Push). Um usuário pode ter vários
+// (celular e computador); o endpoint é único: se outro usuário entra no mesmo
+// aparelho, a inscrição passa para ele. Ver src/lib/push.ts.
+export interface PushInscricao {
+  id: string;
+  usuario_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent?: string;
+  criado_em: string;
+  ultimo_uso_em?: string;
+}
+
 // Ponto monitorado dentro de um condomínio. nome_sensorlog é a chave de
 // resolução do alerta: a mensagem que chega da SensorLog referencia o
 // reservatório ("Caixa torre 03"), não o condomínio diretamente.
@@ -420,6 +434,14 @@ export interface DbBackend {
   getConfiguracao(chave: string): Promise<string | null>;
   setConfiguracao(chave: string, valor: string): Promise<void>;
 
+  // Avisos do app (Web Push)
+  upsertPushInscricao(i: PushInscricao): Promise<void>;
+  getPushInscricaoByEndpoint(endpoint: string): Promise<PushInscricao | null>;
+  getPushInscricoesByUsuarios(usuarioIds: string[]): Promise<PushInscricao[]>;
+  getUsuarioIdsComPush(): Promise<string[]>;
+  deletePushInscricaoByEndpoint(endpoint: string): Promise<boolean>;
+  tocarPushInscricao(id: string): Promise<void>;
+
   // Auditoria
   getAuditLogs(): Promise<AuditLog[]>;
   getAuditLogsByEntidade(entidade: string, entidadeId: string): Promise<AuditLog[]>;
@@ -476,6 +498,7 @@ function emptyDB() {
     ajustes: [] as AjusteValor[],
     reajustes: [] as Reajuste[],
     configuracoes: [] as Configuracao[],
+    push_inscricoes: [] as PushInscricao[],
   };
 }
 
@@ -689,6 +712,7 @@ const jsonBackend: DbBackend = {
     const db = readLocalDB();
     const before = db.users.length;
     db.users = db.users.filter((u) => u.id !== id);
+    db.push_inscricoes = db.push_inscricoes.filter((p) => p.usuario_id !== id);
     const removed = db.users.length < before;
     if (removed) writeLocalDB(db);
     return removed;
@@ -865,6 +889,43 @@ const jsonBackend: DbBackend = {
   async setConfiguracao(chave, valor) {
     const db = readLocalDB();
     db.configuracoes = [...db.configuracoes.filter((c) => c.chave !== chave), { chave, valor }];
+    writeLocalDB(db);
+  },
+
+  // ----- Avisos do app (Web Push) -----
+  async upsertPushInscricao(i) {
+    const db = readLocalDB();
+    const antiga = db.push_inscricoes.find((p) => p.endpoint === i.endpoint);
+    db.push_inscricoes = [
+      ...db.push_inscricoes.filter((p) => p.endpoint !== i.endpoint),
+      // Mesmo aparelho: mantém o id e a data de criação, troca dono e chaves.
+      antiga ? { ...i, id: antiga.id, criado_em: antiga.criado_em } : i,
+    ];
+    writeLocalDB(db);
+  },
+  async getPushInscricaoByEndpoint(endpoint) {
+    return readLocalDB().push_inscricoes.find((p) => p.endpoint === endpoint) ?? null;
+  },
+  async getPushInscricoesByUsuarios(usuarioIds) {
+    const ids = new Set(usuarioIds);
+    return readLocalDB().push_inscricoes.filter((p) => ids.has(p.usuario_id));
+  },
+  async getUsuarioIdsComPush() {
+    return [...new Set(readLocalDB().push_inscricoes.map((p) => p.usuario_id))];
+  },
+  async deletePushInscricaoByEndpoint(endpoint) {
+    const db = readLocalDB();
+    const antes = db.push_inscricoes.length;
+    db.push_inscricoes = db.push_inscricoes.filter((p) => p.endpoint !== endpoint);
+    const removida = db.push_inscricoes.length < antes;
+    if (removida) writeLocalDB(db);
+    return removida;
+  },
+  async tocarPushInscricao(id) {
+    const db = readLocalDB();
+    const p = db.push_inscricoes.find((x) => x.id === id);
+    if (!p) return;
+    p.ultimo_uso_em = new Date().toISOString();
     writeLocalDB(db);
   },
 
@@ -1268,6 +1329,19 @@ export class Database {
   static updateReajuste(id: string, updates: Partial<Reajuste>) { return backend().updateReajuste(id, updates); }
   static getConfiguracao(chave: string) { return backend().getConfiguracao(chave); }
   static setConfiguracao(chave: string, valor: string) { return backend().setConfiguracao(chave, valor); }
+
+  // ----- Avisos do app (Web Push) -----
+  static async salvarPushInscricao(data: Omit<PushInscricao, 'id' | 'criado_em' | 'ultimo_uso_em'>): Promise<PushInscricao> {
+    const agora = new Date().toISOString();
+    const i: PushInscricao = { ...data, id: randomUUID(), criado_em: agora, ultimo_uso_em: agora };
+    await backend().upsertPushInscricao(i);
+    return i;
+  }
+  static getPushInscricaoByEndpoint(endpoint: string) { return backend().getPushInscricaoByEndpoint(endpoint); }
+  static getPushInscricoesByUsuarios(usuarioIds: string[]) { return backend().getPushInscricoesByUsuarios(usuarioIds); }
+  static getUsuarioIdsComPush() { return backend().getUsuarioIdsComPush(); }
+  static deletePushInscricaoByEndpoint(endpoint: string) { return backend().deletePushInscricaoByEndpoint(endpoint); }
+  static tocarPushInscricao(id: string) { return backend().tocarPushInscricao(id); }
 
   // ----- Foto -----
   static getFotosByOS(osId: string) { return backend().getFotosByOS(osId); }

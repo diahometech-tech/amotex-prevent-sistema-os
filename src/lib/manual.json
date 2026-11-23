@@ -1,5 +1,5 @@
 {
-  "atualizado": "2026-11-20",
+  "atualizado": "2026-11-22",
   "papeis": [
     {
       "papel": "admin",
@@ -21,7 +21,7 @@
             "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
             "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
             "Horário comercial e plantão: de segunda a sexta, das 8h às 18h, e no sábado, das 8h às 16h, é horário comercial. Fora disso, e no domingo o dia todo, é plantão. Em horário comercial, o aviso de corretiva sem técnico vai para todos os técnicos de corretiva, para os gestores e para a secretária; quem estiver mais perto assume a OS. No plantão, vai só para o plantonista marcado (mais gestores e secretária). Sem ninguém marcado de plantão, vai para todos os técnicos de corretiva e o sistema avisa isso na tela de quem abriu a OS.",
-            "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Cadastre o ID do Telegram dela em Usuários.",
+            "O selo SEM TELEGRAM NEM APP indica que a pessoa não recebe nenhum aviso. Cadastre o ID do Telegram dela em Usuários ou peça para ela ligar os avisos no app do celular.",
             "Os quadros mostram corretivas fora do prazo, chegada em até 3h, OS abertas, pendências críticas, alertas e a rota do dia."
           ]
         },
@@ -32,8 +32,8 @@
             "Escolha o condomínio e o tipo: Preventiva (visita programada) ou Corretiva (chamado de defeito).",
             "Na corretiva, descreva o problema relatado (obrigatório) e informe quem chamou e o telefone. Toda corretiva é urgente: o técnico tem até 3h para chegar.",
             "Escolha a data da visita (define em que dia a OS aparece na rota) e, se já souber, o técnico responsável.",
-            "Clique em Criar OS. Na corretiva, os técnicos e gestores recebem o aviso no Telegram.",
-            "Se aparecer Aviso NÃO enviado, ninguém foi avisado pelo Telegram: ligue para o técnico."
+            "Clique em Criar OS. Na corretiva, os técnicos e gestores recebem o aviso no Telegram e, quem ligou os avisos no app, também na barra de notificações do celular.",
+            "Se aparecer Aviso NÃO enviado, ninguém foi avisado (nem pelo Telegram, nem pelo app): ligue para o técnico."
           ]
         },
         {
@@ -80,7 +80,7 @@
           "passos": [
             "Em Usuários, preencha Nome, Login, Senha inicial e Papel (Técnico, Síndico, Secretária ou Gestor).",
             "Para técnico, escolha a especialidade: Corretiva e preventiva, só Corretiva (urgências) ou só Preventiva (rota mensal).",
-            "Informe o ID do Telegram para a pessoa receber os avisos de corretiva.",
+            "Informe o ID do Telegram para a pessoa receber os avisos de corretiva. O selo APP, ao lado do selo do Telegram, mostra quem ligou os avisos no app do celular; quem tem um dos dois recebe o aviso.",
             "Para a secretária, escolha o papel Secretária. Informe o ID do Telegram dela para receber os avisos de corretiva junto com os gestores.",
             "Clique em + Criar acesso e passe o login e a senha para a pessoa.",
             "Na lista: Editar, Resetar senha, Desativar e Excluir. Quem saiu da equipe deve ser Desativado: o nome continua nas OS que atendeu."
@@ -108,6 +108,17 @@
             "Técnico: vê só as OS dele e as corretivas sem técnico, só a rota dele e só os condomínios das OS que vê.",
             "Síndico: vê só o Painel do Condomínio dele e a Ajuda."
           ]
+        },
+        {
+          "titulo": "Instalar o app e ligar os avisos no celular",
+          "passos": [
+            "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
+            "No iPhone, abra o sistema no Safari, toque em Compartilhar (o quadrado com a seta) e em Adicionar à Tela de Início. Depois abra o app pelo ícone na tela inicial. No iPhone, os avisos só funcionam por esse ícone (iOS 16.4 ou mais novo).",
+            "Abra o menu (no celular, o botão Menu no topo) e toque em Avisos neste celular. Quando o celular perguntar, permita as notificações. O menu passa a mostrar Ligado.",
+            "Para conferir, toque em Enviar aviso de teste: a notificação aparece em instantes.",
+            "Para parar de receber neste celular, toque de novo em Avisos neste celular. Se o navegador bloqueou as notificações, libere nas configurações do site.",
+            "Cada celular liga os avisos por conta própria. Se outra pessoa entrar no mesmo aparelho e ligar, os avisos passam a ser dela."
+          ]
         }
       ],
       "situacoes": [
@@ -117,7 +128,7 @@
         },
         {
           "pergunta": "O técnico disse que não recebeu o aviso da corretiva.",
-          "resposta": "Confira em Usuários se ele tem ID do Telegram e se está de plantão. Enquanto isso, ligue para ele."
+          "resposta": "Confira em Usuários se ele tem ID do Telegram ou o selo APP e se está de plantão. Enquanto isso, ligue para ele. Peça para ele ligar os avisos no app, no menu."
         },
         {
           "pergunta": "O síndico esqueceu a senha.",
@@ -153,8 +164,8 @@
             "Escolha o condomínio e o tipo: Corretiva (chamado de defeito) ou Preventiva (visita programada).",
             "Na corretiva por telefone, preencha quem ligou (solicitante), o telefone e o problema relatado. O problema é obrigatório.",
             "Escolha o técnico responsável, se já souber. Sem técnico, a OS fica livre para algum técnico assumir.",
-            "Clique em Criar OS. Na corretiva, o sistema avisa técnicos e gestores no Telegram.",
-            "Se aparecer Aviso NÃO enviado, ninguém foi avisado pelo Telegram. Se aparecer o recado para avisar por telefone, ligue para o técnico de plantão."
+            "Clique em Criar OS. Na corretiva, o sistema avisa técnicos e gestores no Telegram e, para quem ligou os avisos no app, na barra de notificações do celular.",
+            "Se aparecer Aviso NÃO enviado, ninguém foi avisado (nem pelo Telegram, nem pelo app). Se aparecer o recado para avisar por telefone, ligue para o técnico de plantão."
           ]
         },
         {
@@ -170,7 +181,7 @@
           "passos": [
             "Abra a OS em Ordens de Serviço.",
             "Mude a data da visita ou o técnico responsável. Salva sozinho, não tem botão Salvar.",
-            "Ao atribuir ou trocar o técnico de uma corretiva, o aviso no Telegram vai só para esse técnico, para os gestores e para você. Os outros técnicos e o plantão não são avisados. Se aparecer o recado de que ele está sem Telegram, ligue para ele."
+            "Ao atribuir ou trocar o técnico de uma corretiva, o aviso no Telegram vai só para esse técnico, para os gestores e para você. No app do celular, o aviso vai só para o técnico. Os outros técnicos e o plantão não são avisados. Se aparecer o recado de que ele está sem Telegram nem app, ligue para ele."
           ]
         },
         {
@@ -188,7 +199,7 @@
             "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
             "Horário comercial e plantão: de segunda a sexta, das 8h às 18h, e no sábado, das 8h às 16h, é horário comercial. Fora disso, e no domingo o dia todo, é plantão. Em horário comercial, o aviso de corretiva sem técnico vai para todos os técnicos de corretiva, para os gestores e para você. No plantão, vai só para o plantonista marcado, para os gestores e para você. Sem ninguém marcado de plantão, vai para todos os técnicos de corretiva e o sistema avisa na tela.",
             "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Avise o gestor para cadastrar o ID dela.",
-            "Reagendar a visita é com você e com o gestor: o técnico não muda a data e liga para o escritório. Se aparecer o recado de aviso não enviado ou plantonista sem Telegram, ligue para a pessoa."
+            "Reagendar a visita é com você e com o gestor: o técnico não muda a data e liga para o escritório. Se aparecer o recado de aviso não enviado ou plantonista sem Telegram nem app, ligue para a pessoa."
           ]
         },
         {
@@ -234,12 +245,23 @@
             "Para guardar ou trocar um comprovante depois, numa cobrança paga, clique em Anexar comprovante (ou Trocar comprovante, se já tem um), escolha o arquivo e clique em Enviar. Ver comprovante abre o arquivo já guardado.",
             "Isentar, reabrir e editar o valor de uma cobrança são com o gestor."
           ]
+        },
+        {
+          "titulo": "Instalar o app e ligar os avisos no celular",
+          "passos": [
+            "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
+            "No iPhone, abra o sistema no Safari, toque em Compartilhar (o quadrado com a seta) e em Adicionar à Tela de Início. Depois abra o app pelo ícone na tela inicial. No iPhone, os avisos só funcionam por esse ícone (iOS 16.4 ou mais novo).",
+            "Abra o menu (no celular, o botão Menu no topo) e toque em Avisos neste celular. Quando o celular perguntar, permita as notificações. O menu passa a mostrar Ligado.",
+            "Para conferir, toque em Enviar aviso de teste: a notificação aparece em instantes.",
+            "Para parar de receber neste celular, toque de novo em Avisos neste celular. Se o navegador bloqueou as notificações, libere nas configurações do site.",
+            "Cada celular liga os avisos por conta própria. Se outra pessoa entrar no mesmo aparelho e ligar, os avisos passam a ser dela."
+          ]
         }
       ],
       "situacoes": [
         {
           "pergunta": "O técnico não recebeu o aviso.",
-          "resposta": "Ligue para ele agora. Depois peça ao gestor para conferir o ID do Telegram dele em Usuários e veja em Dashboard quem está de plantão."
+          "resposta": "Ligue para ele agora. Depois peça ao gestor para conferir o ID do Telegram dele (ou o selo APP) em Usuários e veja em Dashboard quem está de plantão."
         },
         {
           "pergunta": "O síndico ligou perguntando da visita.",
@@ -309,7 +331,7 @@
         {
           "titulo": "Corretiva urgente",
           "passos": [
-            "Você recebe o aviso de corretiva no Telegram com o condomínio, o problema e o horário limite de chegada. O aviso diz por que chegou a você: \"Horário comercial\" (todos os técnicos recebem; quem estiver mais perto assume), \"Plantão\" (você está de plantão) ou \"Atribuída a você\" (o escritório passou a OS para você).",
+            "Você recebe o aviso de corretiva no Telegram e, se ligou os avisos no app, também na barra de notificações do celular. O aviso traz o condomínio, o problema e o horário limite de chegada. Ele diz por que chegou a você: \"Horário comercial\" (todos os técnicos recebem; quem estiver mais perto assume), \"Plantão\" (você está de plantão) ou \"Atribuída a você\" (o escritório passou a OS para você). Ao tocar na notificação, a OS abre direto.",
             "Abra a OS em Ordens de Serviço e clique em Assumir esta OS. Assim os outros técnicos sabem que você vai.",
             "Ao chegar, clique em Cheguei no local. Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
             "Para chegar, use Google Maps ou Waze e Ligar no bloco Local da OS."
@@ -341,6 +363,17 @@
             "Com tudo feito, clique em Finalizar OS.",
             "A OS finalizada gera o PDF (Baixar PDF da OS), que o síndico também vê no painel dele."
           ]
+        },
+        {
+          "titulo": "Instalar o app e ligar os avisos no celular",
+          "passos": [
+            "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
+            "No iPhone, abra o sistema no Safari, toque em Compartilhar (o quadrado com a seta) e em Adicionar à Tela de Início. Depois abra o app pelo ícone na tela inicial. No iPhone, os avisos só funcionam por esse ícone (iOS 16.4 ou mais novo).",
+            "Abra o menu (no celular, o botão Menu no topo) e toque em Avisos neste celular. Quando o celular perguntar, permita as notificações. O menu passa a mostrar Ligado.",
+            "Para conferir, toque em Enviar aviso de teste: a notificação aparece em instantes.",
+            "Para parar de receber neste celular, toque de novo em Avisos neste celular. Se o navegador bloqueou as notificações, libere nas configurações do site.",
+            "Cada celular liga os avisos por conta própria. Se outra pessoa entrar no mesmo aparelho e ligar, os avisos passam a ser dela."
+          ]
         }
       ],
       "situacoes": [
@@ -366,7 +399,7 @@
         },
         {
           "pergunta": "Não recebi o aviso no Telegram.",
-          "resposta": "Peça ao gestor para conferir seu ID do Telegram em Usuários. Enquanto isso, acompanhe as OS abertas no sistema."
+          "resposta": "Confira se os avisos estão ligados no app (menu, Avisos neste celular: Ligado) e use Enviar aviso de teste. Peça também ao gestor para conferir seu ID do Telegram em Usuários. Enquanto isso, acompanhe as OS abertas no sistema."
         },
         {
           "pergunta": "Não vejo uma OS que me falaram.",
@@ -393,6 +426,14 @@
             "No topo: quantidade de equipamentos, manutenções no mês, tempo médio de resposta (até a chegada do técnico) e a próxima visita.",
             "Em Histórico de atendimentos, cada mês lista as visitas, preventivas e corretivas.",
             "Clique em Fotos para ver as fotos de antes e depois do serviço e em PDF para baixar o relatório da visita."
+          ]
+        },
+        {
+          "titulo": "Instalar o app no celular",
+          "passos": [
+            "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
+            "No iPhone, abra o sistema no Safari, toque em Compartilhar (o quadrado com a seta) e em Adicionar à Tela de Início. Depois abra o app pelo ícone na tela inicial. No iPhone, os avisos só funcionam por esse ícone (iOS 16.4 ou mais novo).",
+            "Na tela Ajuda, o botão Copiar link do app copia o endereço do sistema para você enviar a outra pessoa, como o zelador."
           ]
         }
       ],

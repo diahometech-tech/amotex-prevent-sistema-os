@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Oswald, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -20,11 +20,16 @@ const ibmPlexSans = IBM_Plex_Sans({
 export const metadata: Metadata = {
   title: "Amotex Prevent — Sistema de OS",
   description: "Gestão de ordens de serviço, checklists e manutenção preventiva/corretiva de condomínios.",
-  manifest: "/manifest.json",
+  // O manifest vem de src/app/manifest.ts (Next liga sozinho).
   icons: {
     icon: "/icon-192.png",
     apple: "/apple-touch-icon.png",
   },
+  appleWebApp: { capable: true, title: "Amotex", statusBarStyle: "black" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0B1E3A",
 };
 
 export default function RootLayout({

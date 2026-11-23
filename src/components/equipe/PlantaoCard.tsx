@@ -7,7 +7,9 @@ import type { User } from '@/lib/db';
 import { atendeCorretiva } from '@/lib/plantao';
 import { periodoAtendimento } from '@/lib/horario-comercial';
 
-type Tecnico = Pick<User, 'id' | 'nome' | 'papel' | 'especialidade' | 'ativo' | 'de_plantao' | 'telegram_chat_id'>;
+type Tecnico = Pick<User, 'id' | 'nome' | 'papel' | 'especialidade' | 'ativo' | 'de_plantao' | 'telegram_chat_id'> & {
+  app_ativo?: boolean;
+};
 
 // Quem está de plantão agora — o supervisor marca aqui (regra em
 // src/lib/plantao.ts). Gestor e secretária: lê a lista completa de GET /api/users e grava
@@ -86,7 +88,7 @@ export function PlantaoCard({ onChange }: { onChange?: () => void }) {
               <span aria-hidden className={`h-2.5 w-2.5 rounded-full ${t.de_plantao ? 'bg-amx-green' : 'bg-amx-line'}`} />
               <span className="font-semibold">{t.nome}</span>
               {t.de_plantao && <span className="text-[11px]">de plantão</span>}
-              {t.de_plantao && !t.telegram_chat_id && <Badge tone="warning">sem Telegram</Badge>}
+              {t.de_plantao && !t.telegram_chat_id && !t.app_ativo && <Badge tone="warning">sem Telegram nem app</Badge>}
             </button>
           ))}
         </div>
