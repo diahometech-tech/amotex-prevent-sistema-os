@@ -196,7 +196,7 @@ export function abasFinanceiro(role?: UserRole): AbaFinanceiro[] {
   if (role === 'secretaria') return ['cobrancas'];
   return [];
 }
-export const ACOES_COBRANCA_SECRETARIA = ['marcar_enviada', 'registrar_pagamento', 'anexar_comprovante'] as const;
+export const ACOES_COBRANCA_SECRETARIA = ['marcar_enviada', 'registrar_pagamento', 'anexar_comprovante', 'ajustar_vencimento'] as const;
 export function podeAcaoCobranca(role: UserRole | undefined, acao: string): boolean {
   if (role === 'admin') return true;
   if (role === 'secretaria') return (ACOES_COBRANCA_SECRETARIA as readonly string[]).includes(acao);

@@ -72,25 +72,42 @@ export interface ResultadoGeracao {
   jaExistiam: number;
   /** Ativos sem valor mensal cadastrado — não dá pra cobrar. */
   semValor: { id: string; nome: string }[];
+  /** Quantas das novas teriam vencimento antes de hoje (pelo dia do contrato). */
+  vencidas: number;
+  /** Dias do contrato dessas vencidas (ex.: [10]), em ordem — para avisar na tela. */
+  diasVencidas: number[];
 }
+
+/** Escolha de vencimento para as cobranças que já nasceriam vencidas. */
+export type VencimentoVencidas = { modo: 'manter' } | { modo: 'data'; data: string };
 
 // Gera as cobranças de uma competência. Idempotente: quem já tem cobrança no
 // mês fica de fora (gerar de novo depois de cadastrar um condomínio novo só
 // acrescenta o novo). Condomínio inativo ou com contrato que começa depois do
 // mês não entra.
+// Gerar o mês depois do dia de vencimento deixaria tudo "atrasado" de cara:
+// com `hoje` informado, `vencidas` conta as novas que já nascem vencidas e,
+// com `vencimentoVencidas` = { modo: 'data' }, só ESSAS ganham a data escolhida
+// (cobrança já existente nunca é tocada; as que vencem de hoje em diante
+// seguem o dia do contrato).
 export function gerarCobrancasMes({
   competencia,
   condominios,
   ajustes,
   existentes,
+  hoje,
+  vencimentoVencidas,
 }: {
   competencia: string;
   condominios: Condominio[];
   ajustes: AjusteValor[];
   existentes: Pick<Cobranca, 'condominio_id' | 'competencia'>[];
+  hoje?: string;
+  vencimentoVencidas?: VencimentoVencidas;
 }): ResultadoGeracao {
   const ja = new Set(existentes.filter((c) => c.competencia === competencia).map((c) => c.condominio_id));
-  const r: ResultadoGeracao = { novas: [], jaExistiam: ja.size, semValor: [] };
+  const r: ResultadoGeracao = { novas: [], jaExistiam: ja.size, semValor: [], vencidas: 0, diasVencidas: [] };
+  const dias = new Set<number>();
   for (const c of condominios) {
     if (!condominioAtivo(c) || ja.has(c.id)) continue;
     if (c.contrato_inicio && c.contrato_inicio.slice(0, 7) > competencia) continue;
@@ -100,15 +117,33 @@ export function gerarCobrancasMes({
     }
     const doMes = ajustesDaCompetencia(ajustes, c.id, competencia);
     const extra = doMes.reduce((acc, a) => acc + a.valor_centavos, 0);
+    let vencimento = vencimentoDaCompetencia(competencia, c.dia_vencimento);
+    if (hoje && vencimento < hoje) {
+      r.vencidas++;
+      dias.add(Number(vencimento.slice(8, 10)));
+      if (vencimentoVencidas?.modo === 'data') vencimento = vencimentoVencidas.data;
+    }
     r.novas.push({
       condominio_id: c.id,
       competencia,
       valor_previsto_centavos: Math.max(0, c.valor_mensal_centavos + extra),
-      vencimento: vencimentoDaCompetencia(competencia, c.dia_vencimento),
+      vencimento,
       observacao: doMes.length ? doMes.map((a) => a.descricao).join('; ') : undefined,
     });
   }
+  r.diasVencidas = [...dias].sort((a, b) => a - b);
   return r;
+}
+
+/** Data padrão sugerida para as cobranças que nasceriam vencidas: hoje + 5 dias. */
+export function vencimentoSugerido(hoje: string, dias = 5): string {
+  const [a, m, d] = hoje.split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10);
+}
+
+/** Pode ajustar o vencimento? Só cobrança ainda em aberto (pendente ou enviada). */
+export function cobrancaAjustavel(c: Pick<Cobranca, 'status'>): boolean {
+  return c.status === 'pendente' || c.status === 'enviada';
 }
 
 export interface ResumoMes {
