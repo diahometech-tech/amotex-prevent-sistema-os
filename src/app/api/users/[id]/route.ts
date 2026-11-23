@@ -3,6 +3,7 @@ import { Database, type User } from '@/lib/db';
 import { getSessionFromRequest, canManageUsers, hashPassword } from '@/lib/auth';
 import { isSecretaria } from '@/lib/roles';
 import { normalizarEspecialidade, normalizarTelegramChatId } from '@/lib/usuario-campos';
+import { erroParaPlantao } from '@/lib/plantao';
 
 function safe(u: User) {
   const { senha_hash: _senha_hash, ...rest } = u;
@@ -32,6 +33,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (alvo.papel !== 'tecnico') {
         return NextResponse.json({ error: 'O plantão é só dos técnicos.' }, { status: 403 });
       }
+    }
+    // Plantão (manual) só para quem tem canal de aviso. Vale o Telegram que
+    // está sendo salvo junto, se vier no mesmo pedido.
+    if (body.de_plantao === true) {
+      const alvo = await Database.getUserById(id);
+      if (!alvo) return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
+      const chat = body.telegram_chat_id !== undefined ? normalizarTelegramChatId(body.telegram_chat_id) : alvo.telegram_chat_id;
+      const erro = erroParaPlantao({ nome: alvo.nome, telegram_chat_id: chat ?? undefined });
+      if (erro) return NextResponse.json({ error: erro }, { status: 400 });
     }
     const { senha, ativo, condominio_id } = body;
     const updates: Record<string, unknown> = {};

@@ -4,8 +4,8 @@ import { getSessionFromRequest } from '@/lib/auth';
 import { podePlanejarPreventivas } from '@/lib/roles';
 import { hojeISO } from '@/lib/os-agenda';
 import { criarChecklistInicial } from '@/lib/os-checklist-inicial';
-import { mesValido, planejarPreventivasMes } from '@/lib/planejamento-preventiva';
-import { lerMetaVisitas } from '@/lib/meta-visitas';
+import { mesValido, planejarPreventivasMes, tecnicosDePreventiva } from '@/lib/planejamento-preventiva';
+import { lerDiasUteisPreventiva, lerMetaVisitas } from '@/lib/meta-visitas';
 
 // POST /api/os/preventivas/planejar — rota mensal das preventivas. Gestor e secretária.
 // Corpo: { mes: 'YYYY-MM', confirmar?: boolean }. Sem `confirmar` devolve só a
@@ -29,9 +29,7 @@ export async function POST(request: NextRequest) {
     // Técnico dedicado à preventiva tem prioridade; sem nenhum, entram os que
     // fazem as duas (sem especialidade) — é o caso da equipe de plantonistas
     // (09/11), em que os três fazem corretiva e vistoria.
-    const ativos = users.filter((u) => u.papel === 'tecnico' && u.ativo);
-    const dedicados = ativos.filter((u) => u.especialidade === 'preventiva');
-    const tecnicos = dedicados.length > 0 ? dedicados : ativos.filter((u) => !u.especialidade);
+    const tecnicos = tecnicosDePreventiva(users);
     if (tecnicos.length === 0) {
       return NextResponse.json(
         { error: 'Nenhum técnico que faça preventiva. Defina a especialidade em Usuários › Editar.' },
@@ -40,16 +38,21 @@ export async function POST(request: NextRequest) {
     }
 
     // A meta de visitas por técnico/dia (tela de Rotas) é a capacidade diária.
+    // Sábado só entra se "Planejar preventivas aos sábados" estiver ligado.
     const plano = planejarPreventivasMes({
-      mes, hoje, oss, meta: await lerMetaVisitas(),
-      condominios: condominios.filter((c) => c.ativo !== false).map((c) => ({ id: c.id, nome: c.nome, preventivas_por_mes: c.preventivas_por_mes })),
+      mes, hoje, oss, meta: await lerMetaVisitas(), diasUteis: await lerDiasUteisPreventiva(),
+      condominios: condominios
+        .filter((c) => c.ativo !== false)
+        .map((c) => ({ id: c.id, nome: c.nome, preventivas_por_mes: c.preventivas_por_mes, regiao: c.regiao, cep: c.cep })),
       tecnicos: tecnicos.map((t) => t.id),
     });
     const nomeCondominio = new Map(condominios.map((c) => [c.id, c.nome]));
+    const regiaoCondominio = new Map(condominios.map((c) => [c.id, c.regiao ?? '']));
     const nomeTecnico = new Map(tecnicos.map((t) => [t.id, t.nome]));
     const itens = plano.itens.map((i) => ({
       ...i,
       condominio_nome: nomeCondominio.get(i.condominio_id) ?? '',
+      regiao: regiaoCondominio.get(i.condominio_id) ?? '',
       tecnico_nome: nomeTecnico.get(i.tecnico_id) ?? '',
     }));
 

@@ -9,6 +9,7 @@ import { formatarDataCurta, hojeISO } from '@/lib/os-agenda';
 interface ItemPrevia {
   condominio_id: string;
   condominio_nome: string;
+  regiao?: string;
   tecnico_id: string;
   tecnico_nome: string;
   data: string;
@@ -66,7 +67,7 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
 
   return (
     <>
-      <ModalHeader title="Planejar preventivas do mês" subtitle="Na frequência de cada condomínio (mensal, quinzenal ou semanal), de segunda a sexta" onClose={onClose} />
+      <ModalHeader title="Planejar preventivas do mês" subtitle="Na frequência de cada condomínio (mensal, quinzenal ou semanal), agrupando por região" onClose={onClose} />
       <div className="p-5 flex flex-col gap-4">
         {feito ? (
           <>
@@ -95,8 +96,9 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
               </Button>
             </div>
             <p className="text-xs text-amx-muted">
-              Condomínio que já fez preventiva antes volta no mesmo dia do mês, com o mesmo técnico. Os novos preenchem os
-              dias mais vazios. Quem já tem preventiva no mês fica de fora, então rodar de novo não duplica.
+              Condomínio que já fez preventiva antes volta no mesmo dia do mês. Os novos vão para o dia que já tem visita da
+              mesma região, sem misturar regiões quando dá. Quem já tem preventiva no mês fica de fora, então rodar de novo
+              não duplica.
             </p>
 
             {previa && (
@@ -142,6 +144,7 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
                           <tr>
                             <th className="text-left px-2 py-1.5">Dia</th>
                             <th className="text-left px-2 py-1.5">Condomínio</th>
+                            <th className="text-left px-2 py-1.5">Região</th>
                             <th className="text-left px-2 py-1.5">Técnico</th>
                           </tr>
                         </thead>
@@ -150,6 +153,7 @@ export function PlanejarPreventivas({ onClose, onCriado }: { onClose: () => void
                             <tr key={`${i.condominio_id}-${i.data}`} className="border-t border-amx-line text-white">
                               <td className="px-2 py-1.5 text-amx-muted whitespace-nowrap">{formatarDataCurta(i.data)}</td>
                               <td className="px-2 py-1.5 font-semibold">{i.condominio_nome}</td>
+                              <td className="px-2 py-1.5 text-amx-muted whitespace-nowrap">{i.regiao || '—'}</td>
                               <td className="px-2 py-1.5">{i.tecnico_nome}</td>
                             </tr>
                           ))}
