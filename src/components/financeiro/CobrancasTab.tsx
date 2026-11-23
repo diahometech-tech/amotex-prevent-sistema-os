@@ -78,6 +78,9 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
   const [editando, setEditando] = useState<Cobranca | null>(null);
   const [escolhendoVenc, setEscolhendoVenc] = useState(false);
   const [ajustandoLote, setAjustandoLote] = useState(false);
+  // Cobranças marcadas para o "Ajustar vencimento" (ids). Só contam as que
+  // estão na lista e em aberto (ver `selecionadasVisiveis`).
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(() => new Set());
 
   const carregar = useCallback(async (c: string) => {
     setErro('');
@@ -155,6 +158,15 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
   // Em aberto e ainda não pagas: o que o ajuste de vencimento em lote pode tocar.
   const ajustaveis = useMemo(() => linhas.filter(({ st }) => st === 'pendente' || st === 'enviada' || st === 'atrasada').map(({ c }) => c), [linhas]);
   const podeAjustarLote = podeAcaoCobranca(role, 'ajustar_vencimento');
+  const selecionadasVisiveis = useMemo(() => ajustaveis.filter((c) => selecionadas.has(c.id)), [ajustaveis, selecionadas]);
+  const todasMarcadas = ajustaveis.length > 0 && selecionadasVisiveis.length === ajustaveis.length;
+  const alternarSelecao = (id: string) => setSelecionadas((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
+  const alternarTodas = () => setSelecionadas(todasMarcadas ? new Set() : new Set(ajustaveis.map((c) => c.id)));
 
   const r = dados?.resumo;
   const chips: [Filtro, string, number | undefined][] = [
@@ -212,11 +224,20 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
                 {l}{n !== undefined ? ` · ${n}` : ''}
               </button>
             ))}
-            {podeAjustarLote && ajustaveis.length > 0 && (
-              <Button size="sm" variant="secondary" onClick={() => setAjustandoLote(true)}>Ajustar vencimento ({ajustaveis.length})</Button>
-            )}
             <Input id="fin-busca" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar condomínio ou CNPJ" className="w-full sm:w-64 sm:ml-auto py-1.5 text-xs" />
           </div>
+
+          {podeAjustarLote && ajustaveis.length > 0 && (
+            <div className="flex items-center gap-3 flex-wrap text-xs">
+              <label className="flex items-center gap-2 text-amx-muted cursor-pointer">
+                <input type="checkbox" checked={todasMarcadas} onChange={alternarTodas} className="h-4 w-4 accent-amx-red" />
+                Marcar todas em aberto da lista ({ajustaveis.length})
+              </label>
+              <Button size="sm" variant="secondary" disabled={!selecionadasVisiveis.length} onClick={() => setAjustandoLote(true)} className="sm:ml-auto">
+                {selecionadasVisiveis.length ? `Ajustar vencimento (${selecionadasVisiveis.length})` : 'Marque os condomínios para ajustar o vencimento'}
+              </Button>
+            </div>
+          )}
 
           {dados.cobrancas.length === 0 ? (
             <EmptyState
@@ -229,6 +250,15 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
             <div className="flex flex-col gap-2">
               {linhas.map(({ c, st, cond }) => (
                 <div key={c.id} className="flex items-center gap-x-4 gap-y-2 flex-wrap bg-amx-panel border border-amx-line rounded-[10px] px-4 py-3">
+                  {podeAjustarLote && (st === 'pendente' || st === 'enviada' || st === 'atrasada') && (
+                    <input
+                      type="checkbox"
+                      checked={selecionadas.has(c.id)}
+                      onChange={() => alternarSelecao(c.id)}
+                      aria-label={`Marcar ${cond?.nome ?? 'condomínio'} para ajustar o vencimento`}
+                      className="h-4 w-4 shrink-0 accent-amx-red"
+                    />
+                  )}
                   <div className="min-w-0 flex-1 basis-56">
                     <p className="text-sm font-semibold text-white truncate">{cond?.nome ?? 'Condomínio'}</p>
                     <p className="text-[11px] text-amx-muted truncate">
@@ -289,7 +319,7 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
       <Modal open={ajustandoLote} onClose={() => setAjustandoLote(false)} maxWidth="max-w-md">
         {dados && (
           <AjusteLoteForm
-            quantidade={ajustaveis.length}
+            nomes={selecionadasVisiveis.map((c) => condPorId.get(c.condominio_id)?.nome ?? 'Condomínio')}
             hoje={dados.hoje}
             sugerido={dados.vencimentoSugerido}
             onClose={() => setAjustandoLote(false)}
@@ -298,11 +328,12 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
               const res = await fetch('/api/financeiro/cobrancas', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ acao: 'ajustar_vencimento', ids: ajustaveis.map((c) => c.id), vencimento }),
+                body: JSON.stringify({ acao: 'ajustar_vencimento', ids: selecionadasVisiveis.map((c) => c.id), vencimento }),
               });
               const d = await res.json().catch(() => ({}));
               setAjustandoLote(false);
               if (res.ok) {
+                setSelecionadas(new Set());
                 setMsg(`Vencimento de ${d.ajustadas} cobrança${d.ajustadas !== 1 ? 's' : ''} ajustado para ${dataBR(vencimento)}.`);
                 await carregar(competencia);
               } else setErro(d.error || 'Falha ao ajustar o vencimento.');
@@ -392,11 +423,11 @@ function VencimentoVencidasForm({
   );
 }
 
-// Ajuste em lote: muda o vencimento das cobranças em aberto que estão na lista.
+// Ajuste em lote: muda o vencimento das cobranças em aberto marcadas na lista.
 function AjusteLoteForm({
-  quantidade, hoje, sugerido, onClose, onConfirmar,
+  nomes, hoje, sugerido, onClose, onConfirmar,
 }: {
-  quantidade: number;
+  nomes: string[];
   hoje: string;
   sugerido: string;
   onClose: () => void;
@@ -404,13 +435,17 @@ function AjusteLoteForm({
 }) {
   const [data, setData] = useState(sugerido);
   const [busy, setBusy] = useState(false);
+  const quantidade = nomes.length;
   return (
     <>
-      <ModalHeader title="Ajustar vencimento" subtitle={`${quantidade} cobrança${quantidade > 1 ? 's' : ''} em aberto`} onClose={onClose} />
+      <ModalHeader title="Ajustar vencimento" subtitle={`${quantidade} cobrança${quantidade > 1 ? 's' : ''} marcada${quantidade > 1 ? 's' : ''}`} onClose={onClose} />
       <div className="p-5 flex flex-col gap-4">
         <p className="text-sm text-white">
-          O vencimento de {quantidade} cobrança{quantidade > 1 ? 's' : ''} em aberto (a lista que está na tela) vai mudar para a data abaixo. Cobrança paga ou isenta não é alterada.
+          O vencimento {quantidade > 1 ? `destas ${quantidade} cobranças` : 'desta cobrança'} vai mudar para a data abaixo. Cobrança paga ou isenta não é alterada.
         </p>
+        <ul className="text-xs text-amx-muted max-h-32 overflow-y-auto list-disc pl-5">
+          {nomes.map((n, i) => <li key={i}>{n}</li>)}
+        </ul>
         <Field label="Novo vencimento">
           <Input id="lote-venc" type="date" min={hoje} value={data} onChange={(e) => setData(e.target.value)} />
         </Field>
