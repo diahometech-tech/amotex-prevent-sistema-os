@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       solicitante_nome: textoOpcional(body.solicitante_nome),
       solicitante_telefone: textoOpcional(body.solicitante_telefone),
       descricao_problema: textoOpcional(body.descricao_problema),
-    });
+    }, session.name);
 
     await criarChecklistInicial(os);
     if (os_origem_id) {

@@ -18,6 +18,8 @@ type ConfirmDialogProps = {
   titulo: string;
   children?: React.ReactNode;
   confirmarLabel: string;
+  /** Texto do botão que fecha sem fazer nada. Padrão: "Voltar". */
+  cancelarLabel?: string;
   perigo?: boolean;
   motivoLabel?: string;
   digitarParaConfirmar?: string;
@@ -37,6 +39,7 @@ function ConfirmDialogAberto({
   titulo,
   children,
   confirmarLabel,
+  cancelarLabel = 'Voltar',
   perigo = false,
   motivoLabel,
   digitarParaConfirmar,
@@ -87,7 +90,7 @@ function ConfirmDialogAberto({
         {erro && <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2">{erro}</p>}
         <div className="flex items-center justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={busy}>
-            Voltar
+            {cancelarLabel}
           </Button>
           <Button
             type="submit"

@@ -88,15 +88,19 @@ export function Toggle({
         className={`relative w-9 h-5 rounded-full shrink-0 transition-colors ${checked ? 'bg-amx-red' : 'bg-amx-line'}`}
       >
         <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+          className={`absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
             checked ? 'translate-x-[18px]' : 'translate-x-0.5'
           }`}
         />
       </button>
-      <div className="flex flex-col">
+      <div className="flex flex-col flex-1 min-w-0">
         <span className="text-xs text-white">{label}</span>
         {hint && <span className="text-[11px] text-amx-muted">{hint}</span>}
       </div>
+      {/* Estado por extenso: a cor da bolinha sozinha não diz se está ligado. */}
+      <span className={`text-xs font-semibold shrink-0 ${checked ? 'text-white' : 'text-amx-muted'}`}>
+        {checked ? 'Ligado' : 'Desligado'}
+      </span>
     </label>
   );
 }

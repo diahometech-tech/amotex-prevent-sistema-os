@@ -164,10 +164,20 @@ function OsListContent() {
     [oss]
   );
 
+  // O contador de cada tipo segue o filtro de situação escolhido ("Em aberto",
+  // "Finalizadas"...): é recalculado da própria lista, então muda sozinho ao
+  // criar, assumir, mudar o status ou finalizar uma OS, sem recarregar a página.
+  const doFiltroDeSituacao = oss.filter((o) =>
+    statusFiltro === 'todas'
+      ? true
+      : statusFiltro === 'ativas'
+        ? o.status !== 'finalizada' && o.status !== 'cancelada'
+        : o.status === statusFiltro
+  );
   const FILTROS_TIPO: { value: OsTipo | 'todos'; label: string; count: number }[] = [
-    { value: 'todos', label: 'Todas', count: oss.length },
-    { value: 'preventiva', label: 'Preventiva', count: oss.filter((o) => o.tipo === 'preventiva').length },
-    { value: 'corretiva', label: 'Corretiva', count: oss.filter((o) => o.tipo === 'corretiva').length },
+    { value: 'todos', label: 'Todas', count: doFiltroDeSituacao.length },
+    { value: 'preventiva', label: 'Preventiva', count: doFiltroDeSituacao.filter((o) => o.tipo === 'preventiva').length },
+    { value: 'corretiva', label: 'Corretiva', count: doFiltroDeSituacao.filter((o) => o.tipo === 'corretiva').length },
   ];
 
   if (loading) {
@@ -422,9 +432,14 @@ function OsRow({
         <Badge tone={STATUS_TONE[os.status]}>{OS_STATUS_LABELS[os.status]}</Badge>
       </div>
 
+      {/* Um selo só de situação: OS encerrada já mostra "Finalizada"/"Cancelada" acima. */}
       <div className="flex items-center gap-1.5">
-        <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORIDADE_DOT[prioridade.nivel]}`} aria-hidden />
-        <span className="text-xs text-white">{prioridade.label}</span>
+        {!encerrada && (
+          <>
+            <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORIDADE_DOT[prioridade.nivel]}`} aria-hidden />
+            <span className="text-xs text-white">{prioridade.label}</span>
+          </>
+        )}
       </div>
 
       <div className="flex items-center gap-2 min-w-0">
