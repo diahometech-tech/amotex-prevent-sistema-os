@@ -38,6 +38,8 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: TypeScript
         run: npx tsc --noEmit
+      - name: Testes
+        run: npm test
 
   deploy:
     needs: verificar
