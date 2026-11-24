@@ -130,6 +130,16 @@ A equipe passada pela Amotex: um supervisor técnico (admin, define a escala), t
 - Migração validada contra Postgres com o schema de produção de 10/11 (`1dcac7e`): só `ADD COLUMN IF NOT EXISTS` nulas e índices; idempotente.
 - `npm run seed` está quebrado desde a trava completa de 23/10 (finaliza OS sem foto/assinatura). Não corrigido aqui.
 
+**Feito em 24/11 (acompanhamento da rota do técnico no mapa, versão navegador):**
+Depois de "Estou a caminho", o síndico do condomínio e o escritório veem o técnico no mapa e uma estimativa de chegada.
+- **Regras puras em `src/lib/rastreio.ts`** (testes em `tests/rastreio.test.ts`): rastreio ativo = `a_caminho_em` e sem chegada (`entrada_em`), OS não encerrada e menos de 2 h (`LIMITE_RASTREIO_MS`); estimativa = haversine x 1,4 / 25 km/h, arredondada para cima (sem serviço externo, sem trânsito); posição velha > 2 min; permissões de leitura (gestor/secretária qualquer OS, síndico só o próprio condomínio, técnico só a OS dele) e de envio (só o técnico da OS).
+- **Tabela `os_posicao`** (JSON: `os_posicoes`): só a última posição é exibida; ao gravar, apaga as com mais de `DIAS_RETENCAO_POSICAO` = 7 dias (faxina no máximo 1x por hora, horário guardado em memória).
+- **Endpoints:** `POST /api/os/[id]/posicao` (genérico: o futuro app Android manda a posição em segundo plano para ESTE mesmo endpoint; 403 para quem não é o técnico da OS, 409 `{ativo:false}` fora da janela, ignora precisão pior que 1000 m, não grava se a última tem menos de 5 s), `GET /api/os/[id]/rastreio` (com rastreio inativo não devolve posição: a localização some na chegada) e `GET /api/rastreio` (lista geral, só escritório). Nunca devolvem o histórico do trajeto.
+- **Condomínio** ganhou `lat`, `lng`, `localizacao_origem` (`chegada` | `manual`) e `localizacao_em`. A primeira chegada com precisão <= 100 m grava a localização se o condomínio ainda não tem (`preencherLocalizacaoCondominio`, atômico, nunca sobrescreve). O gestor edita em "Localização no mapa" (cola "lat, lng" ou link do Google Maps com `@lat,lng`, ou usa a posição do aparelho) e isso grava origem `manual`.
+- **Telas:** `src/components/mapa/` (Leaflet 1.9.4 direto, sem react-leaflet; `MapaRastreio` só carrega no navegador via `MapaRastreioCarregado`; marcadores `circleMarker`, tiles do OpenStreetMap com atribuição). Técnico: `CompartilharLocalizacao` na OS (watchPosition, envio a cada 15 s, Wake Lock, para sozinho na chegada/cancelamento/409/2 h). Síndico e escritório: `AcompanharTecnico` (consulta a cada 15 s só com a aba visível). Escritório: página `/mapa` ("Mapa ao vivo", módulo `mapa`).
+- **Armadilha:** o navegador só envia a posição com o Sistema aberto na tela (outro app ou tela bloqueada interrompe); o manual explica. No dev, gravar o `local_db.json` (fica em `src/`) dispara Fast Refresh.
+- Migração: tabela nova e colunas nulas por `IF NOT EXISTS` no `ensureSchema` (e em `postgres/schema.sql`). Não validada contra um Postgres real nesta rodada (só o backend JSON).
+
 ## Armadilhas herdadas do NexusFlow (continuam valendo aqui)
 
 - Nunca rodar `npm run build` com o `dev` ativo — corrompe o cache do `.next` (Turbopack)

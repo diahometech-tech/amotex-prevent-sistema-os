@@ -75,20 +75,21 @@ export function CompartilharLocalizacao({ osId, aCaminhoEm, ativo }: { osId: str
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setEstado('sem_gps');
     } else {
-      watchId = navigator.geolocation.watchPosition(
-        (p) => {
-          const { latitude, longitude, accuracy } = p.coords;
-          ultimaPosicao.current = { lat: latitude, lng: longitude, ...(Number.isFinite(accuracy) ? { precisao_m: Math.round(accuracy) } : {}) };
-          setEstado('enviando');
-          void enviar();
-        },
-        (e) => {
-          // 1 = permissão negada; 2/3 = sem sinal ou tempo esgotado (segue tentando).
-          if (e.code === 1) setEstado('sem_permissao');
-          else if (!ultimaPosicao.current) setEstado('sem_gps');
-        },
-        { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 }
-      );
+      const aoPosicionar = (p: GeolocationPosition) => {
+        const { latitude, longitude, accuracy } = p.coords;
+        ultimaPosicao.current = { lat: latitude, lng: longitude, ...(Number.isFinite(accuracy) ? { precisao_m: Math.round(accuracy) } : {}) };
+        setEstado('enviando');
+        void enviar();
+      };
+      const aoFalhar = (e: GeolocationPositionError) => {
+        // 1 = permissão negada; 2/3 = sem sinal ou tempo esgotado (segue tentando).
+        if (e.code === 1) setEstado('sem_permissao');
+        else if (!ultimaPosicao.current) setEstado('sem_gps');
+      };
+      const opcoes: PositionOptions = { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 };
+      watchId = navigator.geolocation.watchPosition(aoPosicionar, aoFalhar, opcoes);
+      // Alguns aparelhos demoram a entregar a primeira posição do watch: pede uma leitura avulsa também.
+      navigator.geolocation.getCurrentPosition(aoPosicionar, () => {}, opcoes);
     }
     // Reenvia a última posição conhecida a cada ciclo: parado no semáforo o
     // GPS quase não dispara, e a tela do condomínio marcaria "sem atualização".

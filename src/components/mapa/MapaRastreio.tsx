@@ -52,6 +52,8 @@ export default function MapaRastreio({
     L.tileLayer(URL_TILES_OSM, { attribution: ATRIBUICAO_OSM, maxZoom: 19 }).addTo(mapa);
     camadaRef.current = L.layerGroup().addTo(mapa);
     mapaRef.current = mapa;
+    // Mapa novo (inclusive o remontado do modo estrito do React): enquadra de novo.
+    ultimoIdsRef.current = '';
     // O contêiner pode mudar de tamanho depois de montar (modal, abas).
     const obs = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => mapa.invalidateSize()) : null;
     obs?.observe(divRef.current);
