@@ -4,6 +4,7 @@ import { getSessionFromRequest, canAccessCondominio, condominioParaPapel, filtra
 import { podeEditarCondominio, podeVerReservatorios } from '@/lib/roles';
 import { validarCadastro } from '@/lib/financeiro/cadastro';
 import { hojeISO } from '@/lib/os-agenda';
+import { coordenadaValida } from '@/lib/rastreio';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -40,7 +41,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const atual = await Database.getCondominioById(id);
     if (!atual) return NextResponse.json({ error: 'Condomínio não encontrado.' }, { status: 404 });
-    const { dados, erro } = validarCadastro(await request.json());
+    const body = await request.json();
+    const { dados, erro } = validarCadastro(body);
     if (erro) return NextResponse.json({ error: erro }, { status: 400 });
     if (dados.cnpj && dados.cnpj !== atual.cnpj) {
       const outro = (await Database.getCondominios()).find((c) => c.cnpj === dados.cnpj && c.id !== id);
@@ -50,8 +52,27 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const updates: Record<string, unknown> = { ...dados };
     if (dados.ativo === false && atual.ativo !== false) updates.desativado_em = hojeISO();
     if (dados.ativo === true && atual.ativo === false) updates.desativado_em = null;
+    // Localização no mapa (24/11): quem salva aqui grava origem 'manual'. Vazio
+    // nos dois campos limpa; um só, ou valor fora do mundo, é erro. A origem
+    // 'chegada' só nasce em PATCH /api/os/[id] (primeira chegada com boa precisão).
+    let mudouLocalizacao = false;
+    if (body.lat !== undefined || body.lng !== undefined) {
+      const vazio = (v: unknown) => v === null || v === '' || v === undefined;
+      if (vazio(body.lat) && vazio(body.lng)) {
+        Object.assign(updates, { lat: null, lng: null, localizacao_origem: null, localizacao_em: null });
+      } else {
+        const lat = typeof body.lat === 'string' ? Number(body.lat.replace(',', '.')) : body.lat;
+        const lng = typeof body.lng === 'string' ? Number(body.lng.replace(',', '.')) : body.lng;
+        if (!coordenadaValida(lat, lng)) {
+          return NextResponse.json({ error: 'Localização inválida. Use latitude e longitude, como -23.5505, -46.6333.' }, { status: 400 });
+        }
+        Object.assign(updates, { lat, lng, localizacao_origem: 'manual', localizacao_em: new Date().toISOString() });
+      }
+      mudouLocalizacao = true;
+    }
     const condominio = await Database.updateCondominio(id, updates);
     const mudou = Object.keys(dados).filter((k) => (dados as Record<string, unknown>)[k] !== (atual as unknown as Record<string, unknown>)[k]);
+    if (mudouLocalizacao) mudou.push('localizacao');
     if (mudou.length) {
       await Database.createAuditLog({ entidade: 'condominio', entidade_id: id, acao: 'CADASTRO_ALTERADO', ator: session.name, detalhe: { campos: mudou } });
     }

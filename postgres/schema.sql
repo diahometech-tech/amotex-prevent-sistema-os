@@ -217,3 +217,26 @@ CREATE TABLE IF NOT EXISTS plantao_escala (
   CHECK (fim > inicio)
 );
 CREATE INDEX IF NOT EXISTS idx_plantao_escala_periodo ON plantao_escala(inicio, fim);
+
+-- Acompanhamento da rota do técnico (24/11): posição enviada pelo celular no
+-- trecho "a caminho" (hoje pelo navegador; o app Android usará o mesmo
+-- endpoint). Só a última é exibida; as com mais de 7 dias são apagadas ao
+-- gravar uma nova.
+CREATE TABLE IF NOT EXISTS os_posicao (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  os_id UUID NOT NULL REFERENCES os(id) ON DELETE CASCADE,
+  tecnico_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  lat DOUBLE PRECISION NOT NULL,
+  lng DOUBLE PRECISION NOT NULL,
+  precisao_m INTEGER,
+  registrado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_os_posicao_os ON os_posicao(os_id, registrado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_os_posicao_registrado ON os_posicao(registrado_em);
+
+-- Localização do condomínio no mapa (destino da estimativa de chegada).
+-- origem: 'chegada' (gravada pela primeira chegada com boa precisão) | 'manual'.
+ALTER TABLE condominio ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE condominio ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+ALTER TABLE condominio ADD COLUMN IF NOT EXISTS localizacao_origem TEXT;
+ALTER TABLE condominio ADD COLUMN IF NOT EXISTS localizacao_em TIMESTAMPTZ;
