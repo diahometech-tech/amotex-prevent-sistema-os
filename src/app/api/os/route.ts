@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { canAccessCondominio, filtrarOSVisiveis, getSessionFromRequest, podeVerOS } from '@/lib/auth';
-import { isTecnico, podeAbrirOS } from '@/lib/roles';
+import { canAccessCondominio, filtrarOSVisiveis, getSessionFromRequest, osParaPapel, podeVerOS } from '@/lib/auth';
+import { isTecnico, podeAbrirChamado, podeAbrirOS } from '@/lib/roles';
+import { checkRateLimit, recordFailure } from '@/lib/rate-limit';
 import { notifyN8n } from '@/lib/notify';
 import { avisarCorretiva } from '@/lib/notificacao-corretiva';
 import { criarChecklistInicial } from '@/lib/os-checklist-inicial';
@@ -22,17 +23,69 @@ export async function GET(request: NextRequest) {
   const condominioId = request.nextUrl.searchParams.get('condominio_id');
   const todas = condominioId ? await Database.getOSsByCondominio(condominioId) : await Database.getOSs();
   const oss = await filtrarOSVisiveis(session, todas);
-  return NextResponse.json({ oss });
+  return NextResponse.json({ oss: oss.map((o) => osParaPapel(session.role, o)) });
 }
 
-// POST /api/os — cria OS manual. Gestor, secretária ou técnico.
+// Chamado pelo Painel do Condomínio: no máximo 5 por hora por usuário.
+const CHAMADOS_POR_HORA = 5;
+const JANELA_CHAMADOS_MS = 60 * 60_000;
+
+// Síndico (ou zelador/gerente com o acesso do síndico) abre uma CORRETIVA do
+// próprio condomínio. O servidor decide tudo: condomínio é o do usuário,
+// tipo é corretiva, sem técnico, para hoje, prioridade padrão. Preventiva ou
+// outro condomínio = 403. Dados de agenda que vierem no corpo são ignorados.
+async function abrirChamadoDoCondominio(session: { id: string; name: string }, body: Record<string, unknown>) {
+  const usuario = await Database.getUserById(session.id);
+  if (!usuario?.condominio_id) {
+    return NextResponse.json({ error: 'Sua conta não está vinculada a um condomínio.' }, { status: 403 });
+  }
+  if (body.tipo !== undefined && body.tipo !== 'corretiva') {
+    return NextResponse.json({ error: 'O condomínio só abre chamado de corretiva. Para outra visita, ligue para a Amotex.' }, { status: 403 });
+  }
+  if (body.condominio_id !== undefined && body.condominio_id !== usuario.condominio_id) {
+    return NextResponse.json({ error: 'Você só pode abrir chamado do seu condomínio.' }, { status: 403 });
+  }
+  const descricao = textoOpcional(body.descricao_problema)?.slice(0, 1000);
+  if (!descricao || descricao.length < 3) {
+    return NextResponse.json({ error: 'Conte o que está acontecendo.' }, { status: 400 });
+  }
+  const chave = `chamado:${session.id}`;
+  const limite = checkRateLimit(chave, JANELA_CHAMADOS_MS, CHAMADOS_POR_HORA);
+  if (!limite.allowed) {
+    return NextResponse.json(
+      { error: 'Você abriu muitos chamados em pouco tempo. Se for urgente, ligue para a Amotex.' },
+      { status: 429, ...(limite.retryAfterSeconds ? { headers: { 'Retry-After': String(limite.retryAfterSeconds) } } : {}) }
+    );
+  }
+  const condominio = await Database.getCondominioById(usuario.condominio_id);
+  if (!condominio) return NextResponse.json({ error: 'Condomínio não encontrado.' }, { status: 404 });
+
+  const os = await Database.createOS({
+    condominio_id: condominio.id, tipo: 'corretiva', origem: 'manual', canal_abertura: 'condominio',
+    data_programada: hojeISO(),
+    solicitante_nome: textoOpcional(body.solicitante_nome)?.slice(0, 120) ?? session.name,
+    solicitante_telefone: textoOpcional(body.solicitante_telefone)?.slice(0, 40),
+    descricao_problema: descricao,
+  }, session.name);
+  recordFailure(chave, JANELA_CHAMADOS_MS, CHAMADOS_POR_HORA);
+  await criarChecklistInicial(os);
+  notifyN8n('os_created', os);
+  // Mesmos avisos de qualquer corretiva (horário comercial x plantão). O
+  // resultado (quem foi avisado) é interno: o condomínio não recebe.
+  await avisarCorretiva('os_corretiva_aberta', os);
+  return NextResponse.json({ success: true, os: osParaPapel('sindico', os) });
+}
+
+// POST /api/os — cria OS manual. Gestor, secretária ou técnico; o síndico só
+// abre chamado de corretiva do próprio condomínio (abrirChamadoDoCondominio).
 export async function POST(request: NextRequest) {
   const session = getSessionFromRequest(request);
-  if (!session || !podeAbrirOS(session.role)) {
+  if (!session || !(podeAbrirOS(session.role) || podeAbrirChamado(session.role))) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
   try {
     const body = await request.json();
+    if (podeAbrirChamado(session.role)) return await abrirChamadoDoCondominio(session, body ?? {});
     const { condominio_id, tipo, prioridade, tecnico_id, observacao } = body;
     if (!condominio_id || (tipo !== 'preventiva' && tipo !== 'corretiva')) {
       return NextResponse.json({ error: 'Informe o condomínio e o tipo da OS.' }, { status: 400 });
@@ -92,6 +145,7 @@ export async function POST(request: NextRequest) {
     const os = await Database.createOS({
       condominio_id, tipo, prioridade, origem: 'manual', tecnico_id: tecnico_id || undefined, observacao,
       os_origem_id, equipamento_id,
+      canal_abertura: isTecnico(session.role) ? 'tecnico' : 'escritorio',
       data_programada: data_programada ?? undefined,
       solicitante_nome: textoOpcional(body.solicitante_nome),
       solicitante_telefone: textoOpcional(body.solicitante_telefone),
@@ -111,7 +165,7 @@ export async function POST(request: NextRequest) {
     // corretiva e gestores no Telegram. O resultado volta pra tela dizer a
     // quem chegou — ou por que não chegou.
     const aviso = tipo === 'corretiva' ? await avisarCorretiva('os_corretiva_aberta', os, { ignorarId: isTecnico(session.role) ? session.id : undefined }) : undefined;
-    return NextResponse.json({ success: true, os, ...(aviso ? { aviso } : {}) });
+    return NextResponse.json({ success: true, os: osParaPapel(session.role, os), ...(aviso ? { aviso } : {}) });
   } catch (e) {
     console.error('Erro ao criar OS:', e);
     return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });

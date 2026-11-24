@@ -134,6 +134,28 @@ export function podeAbrirOS(role?: UserRole): boolean {
   return role === 'admin' || role === 'secretaria' || role === 'tecnico';
 }
 
+// Chamado de corretiva aberto pelo Painel do Condomínio (síndico/zelador/
+// gerente do condomínio): só corretiva, só do próprio condomínio, sem escolher
+// técnico, data nem prioridade. E cancelar o próprio chamado dentro da regra
+// de src/lib/os-cancelamento.ts.
+export function podeAbrirChamado(role?: UserRole): boolean {
+  return role === 'sindico';
+}
+export function podeCancelarChamado(role?: UserRole): boolean {
+  return role === 'sindico';
+}
+
+// "Estou a caminho": o técnico da OS (o servidor confere que a OS é dele) e o
+// escritório, quando marca por ele.
+export function podeMarcarACaminho(role?: UserRole): boolean {
+  return isEscritorio(role) || role === 'tecnico';
+}
+
+// Localização de chegada/finalização: só o escritório vê as coordenadas.
+export function podeVerLocalizacao(role?: UserRole): boolean {
+  return isEscritorio(role);
+}
+
 // Atribuir técnico, reagendar, mudar prioridade e dados do chamado.
 // O técnico ainda pode (até a P2 "Técnico com permissão demais nas OS"),
 // mas só nas OS que ele vê.
@@ -177,6 +199,13 @@ export function podeEditarCondominio(role?: UserRole): boolean {
 }
 export function podeEditarContato(role?: UserRole): boolean {
   return isEscritorio(role);
+}
+// Contato em campo: o técnico adiciona e edita (sem excluir, sem mexer no
+// nível de escalonamento) nos condomínios das OS atribuídas a ele — o servidor
+// confere o vínculo (src/lib/contato-acesso.ts). A tela mostra os botões só
+// para quem passa por aqui.
+export function podeEditarContatoEmCampo(role?: UserRole): boolean {
+  return isEscritorio(role) || role === 'tecnico';
 }
 export function podeEditarEquipamento(role?: UserRole): boolean {
   return isAdminOrTecnico(role);

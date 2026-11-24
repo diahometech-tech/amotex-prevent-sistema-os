@@ -186,7 +186,7 @@ function MenuConteudo({
             <div className="text-xs text-amx-muted">{ROLE_LABELS[user.role]}</div>
           </div>
         )}
-        <AppCelularMenu app={app} compacto={compacto} mostrarAvisos={user.role !== 'sindico'} botaoClasse={botaoRodape} />
+        <AppCelularMenu app={app} compacto={compacto} mostrarAvisos botaoClasse={botaoRodape} />
         <button
           type="button"
           onClick={onTrocarSenha}

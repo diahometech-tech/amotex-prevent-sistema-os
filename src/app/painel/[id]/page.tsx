@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
@@ -18,6 +18,8 @@ import {
 } from '@/lib/condominio-stats';
 import { formatarDataCurta } from '@/lib/os-agenda';
 import { OSModal } from '@/components/os/OSModal';
+import { AbrirChamado, ChamadosDoCondominio } from '@/components/os/ChamadosDoCondominio';
+import { podeAbrirChamado, podeCancelarChamado } from '@/lib/roles';
 import type { Condominio, OS, Equipamento } from '@/lib/db';
 import { Icon } from '@/components/ui/Icon';
 
@@ -49,13 +51,12 @@ function PainelDetailContent() {
   const [error, setError] = useState<string | null>(null);
 
   // Carrega condomínio, equipamentos e OS em paralelo
-  useEffect(() => {
-    if (!id) return;
-
-    const load = async () => {
+  const carregar = useCallback(
+    // inicial = primeira carga da tela (mostra erro e some o carregando);
+    // as seguintes (a cada 30 s, depois de cancelar) são silenciosas.
+    async (inicial = false) => {
+      if (!id) return;
       try {
-        setLoadingCondominio(true);
-        setError(null);
 
         // GET /api/condominios/:id já devolve condominio + reservatorios +
         // contatos + equipamentos + oss (as OS já escopadas a este
@@ -67,7 +68,7 @@ function PainelDetailContent() {
         const data: CondominioDetalheResponse = await condRes.json().catch(() => ({}));
 
         if (!condRes.ok || !data.condominio) {
-          setError(data.error || 'Condomínio não encontrado');
+          if (inicial) setError(data.error || 'Condomínio não encontrado');
           return;
         }
 
@@ -75,14 +76,32 @@ function PainelDetailContent() {
         setEquipamentos(data.equipamentos ?? []);
         setOss(data.oss ?? []);
       } catch {
-        setError('Erro ao carregar o painel');
+        if (inicial) setError('Erro ao carregar o painel');
       } finally {
-        setLoadingCondominio(false);
+        if (inicial) setLoadingCondominio(false);
       }
-    };
+    },
+    [id]
+  );
 
-    load();
-  }, [id]);
+  useEffect(() => {
+    const t = window.setTimeout(() => carregar(true), 0);
+    return () => window.clearTimeout(t);
+  }, [carregar]);
+
+  // Acompanhamento ao vivo: o técnico avisa que está a caminho e chega com a
+  // tela aberta. Atualiza a cada 30 s e quando o app volta pra frente.
+  useEffect(() => {
+    const atualizar = () => {
+      if (document.visibilityState === 'visible') carregar();
+    };
+    const timer = window.setInterval(atualizar, 30_000);
+    document.addEventListener('visibilitychange', atualizar);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', atualizar);
+    };
+  }, [carregar]);
 
   const manutencoes = useMemo(() => manutencoesDoMes(oss), [oss]);
   const tempoMedio = useMemo(() => tempoMedioRespostaMinutos(oss), [oss]);
@@ -125,16 +144,31 @@ function PainelDetailContent() {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
-      <div className="px-8 pt-6 pb-4 border-b border-amx-line flex items-center justify-between">
-        <div>
+      <div className="px-4 sm:px-8 pt-6 pb-4 border-b border-amx-line flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider mb-1">{user?.role === 'sindico' ? 'Painel do Condomínio' : 'Painel do Síndico'}</p>
           <h1 className="text-white">{condominio.nome}</h1>
         </div>
-        <Badge tone="info">{relatorioMes}</Badge>
+        {podeAbrirChamado(user?.role) ? (
+          <AbrirChamado
+            nomePadrao={user?.name ?? ''}
+            onAberto={(nova) => setOss((prev) => [nova, ...prev])}
+          />
+        ) : (
+          <Badge tone="info">{relatorioMes}</Badge>
+        )}
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto px-8 py-6">
+      <div className="flex-1 overflow-auto px-4 sm:px-8 py-6">
+        {/* Atendimentos em andamento (linha do tempo) e chamados recentes */}
+        <ChamadosDoCondominio
+          oss={oss}
+          podeCancelar={podeCancelarChamado(user?.role)}
+          onAlterada={(atualizada) => setOss((prev) => prev.map((o) => (o.id === atualizada.id ? atualizada : o)))}
+          onRecarregar={() => carregar()}
+        />
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           {/* EQUIPAMENTOS */}

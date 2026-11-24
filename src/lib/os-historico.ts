@@ -146,6 +146,12 @@ export function descreverEvento(ev: EventoHistorico, pessoas: PessoaHistorico[] 
       const momento = d.momento === 'antes' ? ' do antes' : d.momento === 'depois' ? ' do depois' : '';
       return `${quem} removeu uma foto${momento}`;
     }
+    case 'A_CAMINHO':
+      return `${texto(d.tecnico) ?? quem} avisou que está a caminho`;
+    case 'AVISO_CANCELAMENTO': {
+      const nomes = Array.isArray(d.destinatarios) ? d.destinatarios.filter((n): n is string => typeof n === 'string') : [];
+      return `Aviso de cancelamento enviado${nomes.length > 0 ? ` para ${nomes.join(', ')}` : ''}`;
+    }
     case 'CORRETIVA_ABERTA':
       return `Corretiva aberta a partir desta OS por ${por}`;
     case 'AVISO_ABERTURA':

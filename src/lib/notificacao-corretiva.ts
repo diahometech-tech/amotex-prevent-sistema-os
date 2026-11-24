@@ -316,3 +316,59 @@ export async function avisarCorretiva(
     atribuidaSemTelegram: atribuido?.semTelegram || undefined,
   };
 }
+
+// Chamado cancelado pelo condomínio (22/11). Sem canal novo: sai pelo mesmo
+// evento de abertura (o n8n só entrega cada `mensagem` no Telegram de cada
+// destinatário), com `motivo_aviso: 'cancelada_pelo_condominio'`. Recebem o
+// técnico da OS (se houver) e quem recebeu a abertura (ids na auditoria).
+export function mensagemCorretivaCancelada(os: OS, condominio: Condominio, motivo: string, tecnico?: User | null): string {
+  return [
+    `*CHAMADO CANCELADO pelo condomínio* — ${escaparMarkdown(condominio.nome)}`,
+    `Motivo: ${escaparMarkdown(motivo)}`,
+    tecnico && `Técnico: ${escaparMarkdown(tecnico.nome)} — não precisa mais ir`,
+    os.descricao_problema && `Chamado: ${escaparMarkdown(os.descricao_problema)}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+export async function avisarCancelamentoCorretiva(os: OS, motivo: string): Promise<ResultadoAviso> {
+  if (os.tipo !== 'corretiva') return { enviado: false, destinatarios: 0, motivo: 'não é corretiva' };
+  const [condominio, tecnico, usuarios, idsAbertura] = await Promise.all([
+    Database.getCondominioById(os.condominio_id),
+    os.tecnico_id ? Database.getUserById(os.tecnico_id) : Promise.resolve(null),
+    Database.getUsers(),
+    idsDaAbertura(os.id),
+  ]);
+  if (!condominio) return { enviado: false, destinatarios: 0, motivo: 'condomínio não encontrado' };
+  const ids = new Set<string>(idsAbertura ?? []);
+  if (os.tecnico_id) ids.add(os.tecnico_id);
+  const lista = usuarios.filter((u) => u.ativo !== false && u.telegram_chat_id && ids.has(u.id));
+  // No celular (app) vai para os mesmos de antes, com ou sem Telegram.
+  const nomeCond = condominio.nome;
+  await enviarPushUsuarios(
+    usuarios.filter((u) => u.ativo !== false && ids.has(u.id)).map((u) => u.id),
+    { titulo: 'Chamado cancelado', corpo: `${nomeCond} cancelou o chamado. Motivo: ${motivo}`, url: `/?os=${os.id}`, tag: `os-${os.id}` }
+  );
+  if (!webhookConfigurado()) {
+    return { enviado: false, destinatarios: lista.length, motivo: 'aviso por Telegram ainda não configurado no servidor' };
+  }
+  if (lista.length === 0) return { enviado: false, destinatarios: 0, motivo: 'ninguém com Telegram para avisar' };
+
+  const mensagem = mensagemCorretivaCancelada(os, condominio, motivo, tecnico);
+  const destinatarios: Destinatario[] = lista.map((u) => ({
+    nome: u.nome, papel: u.papel, telegram_chat_id: u.telegram_chat_id!,
+  }));
+  notifyN8n('os_corretiva_aberta', os, {
+    mensagem,
+    destinatarios,
+    motivo_aviso: 'cancelada_pelo_condominio',
+    condominio: { nome: condominio.nome, endereco: enderecoCompleto(condominio) },
+    tecnico_nome: tecnico?.nome,
+  });
+  await Database.createAuditLog({
+    entidade: 'os', entidade_id: os.id, acao: 'AVISO_CANCELAMENTO', ator: 'sistema',
+    detalhe: { destinatarios: destinatarios.map((d) => d.nome), ids: lista.map((u) => u.id) },
+  });
+  return { enviado: true, destinatarios: destinatarios.length };
+}

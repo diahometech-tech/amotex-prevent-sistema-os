@@ -1,26 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Contato, Database } from '@/lib/db';
-import { getSessionFromRequest } from '@/lib/auth';
-import { podeEditarContato } from '@/lib/roles';
+import { getSessionFromRequest, podeEditarContatosDoCondominio } from '@/lib/auth';
+import { isEscritorio, podeEditarContatoEmCampo } from '@/lib/roles';
+import { PAPEIS_CONTATO_TECNICO } from '@/lib/contato-acesso';
+import { telefoneDiscavel } from '@/lib/endereco';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-const PAPEIS: Contato['papel'][] = ['zelador', 'sindico', 'administradora', 'conservadora', 'plantao'];
+const PAPEIS: Contato['papel'][] = ['zelador', 'gerente', 'portaria', 'sindico', 'administradora', 'conservadora', 'plantao'];
 const CANAIS: Contato['canal_preferencial'][] = ['telegram', 'whatsapp', 'email'];
 
 // PATCH /api/contatos/[id] — edita contato existente (inclusive ativar/
 // desativar, sem apagar o histórico de escalonamento que referencia o
-// contato_id). Gestor e secretária, mesma regra do POST em
-// condominios/[id]/contatos. Os dois papéis acessam todos os condomínios
-// (canAccessCondominio), então não há checagem de escopo adicional aqui.
+// contato_id). Gestor e secretária: tudo, em qualquer condomínio. Técnico
+// (22/11): só nome, papel (zelador/gerente/portaria/síndico) e telefone, de
+// contato por WhatsApp, e só nos condomínios das OS atribuídas a ele. Não mexe
+// em nível de escalonamento, canal nem ativo (e não exclui).
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || !podeEditarContato(session.role)) {
+  if (!session || !podeEditarContatoEmCampo(session.role)) {
     return NextResponse.json({ error: 'Você não pode editar contatos.' }, { status: 403 });
   }
   try {
     const { papel, nome, canal_preferencial, identificador_canal, nivel_escalonamento, ativo } = await request.json();
+
+    if (!isEscritorio(session.role)) {
+      // Técnico: o contato tem que existir, ser de um condomínio das OS dele e
+      // ser de WhatsApp; só nome, papel e telefone mudam.
+      const atual = (await Database.getContatosAtivos()).find((c) => c.id === id) ?? null;
+      if (!atual || !(await podeEditarContatosDoCondominio(session, atual.condominio_id))) {
+        return NextResponse.json({ error: 'Você só edita contato dos condomínios das suas OS.' }, { status: 403 });
+      }
+      if (atual.canal_preferencial !== 'whatsapp') {
+        return NextResponse.json({ error: 'Este contato só o escritório edita.' }, { status: 403 });
+      }
+      if (canal_preferencial !== undefined || nivel_escalonamento !== undefined || ativo !== undefined) {
+        return NextResponse.json({ error: 'Só o escritório muda o nível, o canal ou desativa um contato.' }, { status: 403 });
+      }
+      if (papel !== undefined && !PAPEIS_CONTATO_TECNICO.includes(papel)) {
+        return NextResponse.json({ error: 'Escolha zelador, gerente, portaria ou síndico.' }, { status: 400 });
+      }
+      if (identificador_canal !== undefined && (typeof identificador_canal !== 'string' || !telefoneDiscavel(identificador_canal))) {
+        return NextResponse.json({ error: 'Telefone inválido. Informe o DDD e o número.' }, { status: 400 });
+      }
+    }
 
     // PATCH é atualização parcial: campo ausente é permitido (não mexe no
     // que já existe), mas campo presente e vazio corromperia o registro —
@@ -62,6 +86,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!contato) {
       return NextResponse.json({ error: 'Contato não encontrado.' }, { status: 404 });
     }
+    await Database.createAuditLog({
+      entidade: 'contato', entidade_id: id, acao: 'CONTATO_EDITADO', ator: session.name,
+      detalhe: {
+        condominio_id: contato.condominio_id,
+        campos: Object.entries({ papel, nome, canal_preferencial, identificador_canal, nivel_escalonamento, ativo })
+          .filter(([, v]) => v !== undefined).map(([k]) => k),
+      },
+    });
     return NextResponse.json({ success: true, contato });
   } catch (e) {
     console.error('Erro ao editar contato:', e);

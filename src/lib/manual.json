@@ -1,5 +1,5 @@
 {
-  "atualizado": "2026-11-22",
+  "atualizado": "2026-11-23",
   "papeis": [
     {
       "papel": "admin",
@@ -63,7 +63,9 @@
             "O Histórico da OS conta o que aconteceu em frases, com dia e hora de São Paulo. Exemplos: Ana (secretária) trocou o técnico de Yuri para Mateus; Status: Aberta → Em andamento; Chegada registrada às 10:32; OS finalizada por Mateus.",
             "Os selos da OS mostram só a situação (Aberta, Em andamento, Finalizada ou Cancelada). Prioridade só aparece nas OS em aberto.",
             "Os números dos filtros Todas, Preventiva e Corretiva seguem a situação escolhida (por exemplo, Em aberto) e mudam sozinhos ao criar, assumir, mudar o status ou finalizar uma OS.",
-            "Na OS cancelada, o checklist não marca nenhum item como pendente."
+            "Na OS cancelada, o checklist não marca nenhum item como pendente.",
+            "A OS aberta pelo síndico mostra Aberta pelo condomínio. O síndico só abre corretiva do próprio condomínio, até 5 por hora, e pode cancelar o chamado até o técnico chegar (sem limite antes do a caminho; só nos primeiros 5 minutos depois dele). Depois disso, o cancelamento é por aqui.",
+            "O técnico avisa Estou a caminho e Cheguei no local; o condomínio vê no Painel. Em Localização da visita, na OS, você vê onde estava o celular na chegada e na finalização (ver no mapa). O síndico não vê a localização."
           ]
         },
         {
@@ -96,7 +98,8 @@
             "Na página do condomínio: Editar, Ver painel, ajustes temporários de valor e as abas Reservatórios, Contatos e Equipamentos.",
             "Em Acesso do síndico ao painel, clique em + Criar acesso. O sistema gera a senha e monta a mensagem pronta: clique em Copiar mensagem e envie ao síndico.",
             "Cliente que saiu: Editar e desmarque Contrato ativo (mantém o histórico). Apagar condomínio é só para cadastro de teste ou feito por engano e pede para digitar o nome.",
-            "No cadastro, Monitoramento ativo mostra Ligado ou Desligado por escrito. Em condomínio novo ele começa Desligado; ligue só quando houver sensor funcionando."
+            "No cadastro, Monitoramento ativo mostra Ligado ou Desligado por escrito. Em condomínio novo ele começa Desligado; ligue só quando houver sensor funcionando.",
+            "O técnico pode cadastrar e corrigir contato (nome, papel e telefone) dos condomínios das OS dele, pelo bloco Contatos do condomínio da OS. Excluir contato e mudar a ordem de chamada continuam aqui com você e com a secretária. Os papéis agora incluem Gerente e Portaria."
           ]
         },
         {
@@ -266,11 +269,20 @@
           ]
         },
         {
+          "titulo": "Contatos do condomínio na OS",
+          "passos": [
+            "Dentro da OS, o bloco Contatos do condomínio mostra quem atende no local, com Ligar, Adicionar contato e Editar.",
+            "Você e o gestor continuam editando tudo em Condomínios (inclusive nível de chamada e excluir). O técnico só cadastra e corrige nome, papel e telefone."
+          ]
+        },
+        {
           "titulo": "Atender o síndico pelo Painel",
           "passos": [
             "Abra Painel do Síndico no menu e escolha o condomínio que ligou.",
             "Você vê o mesmo que o síndico vê: próxima visita, histórico de atendimentos, fotos e PDF de cada visita.",
-            "Use a tela para responder ao telefone. Para mandar um relatório, abra a visita e baixe o PDF."
+            "Use a tela para responder ao telefone. Para mandar um relatório, abra a visita e baixe o PDF.",
+            "O síndico também abre chamado de corretiva pelo Painel dele. Esses chamados entram como qualquer corretiva (com os mesmos avisos de horário comercial e plantão) e a OS mostra Aberta pelo condomínio.",
+            "Na OS você vê o quanto o atendimento andou: o técnico a caminho, a chegada e, em Localização da visita, o link para o mapa (com a precisão do celular) ou sem localização, se o técnico não permitiu."
           ]
         },
         {
@@ -362,7 +374,17 @@
             "O endereço aparece na lista de OS, na Rota do dia e no bloco Local, no alto da OS.",
             "Toque em Google Maps ou em Waze para traçar o caminho no app que você usa.",
             "Toque em Ligar para chamar o zelador (ou quem chamou, ou o responsável) sem digitar o número.",
-            "Se aparecer Endereço não cadastrado, peça ao gestor para completar em Condomínios."
+            "Se aparecer Endereço não cadastrado, peça ao gestor para completar em Condomínios.",
+            "Ao sair para o atendimento, toque em Estou a caminho. O condomínio vê no Painel que você está indo (com seu nome e a hora). Só a OS que é sua tem esse botão.",
+            "Ao chegar, toque em Cheguei no local. O celular pergunta se pode usar a sua localização: toque em Permitir. A localização fica só com o escritório. Se você negar ou estiver sem sinal, a chegada é registrada do mesmo jeito."
+          ]
+        },
+        {
+          "titulo": "Contatos do condomínio",
+          "passos": [
+            "Dentro da OS, o bloco Contatos do condomínio mostra o zelador, o gerente, a portaria e o síndico, cada um com o botão Ligar.",
+            "Descobriu um contato novo ou o número mudou? Toque em Adicionar contato (ou em Editar), informe o nome, quem é e o telefone, e salve.",
+            "Você pode cadastrar e corrigir contatos dos condomínios das suas OS (abertas, ou finalizadas nos últimos 30 dias). Excluir contato e mudar a ordem de chamada é com o escritório."
           ]
         },
         {
@@ -379,8 +401,9 @@
           "passos": [
             "Você recebe o aviso de corretiva no Telegram e, se ligou os avisos no app, também na barra de notificações do celular. O aviso traz o condomínio, o problema e o horário limite de chegada. Ele diz por que chegou a você: \"Horário comercial\" (todos os técnicos recebem; quem estiver mais perto assume), \"Plantão\" (você está de plantão) ou \"Atribuída a você\" (o escritório passou a OS para você). Ao tocar na notificação, a OS abre direto.",
             "Abra a OS em Ordens de Serviço e clique em Assumir esta OS. Assim os outros técnicos sabem que você vai.",
-            "Ao chegar, clique em Cheguei no local. Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
-            "Para chegar, use Google Maps ou Waze e Ligar no bloco Local da OS."
+            "Ao sair, toque em Estou a caminho. Ao chegar, toque em Cheguei no local (e permita a localização). Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
+            "Para chegar, use Google Maps ou Waze e Ligar no bloco Local da OS.",
+            "O condomínio também pode abrir o chamado pelo Painel dele. Nesse caso a OS mostra Aberta pelo condomínio. Se o condomínio cancelar, você recebe o aviso no Telegram."
           ]
         },
         {
@@ -415,7 +438,7 @@
           "titulo": "Finalizar",
           "passos": [
             "O botão Finalizar OS só libera quando estiver tudo completo. Abaixo dele aparece a lista do que ainda falta.",
-            "Com tudo feito, clique em Finalizar OS.",
+            "Com tudo feito, clique em Finalizar OS. O celular pede a sua localização de novo (permita; se negar, a OS finaliza do mesmo jeito).",
             "A OS finalizada gera o PDF (Baixar PDF da OS), que o síndico também vê no painel dele."
           ]
         },
@@ -459,13 +482,17 @@
         {
           "pergunta": "Não vejo uma OS que me falaram.",
           "resposta": "Você só vê as suas OS e as corretivas sem técnico. Peça à secretária ou ao gestor para colocar você como técnico da OS."
+        },
+        {
+          "pergunta": "O celular não deixa usar a localização.",
+          "resposta": "Tudo bem: a chegada e a finalização são registradas sem a localização. Se quiser que ela vá junto, libere a localização para o site nas configurações do navegador e toque de novo na próxima OS."
         }
       ]
     },
     {
       "papel": "sindico",
       "titulo": "Síndico",
-      "resumo": "O síndico acompanha a manutenção do próprio condomínio: as visitas de cada mês, as fotos e o relatório (PDF) de cada atendimento.",
+      "resumo": "O síndico acompanha a manutenção do próprio condomínio: abre chamados de conserto, vê o técnico a caminho e chegando, cancela o chamado dentro do prazo e baixa as fotos e o relatório (PDF) de cada atendimento.",
       "secoes": [
         {
           "titulo": "Entrar e trocar a senha",
@@ -485,11 +512,40 @@
           ]
         },
         {
-          "titulo": "Instalar o app no celular",
+          "titulo": "Instalar o app e ligar os avisos no celular",
           "passos": [
             "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
             "No iPhone, abra o sistema no Safari, toque em Compartilhar (o quadrado com a seta) e em Adicionar à Tela de Início. Depois abra o app pelo ícone na tela inicial. No iPhone, os avisos só funcionam por esse ícone (iOS 16.4 ou mais novo).",
-            "Na tela Ajuda, o botão Copiar link do app copia o endereço do sistema para você enviar a outra pessoa, como o zelador."
+            "Na tela Ajuda, o botão Copiar link do app copia o endereço do sistema para você enviar a outra pessoa, como o zelador.",
+            "Depois de instalar, abra o menu e ligue Avisos neste celular. Você recebe um aviso quando o técnico sai para o condomínio, quando ele chega e quando o serviço é finalizado. No iPhone, o aviso só funciona com o app instalado na tela de início."
+          ]
+        },
+        {
+          "titulo": "Abrir um chamado",
+          "passos": [
+            "Algo quebrou ou parou? No topo do Painel, toque em Abrir chamado.",
+            "Conte o que está acontecendo (obrigatório). O seu nome já vem preenchido; informe um telefone para o técnico ligar, se precisar.",
+            "Toque em Enviar chamado. A Amotex é avisada e o chamado aparece em Em andamento, no Painel.",
+            "O chamado é sempre de corretiva (conserto). Para pedir uma visita de preventiva, fale com a Amotex.",
+            "Há um limite de 5 chamados por hora. Se for urgente e passar do limite, ligue para a Amotex."
+          ]
+        },
+        {
+          "titulo": "Acompanhar o atendimento",
+          "passos": [
+            "Em Em andamento, cada atendimento mostra o caminho: Chamado aberto, Técnico a caminho (com o nome e a hora), Técnico chegou e Finalizado.",
+            "Quando finaliza, aparece o botão Baixar relatório (PDF). A tela atualiza sozinha a cada 30 segundos.",
+            "Os chamados que você abriu e já terminaram ficam em Chamados recentes, com a situação de cada um."
+          ]
+        },
+        {
+          "titulo": "Cancelar um chamado",
+          "passos": [
+            "Em Em andamento, toque em Cancelar chamado e conte o motivo (obrigatório). O técnico é avisado.",
+            "Enquanto o técnico não avisou que está a caminho, você cancela a qualquer momento.",
+            "Depois que ele avisa que está a caminho, o cancelamento só vale nos primeiros 5 minutos. A tela mostra quanto tempo ainda resta.",
+            "Passou o prazo, ou o técnico já chegou: o botão some e a tela avisa para ligar para a Amotex.",
+            "Visitas de preventiva não são canceladas por aqui."
           ]
         }
       ],
@@ -501,6 +557,14 @@
         {
           "pergunta": "Uma visita não aparece no painel.",
           "resposta": "O painel mostra as visitas registradas pelo técnico. Se faltar alguma, fale com a Amotex."
+        },
+        {
+          "pergunta": "Quero cancelar e o botão sumiu.",
+          "resposta": "O técnico já está a caminho há mais de 5 minutos, ou já chegou. Ligue para a Amotex para cancelar."
+        },
+        {
+          "pergunta": "A tela diz que abri muitos chamados.",
+          "resposta": "O limite é de 5 chamados por hora. Se for urgente, ligue para a Amotex."
         }
       ]
     }
