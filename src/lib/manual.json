@@ -145,7 +145,7 @@
           "passos": [
             "Cada pessoa só vê o que é do seu perfil. O que não é dela nem aparece no menu.",
             "Gestor: vê e faz tudo.",
-            "Secretária: vê Dashboard, Ordens de Serviço, Rotas, Condomínios, Painel do Síndico, Financeiro (só a aba Cobranças) e Ajuda. Abre OS, atribui técnico, reagenda, cancela, marca o plantão e planeja as preventivas. Edita contatos dos condomínios e vê o contrato só para leitura.",
+            "Secretária: vê Dashboard, Ordens de Serviço, Rotas, Condomínios, Painel do Síndico, Financeiro (só a aba Cobranças) e Ajuda. Abre OS, atribui técnico, reagenda, cancela, marca o plantão e planeja as preventivas. Edita contatos, endereço e localização no mapa dos condomínios, e vê o contrato só para leitura.",
             "A secretária não vai a campo (chegada no local, checklist, fotos, assinaturas e finalizar são do técnico). Também não apaga OS, não cadastra nem edita condomínio, não cria acesso de síndico, não vê Usuários e só usa a aba Cobranças do Financeiro.",
             "Na Cobranças, a secretária gera o mês, marca como enviada, registra pagamento, anexa comprovante e ajusta o vencimento de cobranças em aberto. Isentar, reabrir e editar valor são só do gestor.",
             "Técnico: vê só as OS dele e as corretivas sem técnico, só a rota dele e só os condomínios das OS que vê.",
@@ -228,7 +228,8 @@
           "passos": [
             "Ao abrir uma OS, o bloco Local no alto mostra o endereço do condomínio.",
             "Google Maps e Waze abrem a rota até o condomínio no app que você preferir. Ligar chama o zelador, quem chamou ou o responsável, direto do celular.",
-            "Na primeira visita a um condomínio novo, o técnico cadastra os equipamentos pela própria OS. Você não precisa cadastrar."
+            "Na primeira visita a um condomínio novo, o técnico cadastra os equipamentos pela própria OS. Você não precisa cadastrar.",
+            "Endereço errado ou sem localização no mapa? Em Condomínios, abra o condomínio e toque em Editar endereço. Você muda rua, bairro, CEP, região e a Localização no mapa (cole as coordenadas ou o link do Google Maps, ou use sua localização atual se estiver no local). Nome, contrato e responsável ficam com o gestor."
           ]
         },
         {

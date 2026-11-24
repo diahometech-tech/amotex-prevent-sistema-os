@@ -201,6 +201,13 @@ export function podeVerRotaDeTodos(role?: UserRole): boolean {
 export function podeEditarCondominio(role?: UserRole): boolean {
   return isAdmin(role);
 }
+// Endereço e localização no mapa (24/11): a secretária também edita, sem
+// tocar em identificação, contrato, responsável ou situação do contrato. O
+// PATCH /api/condominios/[id] descarta os outros campos quando não é gestor.
+export const CAMPOS_ENDERECO_CONDOMINIO = ['endereco', 'bairro', 'cidade', 'uf', 'cep', 'regiao', 'lat', 'lng'] as const;
+export function podeEditarEnderecoCondominio(role?: UserRole): boolean {
+  return isEscritorio(role);
+}
 export function podeEditarContato(role?: UserRole): boolean {
   return isEscritorio(role);
 }
