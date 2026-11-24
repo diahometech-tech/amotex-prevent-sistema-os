@@ -33,6 +33,8 @@ import { EquipamentoForm, type EquipamentoFormData } from '@/components/cadastro
 import type { AuditLog, ChecklistItem, Condominio, Contato, Equipamento, Foto, OS } from '@/lib/db';
 import type { VinculosOS } from '@/lib/os-vinculos';
 import { Icon } from '@/components/ui/Icon';
+import { AcompanharTecnico } from '@/components/mapa/AcompanharTecnico';
+import { CompartilharLocalizacao } from '@/components/mapa/CompartilharLocalizacao';
 
 type Tab = 'checklist' | 'fotos' | 'assinaturas' | 'historico' | 'condominio';
 
@@ -761,6 +763,15 @@ export function OSModal({
 
             {actionError && (
               <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2">{actionError}</p>
+            )}
+
+            {/* Rastreio da rota (24/11): o técnico da OS compartilha a posição entre
+                "a caminho" e "cheguei"; o escritório acompanha no mapa. */}
+            {!isClosed && os.a_caminho_em && !os.entrada_em && !chegadaPendente && user?.role === 'tecnico' && os.tecnico_id === user.id && (
+              <CompartilharLocalizacao osId={osId} aCaminhoEm={os.a_caminho_em} ativo />
+            )}
+            {!isClosed && os.a_caminho_em && !os.entrada_em && isEscritorio(user?.role) && (
+              <AcompanharTecnico osId={osId} paraEscritorio />
             )}
 
             {campoLiberado && !isClosed && (

@@ -22,6 +22,7 @@
 //   Plantão         sim    sim (monta a escala)       só vê quem está de       não
 //                                                     plantão e a própria escala
 //   Rotas           sim    sim + planejar             só a própria             não
+//   Mapa ao vivo    sim    sim                        não                      não
 //   Condomínios     sim    ver; editar contatos;      só os das suas OS        não
 //                          contrato só leitura
 //   Painel síndico  todos  todos                      não                      só o dele
@@ -78,6 +79,7 @@ export type Modulo =
   | 'plantao'
   | 'os'
   | 'rotas'
+  | 'mapa'
   | 'condominios'
   | 'painel'
   | 'financeiro'
@@ -89,6 +91,7 @@ const MODULOS: Record<Modulo, UserRole[]> = {
   plantao: ['admin', 'secretaria', 'tecnico'],
   os: ['admin', 'secretaria', 'tecnico'],
   rotas: ['admin', 'secretaria', 'tecnico'],
+  mapa: ['admin', 'secretaria'],
   condominios: ['admin', 'secretaria', 'tecnico'],
   painel: ['admin', 'secretaria', 'sindico'],
   financeiro: ['admin', 'secretaria'],
@@ -115,6 +118,7 @@ export function moduloDaRota(pathname: string): Modulo | null {
     ['/dashboard', 'dashboard'],
     ['/plantao', 'plantao'],
     ['/rotas', 'rotas'],
+    ['/mapa', 'mapa'],
     ['/condominios', 'condominios'],
     ['/painel', 'painel'],
     ['/financeiro', 'financeiro'],

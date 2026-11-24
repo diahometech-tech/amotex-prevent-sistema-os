@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { hashPassword } from './auth';
 import { pendenciasFinalizacao } from './os-finalizacao';
 import { removeUploadDir, removeUploadFile } from './storage';
+import { DIAS_RETENCAO_POSICAO, INTERVALO_MIN_POSICAO_MS } from './rastreio';
 
 // Lançado por Database.finalizarOS quando a trava de qualidade bloqueia.
 // As pendências são texto pronto pro usuário (a rota devolve verbatim).
@@ -53,6 +54,13 @@ export interface Condominio {
   ativo?: boolean; // carteira ativa (ausente = true)
   desativado_em?: string;
   observacoes?: string;
+  // Localização no mapa (24/11): destino da estimativa de chegada do técnico.
+  // 'chegada' = gravada sozinha na primeira chegada com boa precisão;
+  // 'manual' = digitada/colada ou "usar minha localização" por um gestor.
+  lat?: number;
+  lng?: number;
+  localizacao_origem?: 'chegada' | 'manual';
+  localizacao_em?: string;
 }
 
 export type IndiceReajuste = 'igpm' | 'ipca' | 'inpc' | 'fixo';
@@ -64,6 +72,7 @@ export const CONDOMINIO_CAMPOS_CADASTRO = [
   'responsavel_nome', 'responsavel_telefone', 'responsavel_email', 'emails_cobranca',
   'valor_mensal_centavos', 'dia_vencimento', 'contrato_inicio', 'reajuste_indice', 'reajuste_percentual_fixo',
   'preventivas_por_mes', 'ativo', 'desativado_em', 'observacoes',
+  'lat', 'lng', 'localizacao_origem', 'localizacao_em',
 ] as const;
 
 // Cobrança mensal de um condomínio (uma por competência).
@@ -315,6 +324,19 @@ export interface OS {
   criado_em: string;
 }
 
+// Posição do técnico no trecho "a caminho" (24/11). Só a última é exibida; o
+// histórico existe para auditoria e é apagado depois de DIAS_RETENCAO_POSICAO
+// dias. Ver src/lib/rastreio.ts.
+export interface OsPosicao {
+  id: string;
+  os_id: string;
+  tecnico_id: string;
+  lat: number;
+  lng: number;
+  precisao_m?: number;
+  registrado_em: string;
+}
+
 export interface ChecklistItem {
   id: string;
   os_id: string;
@@ -479,6 +501,15 @@ export interface DbBackend {
   deletePushInscricaoByEndpoint(endpoint: string): Promise<boolean>;
   tocarPushInscricao(id: string): Promise<void>;
 
+  // Posição do técnico a caminho (rastreio)
+  insertOsPosicao(p: OsPosicao): Promise<void>;
+  /** Posição mais recente de cada OS pedida (no máximo uma por OS). */
+  getUltimasPosicoes(osIds: string[]): Promise<OsPosicao[]>;
+  /** Apaga posições registradas antes do corte (ISO). Devolve quantas. */
+  deleteOsPosicoesAntesDe(corteIso: string): Promise<number>;
+  /** Grava lat/lng do condomínio SÓ se ainda não houver (nunca sobrescreve). */
+  preencherLocalizacaoCondominio(id: string, lat: number, lng: number, origem: 'chegada' | 'manual', emIso: string): Promise<boolean>;
+
   // Auditoria
   getAuditLogs(): Promise<AuditLog[]>;
   getAuditLogsByEntidade(entidade: string, entidadeId: string): Promise<AuditLog[]>;
@@ -537,6 +568,7 @@ function emptyDB() {
     configuracoes: [] as Configuracao[],
     plantao_escala: [] as PlantaoEscala[],
     push_inscricoes: [] as PushInscricao[],
+    os_posicoes: [] as OsPosicao[],
   };
 }
 
@@ -850,6 +882,7 @@ const jsonBackend: DbBackend = {
     if (db.oss.length === antes) return false;
     db.checklist_items = db.checklist_items.filter((c) => c.os_id !== id);
     db.fotos = db.fotos.filter((f) => f.os_id !== id);
+    db.os_posicoes = db.os_posicoes.filter((p) => p.os_id !== id);
     db.oss = db.oss.map((o) => (o.os_origem_id === id ? { ...o, os_origem_id: undefined } : o));
     writeLocalDB(db);
     return true;
@@ -995,6 +1028,41 @@ const jsonBackend: DbBackend = {
     writeLocalDB(db);
   },
 
+  async insertOsPosicao(p) {
+    const db = readLocalDB();
+    db.os_posicoes.push(p);
+    writeLocalDB(db);
+  },
+  async getUltimasPosicoes(osIds) {
+    const quer = new Set(osIds);
+    const ultima = new Map<string, OsPosicao>();
+    for (const p of readLocalDB().os_posicoes) {
+      if (!quer.has(p.os_id)) continue;
+      const atual = ultima.get(p.os_id);
+      if (!atual || Date.parse(p.registrado_em) >= Date.parse(atual.registrado_em)) ultima.set(p.os_id, p);
+    }
+    return [...ultima.values()];
+  },
+  async deleteOsPosicoesAntesDe(corteIso) {
+    const db = readLocalDB();
+    const corte = Date.parse(corteIso);
+    const antes = db.os_posicoes.length;
+    db.os_posicoes = db.os_posicoes.filter((p) => Date.parse(p.registrado_em) >= corte);
+    if (db.os_posicoes.length !== antes) writeLocalDB(db);
+    return antes - db.os_posicoes.length;
+  },
+  async preencherLocalizacaoCondominio(id, lat, lng, origem, emIso) {
+    const db = readLocalDB();
+    const c = db.condominios.find((x) => x.id === id);
+    if (!c || (c.lat != null && c.lng != null)) return false;
+    c.lat = lat;
+    c.lng = lng;
+    c.localizacao_origem = origem;
+    c.localizacao_em = emIso;
+    writeLocalDB(db);
+    return true;
+  },
+
   async getAuditLogs() { return readLocalDB().audit_logs; },
   async getAuditLogsByEntidade(entidade, entidadeId) {
     return readLocalDB().audit_logs.filter((l) => l.entidade === entidade && l.entidade_id === entidadeId);
@@ -1036,6 +1104,9 @@ function backend(): DbBackend {
 // =====================================================================
 // Adaptador geral — regras de negócio independem do backend
 // =====================================================================
+
+// Última faxina de posições antigas (em memória; reinicia com o processo, o que só repete uma limpeza barata).
+let ultimaFaxinaPosicoes = 0;
 
 export class Database {
   // ----- Condomínio -----
@@ -1448,6 +1519,36 @@ export class Database {
     };
     await backend().insertFoto(foto);
     return foto;
+  }
+
+  // ----- Posição do técnico a caminho -----
+  static getUltimasPosicoes(osIds: string[]) { return osIds.length ? backend().getUltimasPosicoes(osIds) : Promise.resolve([]); }
+  static preencherLocalizacaoCondominio(id: string, lat: number, lng: number, origem: 'chegada' | 'manual') {
+    return backend().preencherLocalizacaoCondominio(id, lat, lng, origem, new Date().toISOString());
+  }
+
+  /**
+   * Grava a posição do técnico. Anti-enxurrada: se a última desta OS tem menos
+   * de INTERVALO_MIN_POSICAO_MS, não grava e devolve `false`. A cada hora (no
+   * máximo) apaga as posições com mais de DIAS_RETENCAO_POSICAO dias.
+   */
+  static async registrarPosicao(data: { os_id: string; tecnico_id: string; lat: number; lng: number; precisao_m?: number }): Promise<boolean> {
+    const [ultima] = await backend().getUltimasPosicoes([data.os_id]);
+    if (ultima && Date.now() - Date.parse(ultima.registrado_em) < INTERVALO_MIN_POSICAO_MS) return false;
+    await backend().insertOsPosicao({
+      id: randomUUID(), os_id: data.os_id, tecnico_id: data.tecnico_id, lat: data.lat, lng: data.lng,
+      ...(data.precisao_m !== undefined ? { precisao_m: data.precisao_m } : {}),
+      registrado_em: new Date().toISOString(),
+    });
+    if (Date.now() - ultimaFaxinaPosicoes > 3_600_000) {
+      ultimaFaxinaPosicoes = Date.now();
+      try {
+        await backend().deleteOsPosicoesAntesDe(new Date(Date.now() - DIAS_RETENCAO_POSICAO * 86_400_000).toISOString());
+      } catch (e) {
+        console.error('Erro ao limpar posições antigas:', e);
+      }
+    }
+    return true;
   }
 
   // ----- Auditoria -----

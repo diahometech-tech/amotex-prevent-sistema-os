@@ -7,6 +7,9 @@ import type { Condominio, IndiceReajuste } from '@/lib/db';
 import { cnpjValido, formatarCnpj, limparCnpj, type DadosCnpj } from '@/lib/financeiro/cnpj';
 import { INDICE_LABEL } from '@/lib/financeiro/reajuste';
 import { REGIOES, regiaoPorCep } from '@/lib/regioes';
+import { lerCoordenadaColada } from '@/lib/rastreio';
+import { obterLocalizacao } from '@/lib/localizacao-cliente';
+import { linkMapaCoordenadas } from '@/lib/localizacao';
 
 // O formulário trabalha em texto (como o usuário digita); quem valida e
 // converte (centavos, CNPJ só dígitos, e-mails) é o servidor, com
@@ -53,6 +56,35 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
   });
   const [buscando, setBuscando] = useState(false);
   const [aviso, setAviso] = useState<{ texto: string; ok: boolean } | null>(null);
+
+  // Localização no mapa (24/11): "lat, lng" colado do Google Maps, link com
+  // @lat,lng ou a posição do aparelho. Só vai no pedido se a pessoa mudou.
+  const locInicial = initial?.lat != null && initial?.lng != null ? `${Number(initial.lat).toFixed(6)}, ${Number(initial.lng).toFixed(6)}` : '';
+  const [loc, setLoc] = useState(locInicial);
+  const [locAviso, setLocAviso] = useState<{ texto: string; ok: boolean } | null>(null);
+  const [pegandoLoc, setPegandoLoc] = useState(false);
+  const usarMinhaLocalizacao = async () => {
+    setPegandoLoc(true);
+    setLocAviso(null);
+    const l = await obterLocalizacao();
+    setPegandoLoc(false);
+    if (!l) {
+      setLocAviso({ texto: 'Não foi possível pegar a localização deste aparelho. Libere o acesso à localização ou cole as coordenadas.', ok: false });
+      return;
+    }
+    setLoc(`${l.lat.toFixed(6)}, ${l.lng.toFixed(6)}`);
+    setLocAviso({ texto: `Localização do aparelho preenchida${l.precisao_m !== undefined ? ` (±${l.precisao_m} m)` : ''}. Salve para gravar.`, ok: true });
+  };
+  const origemLoc = (() => {
+    if (!initial || initial.lat == null || initial.lng == null) return null;
+    if (initial.localizacao_origem === 'chegada') {
+      const dia = initial.localizacao_em
+        ? new Date(initial.localizacao_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+        : '';
+      return `Origem: pela chegada do técnico${dia ? ` em ${dia}` : ''}.`;
+    }
+    return 'Origem: informada manualmente.';
+  })();
 
   const set = (k: keyof typeof form, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -113,6 +145,20 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const dados: CondominioFormData = { ...form, cnpj: form.cnpj ? limparCnpj(form.cnpj) : '' };
+    if (editando && loc.trim() !== locInicial) {
+      if (loc.trim() === '') {
+        dados.lat = null;
+        dados.lng = null;
+      } else {
+        const c = lerCoordenadaColada(loc);
+        if (!c) {
+          setLocAviso({ texto: 'Não entendi a localização. Cole como "-23.5505, -46.6333" ou um link do Google Maps com @lat,lng.', ok: false });
+          return;
+        }
+        dados.lat = c.lat;
+        dados.lng = c.lng;
+      }
+    }
     if (form.reajuste_indice !== 'fixo') dados.reajuste_percentual_fixo = '';
     if (!editando) delete dados.ativo;
     await onSubmit(dados);
@@ -157,6 +203,40 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
         </Field>
         <Field label="Cidade">{input('cidade')}</Field>
         <Field label="Administradora">{input('administradora')}</Field>
+        {editando && (
+          <Field label="Localização no mapa" hint="Usada para a estimativa de chegada do técnico. No Google Maps, toque e segure no local e copie as coordenadas.">
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <Input
+                  id="cond-localizacao"
+                  value={loc}
+                  onChange={(e) => setLoc(e.target.value)}
+                  disabled={busy}
+                  placeholder="-23.550520, -46.633308 ou link do Google Maps"
+                  className="flex-1 min-w-0"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="secondary" size="sm" onClick={usarMinhaLocalizacao} disabled={busy || pegandoLoc}>
+                  {pegandoLoc ? 'Pegando a localização...' : 'Usar minha localização atual'}
+                </Button>
+                {origemLoc && initial?.lat != null && initial?.lng != null && loc.trim() === locInicial && (
+                  <a
+                    href={linkMapaCoordenadas(Number(initial.lat), Number(initial.lng))}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-amx-blue-light hover:text-white transition-colors min-h-[44px] inline-flex items-center"
+                  >
+                    Ver no mapa
+                  </a>
+                )}
+              </div>
+              {origemLoc && loc.trim() === locInicial && <p className="text-xs text-amx-muted">{origemLoc}</p>}
+              {!initial?.lat && !loc && <p className="text-xs text-amx-muted">Ainda sem localização. Ela é gravada sozinha na primeira chegada do técnico com boa precisão.</p>}
+              {locAviso && <p className={`text-xs font-semibold ${locAviso.ok ? 'text-amx-green' : 'text-amx-amber'}`}>{locAviso.texto}</p>}
+            </div>
+          </Field>
+        )}
       </Secao>
 
       <Secao titulo="Responsável e cobrança">

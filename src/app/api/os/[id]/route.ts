@@ -10,6 +10,7 @@ import { generateOsPdf } from '@/lib/os-pdf';
 import { notifyN8n } from '@/lib/notify';
 import { avisarCorretiva } from '@/lib/notificacao-corretiva';
 import { vinculosDaOS } from '@/lib/os-vinculos';
+import { chegadaPreencheCondominio } from '@/lib/rastreio';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -273,6 +274,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         entidade: 'os', entidade_id: id, acao: 'CHEGADA_REGISTRADA', ator: session.name,
         detalhe: { em: updates.entrada_em },
       });
+      // Primeira chegada com boa precisão ensina ao mapa onde fica o condomínio
+      // (só se ainda não há localização; nunca sobrescreve). Falha aqui não
+      // atrapalha a chegada.
+      try {
+        const lat = updates.chegada_lat as number | undefined;
+        const lng = updates.chegada_lng as number | undefined;
+        if (lat !== undefined && lng !== undefined) {
+          const cond = await Database.getCondominioById(atual.condominio_id);
+          if (cond && chegadaPreencheCondominio(cond, { precisao_m: updates.chegada_precisao_m as number | undefined })) {
+            await Database.preencherLocalizacaoCondominio(cond.id, lat, lng, 'chegada');
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao gravar a localização do condomínio pela chegada:', e);
+      }
     };
 
     if (finalizar) {

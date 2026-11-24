@@ -5,7 +5,7 @@
 type Pool = InstanceType<typeof import('pg').Pool>;
 import type {
   DbBackend, Condominio, Reservatorio, Contato, Equipamento, User, EventoAlerta,
-  Alerta, Playbook, Escalonamento, OS, ChecklistItem, Foto, AuditLog, SessionLog,
+  Alerta, Playbook, Escalonamento, OS, OsPosicao, ChecklistItem, Foto, AuditLog, SessionLog,
   Cobranca, AjusteValor, Reajuste, PlantaoEscala, PushInscricao,
 } from './db';
 import { defaultUsers, CONDOMINIO_CAMPOS_CADASTRO } from './db';
@@ -376,6 +376,23 @@ async function runSchemaMigration(): Promise<void> {
       ultimo_uso_em TIMESTAMPTZ
     );
     CREATE INDEX IF NOT EXISTS idx_push_inscricao_usuario ON push_inscricao(usuario_id);
+    -- Acompanhamento da rota do técnico (24/11): posição no trecho "a caminho"
+    -- e localização do condomínio no mapa. Só tabela e colunas novas, opcionais.
+    CREATE TABLE IF NOT EXISTS os_posicao (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      os_id UUID NOT NULL REFERENCES os(id) ON DELETE CASCADE,
+      tecnico_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+      lat DOUBLE PRECISION NOT NULL,
+      lng DOUBLE PRECISION NOT NULL,
+      precisao_m INTEGER,
+      registrado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_os_posicao_os ON os_posicao(os_id, registrado_em DESC);
+    CREATE INDEX IF NOT EXISTS idx_os_posicao_registrado ON os_posicao(registrado_em);
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS localizacao_origem TEXT;
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS localizacao_em TIMESTAMPTZ;
   `);
 
   const { rows } = await p.query('SELECT COUNT(*)::int AS n FROM usuario');
@@ -908,6 +925,33 @@ export const pgBackend: DbBackend = {
     await q('UPDATE push_inscricao SET ultimo_uso_em = now() WHERE id = $1', [id]);
   },
 
+  // ----- Posição do técnico a caminho -----
+  async insertOsPosicao(p) {
+    await q(
+      'INSERT INTO os_posicao (id, os_id, tecnico_id, lat, lng, precisao_m, registrado_em) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [p.id, p.os_id, p.tecnico_id, p.lat, p.lng, p.precisao_m ?? null, p.registrado_em]
+    );
+  },
+  async getUltimasPosicoes(osIds) {
+    if (osIds.length === 0) return [];
+    const { rows } = await q(
+      `SELECT DISTINCT ON (os_id) * FROM os_posicao WHERE os_id = ANY($1::uuid[]) ORDER BY os_id, registrado_em DESC`,
+      [osIds]
+    );
+    return rows.map(posicaoDaLinha);
+  },
+  async deleteOsPosicoesAntesDe(corteIso) {
+    const res = await q('DELETE FROM os_posicao WHERE registrado_em < $1', [corteIso]);
+    return res.rowCount || 0;
+  },
+  async preencherLocalizacaoCondominio(id, lat, lng, origem, emIso) {
+    const res = await q(
+      'UPDATE condominio SET lat = $2, lng = $3, localizacao_origem = $4, localizacao_em = $5 WHERE id = $1 AND (lat IS NULL OR lng IS NULL)',
+      [id, lat, lng, origem, emIso]
+    );
+    return (res.rowCount || 0) > 0;
+  },
+
   // ----- Auditoria -----
   async getAuditLogs() {
     const { rows } = await q('SELECT * FROM audit_log ORDER BY criado_em DESC');
@@ -937,6 +981,15 @@ export const pgBackend: DbBackend = {
     );
   },
 };
+
+function posicaoDaLinha(r: Record<string, unknown>): OsPosicao {
+  return {
+    id: String(r.id), os_id: String(r.os_id), tecnico_id: String(r.tecnico_id),
+    lat: Number(r.lat), lng: Number(r.lng),
+    ...(r.precisao_m != null ? { precisao_m: Number(r.precisao_m) } : {}),
+    registrado_em: r.registrado_em instanceof Date ? r.registrado_em.toISOString() : String(r.registrado_em),
+  };
+}
 
 // NUMERIC volta do pg como string — potencia_hp é número no resto do app.
 function equipamentoDaLinha(row: Record<string, unknown>): Equipamento {
