@@ -1,5 +1,5 @@
 {
-  "atualizado": "2026-11-23",
+  "atualizado": "2026-11-24",
   "papeis": [
     {
       "papel": "admin",
@@ -65,7 +65,7 @@
             "Os números dos filtros Todas, Preventiva e Corretiva seguem a situação escolhida (por exemplo, Em aberto) e mudam sozinhos ao criar, assumir, mudar o status ou finalizar uma OS.",
             "Na OS cancelada, o checklist não marca nenhum item como pendente.",
             "A OS aberta pelo síndico mostra Aberta pelo condomínio. O síndico só abre corretiva do próprio condomínio, até 5 por hora, e pode cancelar o chamado até o técnico chegar (sem limite antes do a caminho; só nos primeiros 5 minutos depois dele). Depois disso, o cancelamento é por aqui.",
-            "O técnico avisa Estou a caminho e Cheguei no local; o condomínio vê no Painel. Em Localização da visita, na OS, você vê onde estava o celular na chegada e na finalização (ver no mapa). O síndico não vê a localização."
+            "O técnico avisa Estou a caminho e Cheguei no local; o condomínio vê no Painel. Em Localização da visita, na OS, você vê onde estava o celular na chegada e na finalização (ver no mapa). O síndico não vê a localização da chegada nem da finalização; ele só vê o técnico no mapa enquanto está a caminho (veja Mapa ao vivo)."
           ]
         },
         {
@@ -100,6 +100,19 @@
             "Cliente que saiu: Editar e desmarque Contrato ativo (mantém o histórico). Apagar condomínio é só para cadastro de teste ou feito por engano e pede para digitar o nome.",
             "No cadastro, Monitoramento ativo mostra Ligado ou Desligado por escrito. Em condomínio novo ele começa Desligado; ligue só quando houver sensor funcionando.",
             "O técnico pode cadastrar e corrigir contato (nome, papel e telefone) dos condomínios das OS dele, pelo bloco Contatos do condomínio da OS. Excluir contato e mudar a ordem de chamada continuam aqui com você e com a secretária. Os papéis agora incluem Gerente e Portaria."
+          ]
+        },
+        {
+          "titulo": "Mapa ao vivo e localização do condomínio",
+          "passos": [
+            "No menu, em Operação, toque em Mapa ao vivo. O mapa mostra todos os técnicos que tocaram em Estou a caminho e ainda não chegaram, cada um com o nome ao lado do ponto.",
+            "Abaixo do mapa, a lista traz o técnico, a OS, o condomínio, quanto falta para chegar (chega em ~X min) e atualizado há X. A tela atualiza sozinha a cada 15 segundos.",
+            "Chega em ~X min é uma estimativa: distância em linha reta, com acréscimo para as ruas, a 25 km/h. Não usa trânsito. Serve como referência, não como promessa.",
+            "Sem técnico a caminho, a tela diz Nenhum técnico a caminho agora.",
+            "Na OS aberta, enquanto o técnico está a caminho, o mesmo mapa aparece no meio da tela. Ele some quando o técnico chega.",
+            "A estimativa só funciona se o condomínio tiver localização no mapa. Em Condomínios, toque em Editar e preencha Localização no mapa: cole as coordenadas (no Google Maps, toque e segure no local e copie os números) ou um link do Google Maps, ou toque em Usar minha localização atual quando estiver no condomínio.",
+            "Abaixo do campo aparece a origem: pela chegada do técnico em dd/mm (gravada sozinha na primeira chegada com boa precisão) ou informada manualmente. A chegada nunca troca uma localização que já existe; para corrigir, edite aqui.",
+            "O técnico só compartilha a posição no trajeto, entre Estou a caminho e Cheguei no local (no máximo 2 horas). As posições são apagadas depois de 7 dias."
           ]
         },
         {
@@ -175,6 +188,14 @@
         {
           "pergunta": "Não consigo colocar um técnico de plantão.",
           "resposta": "Se aparecer \"Cadastre o Telegram de fulano em Usuários antes de colocá-lo de plantão\", abra Usuários, edite o técnico e preencha o ID do Telegram. Sem ele a pessoa não receberia o aviso. Quem já estava de plantão sem Telegram continua aparecendo com o selo SEM TELEGRAM."
+        },
+        {
+          "pergunta": "O mapa parou de atualizar.",
+          "resposta": "O técnico abriu outro app ou bloqueou a tela do celular: o navegador só envia a posição com o Sistema aberto na tela. Peça para ele voltar ao app. Na versão Android isso deixará de acontecer."
+        },
+        {
+          "pergunta": "Aparece o técnico no mapa, mas sem Chega em ~X min.",
+          "resposta": "O condomínio ainda não tem localização no mapa. Em Condomínios, toque em Editar e preencha Localização no mapa."
         }
       ]
     },
@@ -260,6 +281,16 @@
           ]
         },
         {
+          "titulo": "Mapa ao vivo",
+          "passos": [
+            "No menu, em Operação, toque em Mapa ao vivo. O mapa mostra os técnicos que estão a caminho, com o nome ao lado do ponto.",
+            "A lista abaixo traz o técnico, a OS, o condomínio, chega em ~X min e atualizado há X. A tela atualiza sozinha a cada 15 segundos.",
+            "Chega em ~X min é uma estimativa (linha reta mais um acréscimo para as ruas, a 25 km/h, sem trânsito). Use para responder o síndico, sem prometer horário.",
+            "Na OS aberta, enquanto o técnico está a caminho, o mesmo mapa aparece. Ele some quando o técnico chega.",
+            "Se aparecer o técnico sem a estimativa, o condomínio ainda não tem localização no mapa. Avise o gestor, que cadastra em Condomínios."
+          ]
+        },
+        {
           "titulo": "Condomínios",
           "passos": [
             "Em Condomínios, clique no condomínio para ver endereço, contatos e equipamentos.",
@@ -330,6 +361,10 @@
         {
           "pergunta": "Não consigo colocar um técnico de plantão.",
           "resposta": "Se aparecer \"Cadastre o Telegram de fulano em Usuários antes de colocá-lo de plantão\", avise o gestor: só ele cadastra o ID do Telegram em Usuários. Sem ele a pessoa não receberia o aviso."
+        },
+        {
+          "pergunta": "O mapa parou de atualizar.",
+          "resposta": "O técnico abriu outro app ou bloqueou a tela do celular: o navegador só envia a posição com o Sistema aberto na tela. Peça para ele voltar ao app. Na versão Android isso deixará de acontecer."
         }
       ]
     },
@@ -375,8 +410,19 @@
             "Toque em Google Maps ou em Waze para traçar o caminho no app que você usa.",
             "Toque em Ligar para chamar o zelador (ou quem chamou, ou o responsável) sem digitar o número.",
             "Se aparecer Endereço não cadastrado, peça ao gestor para completar em Condomínios.",
-            "Ao sair para o atendimento, toque em Estou a caminho. O condomínio vê no Painel que você está indo (com seu nome e a hora). Só a OS que é sua tem esse botão.",
+            "Ao sair para o atendimento, toque em Estou a caminho. O condomínio vê no Painel que você está indo (com seu nome e a hora) e acompanha você no mapa. Só a OS que é sua tem esse botão.",
             "Ao chegar, toque em Cheguei no local. O celular pergunta se pode usar a sua localização: toque em Permitir. A localização fica só com o escritório. Se você negar ou estiver sem sinal, a chegada é registrada do mesmo jeito."
+          ]
+        },
+        {
+          "titulo": "Compartilhar a localização no trajeto",
+          "passos": [
+            "Depois de tocar em Estou a caminho, a OS mostra o bloco Compartilhando sua localização com o condomínio, com a hora do último envio. O celular pergunta se pode usar a localização: toque em Permitir.",
+            "Deixe esta tela aberta no trajeto. Se abrir outro app ou bloquear a tela, o condomínio para de ver você no mapa. O sistema tenta manter a tela acesa sozinho.",
+            "Não há botão de pausar. O envio para sozinho quando você toca em Cheguei no local, se a OS for cancelada ou depois de 2 horas.",
+            "Se você fechar a OS e abrir de novo dentro dessas 2 horas, o envio recomeça sozinho.",
+            "Sua localização só é compartilhada no caminho até o condomínio, com o condomínio e o escritório. Depois que você chega, ninguém vê mais.",
+            "Se você negar a localização ou estiver sem GPS, o bloco avisa e o chamado segue normal: o condomínio só não vê o mapa."
           ]
         },
         {
@@ -486,6 +532,10 @@
         {
           "pergunta": "O celular não deixa usar a localização.",
           "resposta": "Tudo bem: a chegada e a finalização são registradas sem a localização. Se quiser que ela vá junto, libere a localização para o site nas configurações do navegador e toque de novo na próxima OS."
+        },
+        {
+          "pergunta": "O condomínio diz que não me vê no mapa.",
+          "resposta": "Confira se a OS está aberta na tela e se você permitiu a localização. Abrir outro app ou bloquear a tela interrompe o envio. Volte para a OS e espere alguns segundos: o último envio aparece no bloco."
         }
       ]
     },
@@ -534,8 +584,19 @@
           "titulo": "Acompanhar o atendimento",
           "passos": [
             "Em Em andamento, cada atendimento mostra o caminho: Chamado aberto, Técnico a caminho (com o nome e a hora), Técnico chegou e Finalizado.",
+            "Quando o técnico toca em Estou a caminho, o atendimento mostra um mapa com ele e o condomínio, e o texto Técnico (nome) a caminho · chega em ~X min (estimativa).",
             "Quando finaliza, aparece o botão Baixar relatório (PDF). A tela atualiza sozinha a cada 30 segundos.",
             "Os chamados que você abriu e já terminaram ficam em Chamados recentes, com a situação de cada um."
+          ]
+        },
+        {
+          "titulo": "Entender o mapa e a estimativa",
+          "passos": [
+            "A estimativa é um cálculo aproximado: distância em linha reta, com acréscimo para as ruas, a 25 km/h. Não considera trânsito. Pode variar.",
+            "O mapa atualiza sozinho a cada 15 segundos enquanto a tela estiver aberta.",
+            "Aguardando a localização do técnico: ele já saiu, mas o celular ainda não enviou a posição.",
+            "Sem atualização da localização há X min: o celular do técnico parou de enviar (por exemplo, sem sinal). Se passar muito tempo, ligue para a Amotex.",
+            "Quando o técnico chega, o mapa some. A Amotex só mostra a posição do técnico no caminho até o seu condomínio."
           ]
         },
         {
@@ -565,6 +626,10 @@
         {
           "pergunta": "A tela diz que abri muitos chamados.",
           "resposta": "O limite é de 5 chamados por hora. Se for urgente, ligue para a Amotex."
+        },
+        {
+          "pergunta": "O mapa parou de atualizar.",
+          "resposta": "O celular do técnico pode estar sem sinal, ou ele abriu outro app: o navegador só envia a posição com o Sistema aberto na tela. Se a dúvida continuar, ligue para a Amotex. Na versão Android isso deixará de acontecer."
         }
       ]
     }

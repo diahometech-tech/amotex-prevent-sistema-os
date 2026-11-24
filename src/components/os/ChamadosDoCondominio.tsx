@@ -12,6 +12,7 @@ import { Field, Input, Textarea } from '@/components/ui/Form';
 import { Icon } from '@/components/ui/Icon';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { LinhaDoTempoOS } from '@/components/os/LinhaDoTempoOS';
+import { AcompanharTecnico } from '@/components/mapa/AcompanharTecnico';
 import { useTick } from '@/lib/useTick';
 import type { OS } from '@/lib/db';
 import { permissaoCancelarChamado } from '@/lib/os-cancelamento';
@@ -145,6 +146,8 @@ function CartaoEmAndamento({
         {delaCondominio && <span className="text-[11px] text-amx-muted">Chamado do condomínio</span>}
       </div>
       {os.descricao_problema && <p className="text-[13px] text-white">{os.descricao_problema}</p>}
+      {/* Técnico a caminho: mapa e estimativa (some sozinho na chegada). */}
+      {sit === 'a_caminho' && <AcompanharTecnico osId={os.id} />}
       <LinhaDoTempoOS os={os} />
       {podeCancelar && os.tipo === 'corretiva' && (
         <div className="border-t border-amx-line pt-3 flex flex-col gap-2">
