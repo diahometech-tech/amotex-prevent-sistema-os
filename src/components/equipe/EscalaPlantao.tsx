@@ -122,7 +122,7 @@ function AgoraCard({ agora }: { agora: Dados['agora'] }) {
               <span className="text-xs text-amx-muted">
                 {agora.origem === 'escala' && p.ate ? `pela escala, até ${formatarInstante(p.ate)}` : 'marcado à mão'}
               </span>
-              {p.sem_canal && <Badge tone="warning">sem Telegram</Badge>}
+              {p.sem_canal && <Badge tone="warning">sem Telegram nem app</Badge>}
             </li>
           ))}
         </ul>
@@ -245,7 +245,7 @@ function EditarPeriodo({
           <Field label="Técnico">
             <Select id={`ed-usuario-${periodo.id}`} value={usuario} onChange={(e) => setUsuario(e.target.value)} disabled={busy}>
               {tecnicos.map((t) => (
-                <option key={t.id} value={t.id}>{t.nome}{t.sem_canal ? ' (sem Telegram)' : ''}</option>
+                <option key={t.id} value={t.id}>{t.nome}{t.sem_canal ? ' (sem Telegram nem app)' : ''}</option>
               ))}
             </Select>
           </Field>
@@ -300,7 +300,7 @@ function AdicionarPeriodo({ tecnicos, onMudou }: { tecnicos: Tecnico[]; onMudou:
         <Select id="add-usuario" value={usuario} onChange={(e) => setUsuario(e.target.value)} disabled={busy}>
           <option value="">Escolha o técnico</option>
           {tecnicos.map((t) => (
-            <option key={t.id} value={t.id}>{t.nome}{t.sem_canal ? ' (sem Telegram)' : ''}</option>
+            <option key={t.id} value={t.id}>{t.nome}{t.sem_canal ? ' (sem Telegram nem app)' : ''}</option>
           ))}
         </Select>
       </Field>
@@ -402,7 +402,7 @@ function GerarRodizio({ tecnicos, onMudou }: { tecnicos: Tecnico[]; onMudou: () 
               }`}
             >
               <span className="font-semibold">{pos >= 0 ? `${pos + 1}. ` : ''}{t.nome}</span>
-              {t.sem_canal && <Badge tone="warning">sem Telegram</Badge>}
+              {t.sem_canal && <Badge tone="warning">sem Telegram nem app</Badge>}
             </button>
           );
         })}

@@ -11,7 +11,9 @@ import { atendeCorretiva, mensagemSemCanalDeAviso } from '@/lib/plantao';
 import { formatarInstante } from '@/lib/plantao-escala';
 import { periodoAtendimento } from '@/lib/horario-comercial';
 
-type Tecnico = Pick<User, 'id' | 'nome' | 'papel' | 'especialidade' | 'ativo' | 'de_plantao' | 'telegram_chat_id'>;
+type Tecnico = Pick<User, 'id' | 'nome' | 'papel' | 'especialidade' | 'ativo' | 'de_plantao' | 'telegram_chat_id'> & {
+  app_ativo?: boolean;
+};
 
 interface Agora {
   origem: 'escala' | 'manual';
@@ -55,7 +57,7 @@ export function PlantaoCard({ onChange }: { onChange?: () => void }) {
 
   const alternar = async (t: Tecnico) => {
     // Recusa antes de ir ao servidor (o servidor confere de novo).
-    if (!t.de_plantao && !t.telegram_chat_id) {
+    if (!t.de_plantao && !t.telegram_chat_id && !t.app_ativo) {
       setErro(mensagemSemCanalDeAviso(t.nome));
       return;
     }
@@ -79,7 +81,7 @@ export function PlantaoCard({ onChange }: { onChange?: () => void }) {
   const trocar = async () => {
     const alvo = tecnicos?.find((t) => t.id === trocarPara);
     if (!alvo) return;
-    if (!alvo.telegram_chat_id) {
+    if (!alvo.telegram_chat_id && !alvo.app_ativo) {
       setErro(mensagemSemCanalDeAviso(alvo.nome));
       return;
     }
@@ -124,7 +126,7 @@ export function PlantaoCard({ onChange }: { onChange?: () => void }) {
               <span className="text-xs text-amx-muted">
                 {pelaEscala && p.ate ? `pela escala, até ${formatarInstante(p.ate)}` : 'marcado à mão'}
               </span>
-              {p.sem_canal && <Badge tone="warning">sem Telegram</Badge>}
+              {p.sem_canal && <Badge tone="warning">sem Telegram nem app</Badge>}
             </li>
           ))}
         </ul>
@@ -167,7 +169,7 @@ export function PlantaoCard({ onChange }: { onChange?: () => void }) {
                   <span aria-hidden className={`h-2.5 w-2.5 rounded-full ${t.de_plantao ? 'bg-amx-green' : 'bg-amx-line'}`} />
                   <span className="font-semibold">{t.nome}</span>
                   {t.de_plantao && <span className="text-[11px]">de plantão</span>}
-                  {!t.telegram_chat_id && <Badge tone="warning">sem Telegram</Badge>}
+                  {!t.telegram_chat_id && !t.app_ativo && <Badge tone="warning">sem Telegram nem app</Badge>}
                 </button>
               ))}
             </div>
@@ -184,7 +186,7 @@ export function PlantaoCard({ onChange }: { onChange?: () => void }) {
             >
               <option value="">Trocar plantonista agora…</option>
               {tecnicos.filter((t) => !(atuais.length === 1 && atuais[0].id === t.id)).map((t) => (
-                <option key={t.id} value={t.id}>{t.nome}{!t.telegram_chat_id ? ' (sem Telegram)' : ''}</option>
+                <option key={t.id} value={t.id}>{t.nome}{!t.telegram_chat_id && !t.app_ativo ? ' (sem Telegram nem app)' : ''}</option>
               ))}
             </Select>
             <Button size="sm" variant="secondary" onClick={trocar} disabled={trocando || !trocarPara}>

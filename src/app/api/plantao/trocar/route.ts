@@ -3,6 +3,7 @@ import { Database } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/auth';
 import { podeGerirPlantao } from '@/lib/roles';
 import { atendeCorretiva, erroParaPlantao, plantonistasEm } from '@/lib/plantao';
+import { usuariosComPush } from '@/lib/push';
 import { fimDaTrocaManual } from '@/lib/plantao-escala';
 
 // POST /api/plantao/trocar { usuario_id } — "Trocar plantonista agora".
@@ -19,11 +20,12 @@ export async function POST(request: NextRequest) {
   if (!session || !podeGerirPlantao(session.role)) {
     return NextResponse.json({ error: 'Apenas o escritório troca o plantonista.' }, { status: 403 });
   }
+  const comApp = await usuariosComPush();
   try {
     const body = await request.json();
     const novo = typeof body?.usuario_id === 'string' ? await Database.getUserById(body.usuario_id) : null;
     if (!novo || !atendeCorretiva(novo)) return NextResponse.json({ error: 'Escolha um técnico de corretiva ativo.' }, { status: 400 });
-    const semCanal = erroParaPlantao(novo);
+    const semCanal = erroParaPlantao(novo, comApp);
     if (semCanal) return NextResponse.json({ error: semCanal }, { status: 400 });
 
     const agora = new Date();

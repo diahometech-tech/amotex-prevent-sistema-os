@@ -3,6 +3,7 @@ import { Database } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/auth';
 import { isEscritorio, podeGerirPlantao, podeVerModulo } from '@/lib/roles';
 import { atendeCorretiva, erroParaPlantao, plantonistasEm, temCanalDeAviso } from '@/lib/plantao';
+import { usuariosComPush } from '@/lib/push';
 import { erroDoPeriodo, normalizarInstante, periodoEncerrado, periodoIniciado, sePeriodosSobrepoem } from '@/lib/plantao-escala';
 import { periodoAtendimento } from '@/lib/horario-comercial';
 
@@ -14,6 +15,7 @@ export async function GET(request: NextRequest) {
   if (!session || !podeVerModulo(session.role, 'plantao')) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
   }
+  const comApp = await usuariosComPush();
   const agora = new Date();
   const [escala, users] = await Promise.all([Database.getPlantaoEscala(), Database.getUsers()]);
   const nome = new Map(users.map((u) => [u.id, u.nome]));
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
         id: u.id,
         nome: u.nome,
         ate: atual.ate[u.id] ?? null,
-        ...(verTudo ? { sem_canal: !temCanalDeAviso(u) } : {}),
+        ...(verTudo ? { sem_canal: !temCanalDeAviso(u, comApp) } : {}),
       })),
     },
     periodos,
@@ -48,7 +50,7 @@ export async function GET(request: NextRequest) {
       ? {
           tecnicos: users
             .filter(atendeCorretiva)
-            .map((u) => ({ id: u.id, nome: u.nome, sem_canal: !temCanalDeAviso(u) })),
+            .map((u) => ({ id: u.id, nome: u.nome, sem_canal: !temCanalDeAviso(u, comApp) })),
         }
       : {}),
   });
@@ -61,6 +63,7 @@ export async function POST(request: NextRequest) {
   if (!session || !podeGerirPlantao(session.role)) {
     return NextResponse.json({ error: 'Apenas o escritório monta a escala de plantão.' }, { status: 403 });
   }
+  const comApp = await usuariosComPush();
   try {
     const body = await request.json();
     const inicio = normalizarInstante(body?.inicio);
@@ -75,7 +78,7 @@ export async function POST(request: NextRequest) {
     if (!usuario || !atendeCorretiva(usuario)) {
       return NextResponse.json({ error: 'Escolha um técnico de corretiva ativo.' }, { status: 400 });
     }
-    const semCanal = erroParaPlantao(usuario);
+    const semCanal = erroParaPlantao(usuario, comApp);
     if (semCanal) return NextResponse.json({ error: semCanal }, { status: 400 });
 
     const mesmaPessoa = (await Database.getPlantaoEscala()).find((p) => p.usuario_id === usuario.id && sePeriodosSobrepoem(p, { inicio, fim }));

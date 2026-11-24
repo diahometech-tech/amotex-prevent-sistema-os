@@ -8,6 +8,11 @@
 // entrega cada `mensagem` no `telegram_chat_id` de cada destinatário — ver
 // n8n/workflows/ no repo amotex-prevent-infra. WhatsApp entra depois pelo
 // mesmo payload, trocando só o nó de envio no n8n.
+//
+// Além do Telegram, quem tem a notificação do app ligada (src/lib/push.ts)
+// recebe o mesmo aviso no celular. Os destinatários são calculados uma vez;
+// o Telegram vai só para quem tem `telegram_chat_id`, o app só para quem tem
+// aparelho inscrito.
 import { Database, type Condominio, type OS, type User } from './db';
 import { notifyN8n, webhookConfigurado } from './notify';
 import { fmtHora, slaChegada } from './os-sla';
@@ -15,6 +20,7 @@ import type { ResultadoAviso } from './aviso';
 import { escaparMarkdown } from './telegram-texto';
 import { escolherDestinatarios, plantonistasEm } from './plantao';
 import { enderecoCompleto } from './endereco';
+import { enviarPushUsuarios, usuariosComPush } from './push';
 
 export interface Destinatario {
   nome: string;
@@ -113,6 +119,41 @@ async function idsDaAbertura(osId: string): Promise<Set<string> | undefined> {
   return Array.isArray(ids) ? new Set(ids.filter((i): i is string => typeof i === 'string')) : undefined;
 }
 
+// Texto do aviso no celular: sem Markdown, curto (a barra de notificações corta).
+function textoPush(
+  evento: EventoAvisoCorretiva,
+  os: OS,
+  condominio: Condominio,
+  tecnico: User | null,
+  contexto: { periodo?: 'comercial' | 'plantao'; para?: ContextoAviso['para'] }
+): { titulo: string; corpo: string } {
+  const sla = slaChegada(os);
+  const chegar = sla ? `Chegar até ${fmtHora(sla.prazo)}` : '';
+  if (evento === 'os_corretiva_assumida') {
+    return {
+      titulo: `${tecnico?.nome ?? 'Um técnico'} assumiu a corretiva`,
+      corpo: [condominio.nome, chegar].filter(Boolean).join('\n'),
+    };
+  }
+  let quem = '';
+  if (tecnico) {
+    quem = contexto.para === 'tecnico' ? 'Atribuída a você' : `Técnico: ${tecnico.nome}`;
+  } else if (contexto.periodo === 'comercial') {
+    quem = 'Quem estiver mais perto, assuma a OS no sistema';
+  } else if (contexto.para === 'plantonista') {
+    quem = 'Você está de plantão. Assuma a OS no sistema';
+  } else {
+    quem = 'Assuma a OS no sistema';
+  }
+  return {
+    titulo:
+      evento === 'os_corretiva_atribuida' && contexto.para === 'tecnico'
+        ? `Corretiva atribuída a você — ${condominio.nome}`
+        : `Corretiva urgente — ${condominio.nome}`,
+    corpo: [os.descricao_problema, quem, chegar].filter(Boolean).join('\n'),
+  };
+}
+
 export interface OpcoesAvisoCorretiva {
   /** Quem acionou e não precisa ser avisado (o técnico que abriu a corretiva já atribuída a ele). */
   ignorarId?: string;
@@ -137,27 +178,48 @@ export async function avisarCorretiva(
   // Aberta/atribuída com técnico: só ele (+ gestores e secretária).
   const assumida = evento === 'os_corretiva_assumida';
   const momento = assumida ? new Date(os.criado_em) : new Date();
-  const escolha = escolherDestinatarios(usuarios, {
+  const comApp = await usuariosComPush();
+  // Sem o webhook do n8n o Telegram não existe: ninguém conta como "com Telegram".
+  const telegramAtivo = webhookConfigurado();
+  const usuariosCanal = telegramAtivo ? usuarios : usuarios.map((u) => ({ ...u, telegram_chat_id: undefined }));
+  const escolha = escolherDestinatarios(usuariosCanal, {
     tecnicoId: assumida ? null : os.tecnico_id,
     agora: momento,
     escala,
+    comApp,
   });
   const { periodo, motivo: porQue, atribuido } = escolha;
   // Plantão/alertas de Telegram só dizem respeito a quem abre ou atribui: quem assume não resolve isso.
   const plantao = assumida ? [] : escolha.plantao;
   const plantaoSemTelegram = assumida ? [] : escolha.plantaoSemTelegram;
-  let lista = escolha.destinatarios;
+  let lista = escolha.destinatarios; // Telegram
+  let alvos = escolha.alvos; // todos os alvos (app: quem tem aparelho inscrito)
   if (assumida) {
     const ids = await idsDaAbertura(os.id);
-    if (ids) lista = usuarios.filter((u) => ids.has(u.id) && u.telegram_chat_id);
+    if (ids) {
+      lista = usuariosCanal.filter((u) => ids.has(u.id) && u.telegram_chat_id);
+      alvos = usuariosCanal.filter((u) => ids.has(u.id));
+    }
   }
-  if (opcoes.ignorarId) lista = lista.filter((u) => u.id !== opcoes.ignorarId);
+  if (opcoes.ignorarId) {
+    lista = lista.filter((u) => u.id !== opcoes.ignorarId);
+    alvos = alvos.filter((u) => u.id !== opcoes.ignorarId);
+  }
+  // No celular: quem tem o app ligado. Atribuída pelo escritório vai só pro
+  // técnico (gestores e secretária já sabem: foram eles); quem assumiu não
+  // precisa de aviso do que ele mesmo fez.
+  let alvosApp = alvos.filter((u) => comApp.has(u.id));
+  if (evento === 'os_corretiva_atribuida') alvosApp = alvosApp.filter((u) => u.id === os.tecnico_id);
+  if (assumida) alvosApp = alvosApp.filter((u) => u.id !== os.tecnico_id);
 
-  if (!webhookConfigurado()) {
-    return { enviado: false, destinatarios: lista.length, motivo: 'aviso por Telegram ainda não configurado no servidor' };
-  }
-  if (lista.length === 0) {
-    return { enviado: false, destinatarios: 0, motivo: 'ninguém com Telegram cadastrado em Usuários' };
+  if (lista.length === 0 && alvosApp.length === 0) {
+    return {
+      enviado: false,
+      destinatarios: 0,
+      motivo: telegramAtivo
+        ? 'ninguém com Telegram cadastrado nem com o app ligado, em Usuários'
+        : 'aviso por Telegram ainda não configurado no servidor e ninguém com o app ligado',
+    };
   }
   if (evento === 'os_corretiva_assumida' && !tecnico) {
     return { enviado: false, destinatarios: 0, motivo: 'OS sem técnico' };
@@ -171,12 +233,14 @@ export async function avisarCorretiva(
 
   // Texto de cada um com o motivo dele (só abertura/atribuição muda por pessoa).
   const idsPlantao = new Set(plantonistasEm(momento, escala, usuarios).usuarios.map((u) => u.id));
+  const paraDe = (u: User): ContextoAviso['para'] => {
+    if (evento === 'os_corretiva_assumida') return undefined;
+    if (u.id === atribuido?.id) return 'tecnico';
+    if (porQue === 'plantao' && idsPlantao.has(u.id)) return 'plantonista';
+    return undefined;
+  };
   const destinatarios: Destinatario[] = lista.map((u) => {
-    let para: ContextoAviso['para'];
-    if (evento !== 'os_corretiva_assumida') {
-      if (u.id === atribuido?.id) para = 'tecnico';
-      else if (porQue === 'plantao' && idsPlantao.has(u.id)) para = 'plantonista';
-    }
+    const para = paraDe(u);
     return {
       nome: u.nome,
       papel: u.papel,
@@ -188,23 +252,60 @@ export async function avisarCorretiva(
   const sla = slaChegada(os);
   // O n8n só conhece abertura e assumida: a atribuição pelo escritório sai
   // como abertura (o técnico recebe o chamado); `motivo_aviso` diferencia.
-  notifyN8n(evento === 'os_corretiva_assumida' ? 'os_corretiva_assumida' : 'os_corretiva_aberta', os, {
-    mensagem,
-    destinatarios,
-    motivo_aviso: porQue,
-    condominio: { nome: condominio.nome, endereco: enderecoCompleto(condominio) },
-    tecnico_nome: tecnico?.nome,
-    prazo_chegada: sla ? new Date(sla.prazo).toISOString() : undefined,
-    link: linkOs(os.id),
-  });
+  if (destinatarios.length > 0) {
+    notifyN8n(evento === 'os_corretiva_assumida' ? 'os_corretiva_assumida' : 'os_corretiva_aberta', os, {
+      mensagem,
+      destinatarios,
+      motivo_aviso: porQue,
+      condominio: { nome: condominio.nome, endereco: enderecoCompleto(condominio) },
+      tecnico_nome: tecnico?.nome,
+      prazo_chegada: sla ? new Date(sla.prazo).toISOString() : undefined,
+      link: linkOs(os.id),
+    });
+  }
+
+  // App: um envio por texto diferente (o técnico dono e o plantonista leem o motivo deles).
+  const alcancadosApp = new Set<string>();
+  if (alvosApp.length > 0) {
+    const grupos = new Map<string, { para: ContextoAviso['para']; ids: string[] }>();
+    for (const u of alvosApp) {
+      const para = paraDe(u);
+      const g = grupos.get(para ?? '') ?? { para, ids: [] };
+      g.ids.push(u.id);
+      grupos.set(para ?? '', g);
+    }
+    const url = `/?os=${os.id}`;
+    const envios = await Promise.all(
+      [...grupos.values()].map((g) => {
+        const t = textoPush(evento, os, condominio, tecnico, { periodo, para: g.para });
+        return enviarPushUsuarios(g.ids, { titulo: t.titulo, corpo: t.corpo, url, tag: `os-${os.id}` });
+      })
+    );
+    for (const r of envios) r.usuariosAlcancados.forEach((id) => alcancadosApp.add(id));
+  }
+  const alcancados = new Set<string>([...lista.map((u) => u.id), ...alcancadosApp]);
+  if (alcancados.size === 0) {
+    return { enviado: false, destinatarios: 0, motivo: 'o aviso no app não chegou a ninguém (aparelhos sem resposta)' };
+  }
+
   await Database.createAuditLog({
     entidade: 'os', entidade_id: os.id,
     acao: evento === 'os_corretiva_aberta' ? 'AVISO_ABERTURA' : evento === 'os_corretiva_atribuida' ? 'AVISO_ATRIBUICAO' : 'AVISO_ASSUMIDA',
-    ator: 'sistema', detalhe: { destinatarios: destinatarios.map((d) => d.nome), ids: lista.map((u) => u.id), plantao, periodo, motivo: porQue },
+    ator: 'sistema',
+    detalhe: {
+      destinatarios: alvos.filter((u) => alcancados.has(u.id)).map((u) => u.nome),
+      // Todos os alvos, não só quem tinha Telegram: o "assumida" reaproveita esta lista.
+      ids: alvos.map((u) => u.id),
+      telegram: lista.length,
+      app: alcancadosApp.size,
+      plantao, periodo, motivo: porQue,
+    },
   });
   return {
     enviado: true,
-    destinatarios: destinatarios.length,
+    destinatarios: alcancados.size,
+    viaTelegram: lista.length,
+    viaApp: alcancadosApp.size,
     plantao,
     plantaoSemTelegram,
     periodo,

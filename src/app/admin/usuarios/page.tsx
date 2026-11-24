@@ -22,6 +22,7 @@ interface UserRow {
   condominio_id?: string;
   especialidade?: Especialidade;
   telegram_chat_id?: string;
+  app_ativo?: boolean; // notificação do app ligada em algum aparelho
   de_plantao?: boolean;
   ativo: boolean;
   criado_em: string;
@@ -375,10 +376,11 @@ function UsuariosContent() {
                 )}
                 {u.papel === 'tecnico' && u.de_plantao && <Badge tone="success">De plantão</Badge>}
                 {u.papel !== 'sindico' && (
-                  <Badge tone={u.telegram_chat_id ? 'success' : 'warning'}>
+                  <Badge tone={u.telegram_chat_id ? 'success' : u.app_ativo ? 'neutral' : 'warning'}>
                     {u.telegram_chat_id ? 'Telegram ok' : 'Sem Telegram'}
                   </Badge>
                 )}
+                {u.papel !== 'sindico' && u.app_ativo && <Badge tone="success">App</Badge>}
                 {u.papel === 'sindico' && (
                   <span className="text-xs text-amx-muted">{condominioNome(u.condominio_id) || 'sem condomínio'}</span>
                 )}

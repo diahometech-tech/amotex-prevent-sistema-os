@@ -27,9 +27,13 @@ export async function GET(request: NextRequest) {
   }
 
   const users = await Database.getUsers();
+  // app_ativo = tem a notificação do celular ligada (src/lib/push.ts). Só
+  // quem gere a equipe vê; o técnico recebe a lista reduzida.
+  const comApp = isEscritorio(session.role) ? new Set(await Database.getUsuarioIdsComPush()) : new Set<string>();
+  const comAppFlag = (u: User) => ({ ...safe(u), app_ativo: comApp.has(u.id) });
   if (!isAdmin(session.role)) {
     if (isEscritorio(session.role)) {
-      const equipe = users.filter((u) => u.papel !== 'sindico').map(safe);
+      const equipe = users.filter((u) => u.papel !== 'sindico').map(comAppFlag);
       return NextResponse.json({ users: equipe });
     }
     const tecnicos = users
@@ -37,7 +41,7 @@ export async function GET(request: NextRequest) {
       .map((u) => ({ id: u.id, nome: u.nome }));
     return NextResponse.json({ users: tecnicos });
   }
-  return NextResponse.json({ users: users.map(safe) });
+  return NextResponse.json({ users: users.map(comAppFlag) });
 }
 
 // POST /api/users — cria usuário. Só admin.

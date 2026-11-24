@@ -6,7 +6,7 @@ type Pool = InstanceType<typeof import('pg').Pool>;
 import type {
   DbBackend, Condominio, Reservatorio, Contato, Equipamento, User, EventoAlerta,
   Alerta, Playbook, Escalonamento, OS, ChecklistItem, Foto, AuditLog, SessionLog,
-  Cobranca, AjusteValor, Reajuste, PlantaoEscala,
+  Cobranca, AjusteValor, Reajuste, PlantaoEscala, PushInscricao,
 } from './db';
 import { defaultUsers, CONDOMINIO_CAMPOS_CADASTRO } from './db';
 
@@ -330,6 +330,17 @@ async function runSchemaMigration(): Promise<void> {
       CHECK (fim > inicio)
     );
     CREATE INDEX IF NOT EXISTS idx_plantao_escala_periodo ON plantao_escala(inicio, fim);
+    CREATE TABLE IF NOT EXISTS push_inscricao (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      user_agent TEXT,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+      ultimo_uso_em TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_push_inscricao_usuario ON push_inscricao(usuario_id);
   `);
 
   const { rows } = await p.query('SELECT COUNT(*)::int AS n FROM usuario');
@@ -826,6 +837,37 @@ export const pgBackend: DbBackend = {
       'INSERT INTO configuracao (chave, valor) VALUES ($1,$2) ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor',
       [chave, valor]
     );
+  },
+
+  // ----- Avisos do app (Web Push) -----
+  async upsertPushInscricao(i) {
+    await q(
+      `INSERT INTO push_inscricao (id, usuario_id, endpoint, p256dh, auth, user_agent, criado_em, ultimo_uso_em)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (endpoint) DO UPDATE SET usuario_id = EXCLUDED.usuario_id, p256dh = EXCLUDED.p256dh,
+         auth = EXCLUDED.auth, user_agent = EXCLUDED.user_agent, ultimo_uso_em = EXCLUDED.ultimo_uso_em`,
+      [i.id, i.usuario_id, i.endpoint, i.p256dh, i.auth, i.user_agent ?? null, i.criado_em, i.ultimo_uso_em ?? null]
+    );
+  },
+  async getPushInscricaoByEndpoint(endpoint) {
+    const { rows } = await q('SELECT * FROM push_inscricao WHERE endpoint = $1', [endpoint]);
+    return (rows[0] as PushInscricao) || null;
+  },
+  async getPushInscricoesByUsuarios(usuarioIds) {
+    if (usuarioIds.length === 0) return [];
+    const { rows } = await q('SELECT * FROM push_inscricao WHERE usuario_id = ANY($1::uuid[])', [usuarioIds]);
+    return rows as PushInscricao[];
+  },
+  async getUsuarioIdsComPush() {
+    const { rows } = await q('SELECT DISTINCT usuario_id FROM push_inscricao');
+    return rows.map((r: { usuario_id: string }) => r.usuario_id);
+  },
+  async deletePushInscricaoByEndpoint(endpoint) {
+    const res = await q('DELETE FROM push_inscricao WHERE endpoint = $1', [endpoint]);
+    return (res.rowCount || 0) > 0;
+  },
+  async tocarPushInscricao(id) {
+    await q('UPDATE push_inscricao SET ultimo_uso_em = now() WHERE id = $1', [id]);
   },
 
   // ----- Auditoria -----

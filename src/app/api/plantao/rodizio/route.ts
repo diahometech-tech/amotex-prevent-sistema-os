@@ -3,6 +3,7 @@ import { Database } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/auth';
 import { podeGerirPlantao } from '@/lib/roles';
 import { atendeCorretiva, erroParaPlantao } from '@/lib/plantao';
+import { usuariosComPush } from '@/lib/push';
 import { erroDoRodizio, gerarRodizio, sePeriodosSobrepoem } from '@/lib/plantao-escala';
 import { hojeISO } from '@/lib/os-agenda';
 
@@ -17,6 +18,7 @@ export async function POST(request: NextRequest) {
   if (!session || !podeGerirPlantao(session.role)) {
     return NextResponse.json({ error: 'Apenas o escritório monta a escala de plantão.' }, { status: 403 });
   }
+  const comApp = await usuariosComPush();
   try {
     const body = await request.json();
     const usuarios: string[] = Array.isArray(body?.usuarios_ids) ? body.usuarios_ids.filter((i: unknown) => typeof i === 'string') : [];
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest) {
     for (const id of usuarios) {
       const u = porId.get(id);
       if (!u || !atendeCorretiva(u)) return NextResponse.json({ error: 'Escolha só técnicos de corretiva ativos.' }, { status: 400 });
-      const semCanal = erroParaPlantao(u);
+      const semCanal = erroParaPlantao(u, comApp);
       if (semCanal) return NextResponse.json({ error: semCanal }, { status: 400 });
     }
 

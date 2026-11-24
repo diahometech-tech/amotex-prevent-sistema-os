@@ -4,6 +4,7 @@ import { getSessionFromRequest, canManageUsers, hashPassword } from '@/lib/auth'
 import { isSecretaria } from '@/lib/roles';
 import { normalizarEspecialidade, normalizarTelegramChatId } from '@/lib/usuario-campos';
 import { erroParaPlantao } from '@/lib/plantao';
+import { usuariosComPush } from '@/lib/push';
 
 function safe(u: User) {
   const { senha_hash: _senha_hash, ...rest } = u;
@@ -40,7 +41,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const alvo = await Database.getUserById(id);
       if (!alvo) return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
       const chat = body.telegram_chat_id !== undefined ? normalizarTelegramChatId(body.telegram_chat_id) : alvo.telegram_chat_id;
-      const erro = erroParaPlantao({ nome: alvo.nome, telegram_chat_id: chat ?? undefined });
+      const erro = erroParaPlantao({ id: alvo.id, nome: alvo.nome, telegram_chat_id: chat ?? undefined }, await usuariosComPush());
       if (erro) return NextResponse.json({ error: erro }, { status: 400 });
     }
     const { senha, ativo, condominio_id } = body;

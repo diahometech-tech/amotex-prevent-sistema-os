@@ -23,25 +23,20 @@ import { periodoAtendimento, type PeriodoAtendimento } from './horario-comercial
 /** Um período da escala (o que `plantonistasEm` precisa; as datas são instantes ISO). */
 export type PeriodoEscala = Pick<PlantaoEscala, 'usuario_id' | 'inicio' | 'fim'>;
 
-// Canal de aviso = por onde a pessoa recebe a corretiva. Hoje é o Telegram.
-// Quando o app ganhar notificação própria, é só acrescentar a condição aqui:
-// a marcação de plantão (manual e na escala) e o aviso já passam por este
-// helper.
-export function temCanalDeAviso(u: Pick<User, 'telegram_chat_id'>): boolean {
-  return !!u.telegram_chat_id;
-}
-
 /**
  * Confere se a pessoa pode entrar no plantão (manual ou na escala): precisa ter
- * canal de aviso. Devolve a mensagem de recusa ou null.
+ * canal de aviso (Telegram ou app). Devolve a mensagem de recusa ou null.
  */
-export function erroParaPlantao(u: Pick<User, 'nome' | 'telegram_chat_id'>): string | null {
-  return temCanalDeAviso(u) ? null : mensagemSemCanalDeAviso(u.nome);
+export function erroParaPlantao(
+  u: Pick<User, 'id' | 'nome' | 'telegram_chat_id'>,
+  comApp?: ReadonlySet<string>
+): string | null {
+  return temCanalDeAviso(u, comApp) ? null : mensagemSemCanalDeAviso(u.nome);
 }
 
 /** Texto único da recusa de plantão para quem não tem canal de aviso. */
 export function mensagemSemCanalDeAviso(nome: string): string {
-  return `Cadastre o Telegram de ${nome} em Usuários antes de colocá-lo de plantão.`;
+  return `${nome} não recebe aviso: cadastre o Telegram dele em Usuários ou ligue os avisos do app no celular dele antes de colocá-lo de plantão.`;
 }
 
 export function atendeCorretiva(u: Pick<User, 'papel' | 'especialidade' | 'ativo'>): boolean {
@@ -108,24 +103,36 @@ export function plantonistasEm<T extends Pick<User, 'id' | 'papel' | 'especialid
   return { usuarios: ids.map((id) => porId.get(id)!), origem: 'escala', ate };
 }
 
+// Canal de aviso: Telegram cadastrado OU notificação do app ligada em algum
+// aparelho (`comApp` = ids de quem tem inscrição ativa, ver src/lib/push.ts).
+// Quem não tem nenhum dos dois não recebe aviso: a tela manda ligar.
+export function temCanalDeAviso(
+  u: Pick<User, 'id' | 'telegram_chat_id'>,
+  comApp?: ReadonlySet<string>
+): boolean {
+  return !!u.telegram_chat_id || !!comApp?.has(u.id);
+}
+
 export type MotivoAviso = 'atribuida' | 'comercial' | 'plantao' | 'plantao_vazio';
 
 export interface EscolhaAviso<T> {
-  /** Quem recebe (só quem tem Telegram). */
+  /** Quem recebe no Telegram (só quem tem Telegram cadastrado). */
   destinatarios: T[];
+  /** Todos os alvos do aviso, com ou sem canal. O app recebe os que têm notificação ligada. */
+  alvos: T[];
   /** Nomes de quem está de plantão; vazio = ninguém marcado (aviso a todos). Só preenchido no período de plantão. */
   plantao: string[];
-  /** Plantonistas sem Telegram — o aviso não chega neles; a tela alerta. */
+  /** Plantonistas sem Telegram nem app — o aviso não chega neles; a tela alerta. */
   plantaoSemTelegram: string[];
   /** Comercial ou plantão, no momento do aviso. */
   periodo: PeriodoAtendimento;
   /** Por que os técnicos foram escolhidos assim (ver cabeçalho do arquivo). */
   motivo: MotivoAviso;
-  /** Técnicos-alvo do aviso que de fato recebem (têm Telegram). Zero = nenhum técnico foi avisado. */
+  /** Técnicos-alvo do aviso que de fato recebem (Telegram ou app). Zero = nenhum técnico foi avisado. */
   tecnicosAvisados: number;
-  /** Técnicos-alvo sem Telegram, no horário comercial e no plantão vazio (no plantão com marcado, é `plantaoSemTelegram`). */
+  /** Técnicos-alvo sem Telegram nem app, no horário comercial e no plantão vazio (no plantão com marcado, é `plantaoSemTelegram`). */
   tecnicosSemTelegram: string[];
-  /** Quando `motivo = atribuida`: o técnico dono da OS. */
+  /** Quando `motivo = atribuida`: o técnico dono da OS. `semTelegram` = sem Telegram nem app. */
   atribuido?: { id: string; nome: string; semTelegram: boolean };
 }
 
@@ -136,6 +143,8 @@ export interface OpcoesAviso {
   escala?: PeriodoEscala[];
   /** OS já tem técnico: o aviso vai só para ele (+ gestores e secretária). */
   tecnicoId?: string | null;
+  /** Quem tem notificação do app ligada. Sem isto, só o Telegram conta como canal. */
+  comApp?: ReadonlySet<string>;
 }
 
 export function escolherDestinatarios<
@@ -146,20 +155,22 @@ export function escolherDestinatarios<
   // Secretária também é avisada (19/11): é quem atende o telefone e precisa
   // saber que a corretiva abriu — junto com os gestores, sempre.
   const gestores = users.filter((u) => u.ativo && (u.papel === 'admin' || u.papel === 'secretaria'));
-  const comTelegram = (lista: T[]) => lista.filter(temCanalDeAviso);
+  const comTelegram = (lista: T[]) => lista.filter((u) => u.telegram_chat_id);
+  const comCanal = (lista: T[]) => lista.filter((u) => temCanalDeAviso(u, opcoes.comApp));
 
   // Técnico já definido (e ainda ativo): só ele, mais o escritório.
   const dono = opcoes.tecnicoId ? users.find((u) => u.id === opcoes.tecnicoId && u.ativo && u.papel === 'tecnico') : undefined;
   if (dono) {
     return {
       destinatarios: comTelegram([...gestores, dono]),
+      alvos: [...gestores, dono],
       plantao: [],
       plantaoSemTelegram: [],
-      tecnicosAvisados: temCanalDeAviso(dono) ? 1 : 0,
+      tecnicosAvisados: temCanalDeAviso(dono, opcoes.comApp) ? 1 : 0,
       tecnicosSemTelegram: [],
       periodo,
       motivo: 'atribuida',
-      atribuido: { id: dono.id, nome: dono.nome, semTelegram: !temCanalDeAviso(dono) },
+      atribuido: { id: dono.id, nome: dono.nome, semTelegram: !temCanalDeAviso(dono, opcoes.comApp) },
     };
   }
 
@@ -167,10 +178,11 @@ export function escolherDestinatarios<
   if (periodo === 'comercial') {
     return {
       destinatarios: comTelegram([...gestores, ...todos]),
+      alvos: [...gestores, ...todos],
       plantao: [],
       plantaoSemTelegram: [],
-      tecnicosAvisados: comTelegram(todos).length,
-      tecnicosSemTelegram: todos.filter((u) => !temCanalDeAviso(u)).map((u) => u.nome),
+      tecnicosAvisados: comCanal(todos).length,
+      tecnicosSemTelegram: todos.filter((u) => !temCanalDeAviso(u, opcoes.comApp)).map((u) => u.nome),
       periodo,
       motivo: 'comercial',
     };
@@ -180,10 +192,11 @@ export function escolherDestinatarios<
   const tecnicos = dePlantao.length > 0 ? dePlantao : todos;
   return {
     destinatarios: comTelegram([...gestores, ...tecnicos]),
+    alvos: [...gestores, ...tecnicos],
     plantao: dePlantao.map((u) => u.nome),
-    plantaoSemTelegram: dePlantao.filter((u) => !temCanalDeAviso(u)).map((u) => u.nome),
-    tecnicosAvisados: comTelegram(tecnicos).length,
-    tecnicosSemTelegram: dePlantao.length > 0 ? [] : tecnicos.filter((u) => !temCanalDeAviso(u)).map((u) => u.nome),
+    plantaoSemTelegram: dePlantao.filter((u) => !temCanalDeAviso(u, opcoes.comApp)).map((u) => u.nome),
+    tecnicosAvisados: comCanal(tecnicos).length,
+    tecnicosSemTelegram: dePlantao.length > 0 ? [] : tecnicos.filter((u) => !temCanalDeAviso(u, opcoes.comApp)).map((u) => u.nome),
     periodo,
     motivo: dePlantao.length > 0 ? 'plantao' : 'plantao_vazio',
   };

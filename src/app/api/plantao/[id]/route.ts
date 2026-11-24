@@ -3,6 +3,7 @@ import { Database } from '@/lib/db';
 import { getSessionFromRequest } from '@/lib/auth';
 import { podeGerirPlantao } from '@/lib/roles';
 import { atendeCorretiva, erroParaPlantao } from '@/lib/plantao';
+import { usuariosComPush } from '@/lib/push';
 import { erroDoPeriodo, normalizarInstante, periodoEncerrado, periodoIniciado, sePeriodosSobrepoem } from '@/lib/plantao-escala';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -15,6 +16,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!session || !podeGerirPlantao(session.role)) {
     return NextResponse.json({ error: 'Apenas o escritório edita a escala de plantão.' }, { status: 403 });
   }
+  const comApp = await usuariosComPush();
   const { id } = await context.params;
   try {
     const atual = await Database.getPlantaoEscalaById(id);
@@ -42,7 +44,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (body?.usuario_id !== undefined && body.usuario_id !== atual.usuario_id) {
       const novo = typeof body.usuario_id === 'string' ? await Database.getUserById(body.usuario_id) : null;
       if (!novo || !atendeCorretiva(novo)) return NextResponse.json({ error: 'Escolha um técnico de corretiva ativo.' }, { status: 400 });
-      const semCanal = erroParaPlantao(novo);
+      const semCanal = erroParaPlantao(novo, comApp);
       if (semCanal) return NextResponse.json({ error: semCanal }, { status: 400 });
       usuarioId = novo.id;
     }

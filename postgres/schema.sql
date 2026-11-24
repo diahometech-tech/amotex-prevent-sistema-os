@@ -162,6 +162,25 @@ CREATE TABLE IF NOT EXISTS audit_log (
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS configuracao (
+  chave TEXT PRIMARY KEY,
+  valor TEXT NOT NULL
+);
+
+-- Aparelhos que recebem aviso do app (Web Push). Endpoint único: se outro
+-- usuário entra no mesmo aparelho, a inscrição passa para ele.
+CREATE TABLE IF NOT EXISTS push_inscricao (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  user_agent TEXT,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ultimo_uso_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_push_inscricao_usuario ON push_inscricao(usuario_id);
+
 CREATE INDEX IF NOT EXISTS idx_reservatorio_condominio ON reservatorio(condominio_id);
 CREATE INDEX IF NOT EXISTS idx_contato_condominio ON contato(condominio_id);
 CREATE INDEX IF NOT EXISTS idx_equipamento_condominio ON equipamento(condominio_id);
