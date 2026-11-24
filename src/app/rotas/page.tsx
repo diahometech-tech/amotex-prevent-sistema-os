@@ -24,6 +24,7 @@ import { BotaoLigar, BotoesMapa } from '@/components/os/LocalDoCondominio';
 import { enderecoCompleto, linkMapa, linkWaze, type TelefoneLocal } from '@/lib/endereco';
 import type { Condominio, OS } from '@/lib/db';
 import { Icon } from '@/components/ui/Icon';
+import { compararGeografico, REGIOES } from '@/lib/regioes';
 
 // GET /api/condominios devolve também o telefone pra ligar ao chegar.
 type CondominioRota = Condominio & { contato_local?: TelefoneLocal | null };
@@ -35,6 +36,8 @@ interface TecnicoLite {
 
 // Filtro de técnico: '' = todos; SEM_TECNICO = só as não atribuídas; senão o id.
 const SEM_TECNICO = 'sem_tecnico';
+// Filtro de região (só escritório): '' = todas; SEM_REGIAO = condomínio sem região; senão a região.
+const SEM_REGIAO = 'sem_regiao';
 
 type GrupoNomeado = RotaCondominio & { nome: string };
 
@@ -60,6 +63,7 @@ function RotasContent() {
   // Escritório vê a equipe toda e filtra por técnico; técnico só tem a própria rota. (O AppShell
   // só monta esta tela depois de carregar o usuário, então `user` já existe.)
   const [filtroTecnico, setFiltroTecnico] = useState('');
+  const [filtroRegiao, setFiltroRegiao] = useState('');
 
   const condominioNome = useMemo(() => {
     const map = new Map(condominios.map((c) => [c.id, c.nome]));
@@ -126,21 +130,30 @@ function RotasContent() {
     // Técnico só tem a própria rota: a lista dele traz também corretivas sem
     // técnico (pra assumir), que ficam na tela de OS, não aqui.
     if (!verTodos) return oss.filter((o) => o.tecnico_id === user?.id);
-    if (!filtroTecnico) return oss;
-    if (filtroTecnico === SEM_TECNICO) return oss.filter((o) => !o.tecnico_id);
-    return oss.filter((o) => o.tecnico_id === filtroTecnico);
-  }, [oss, filtroTecnico, verTodos, user?.id]);
+    let lista = oss;
+    if (filtroTecnico) lista = filtroTecnico === SEM_TECNICO ? lista.filter((o) => !o.tecnico_id) : lista.filter((o) => o.tecnico_id === filtroTecnico);
+    if (filtroRegiao) {
+      const regiaoDe = (o: OS) => condominioPorId.get(o.condominio_id)?.regiao ?? '';
+      lista = lista.filter((o) => (filtroRegiao === SEM_REGIAO ? !regiaoDe(o) : regiaoDe(o) === filtroRegiao));
+    }
+    return lista;
+  }, [oss, filtroTecnico, filtroRegiao, condominioPorId, verTodos, user?.id]);
 
   const rota = useMemo(() => montarRotaDoDia(doTecnico, dia, hoje), [doTecnico, dia, hoje]);
 
   // Atrasadas entram junto na rota do dia (é trabalho pra hoje), marcadas
   // na linha. Contagem e ordem saem de resumoRotasPorCondominio — a mesma
   // função dos badges (ver o aviso em src/lib/os-priority.ts).
+  // A rota sai por região e CEP (o que fica perto fica junto); condomínio sem
+  // região vai por último. Só o chamado urgente sobe pro topo: tem prazo de 3h.
   const gruposDoDia = useMemo(
-    () => nomear(resumoRotasPorCondominio([...rota.doDia, ...rota.atrasadas]), condominioNome),
-    [rota, condominioNome]
+    () => ordenarPorRegiao(nomear(resumoRotasPorCondominio([...rota.doDia, ...rota.atrasadas]), condominioNome), condominioPorId),
+    [rota, condominioNome, condominioPorId]
   );
-  const gruposSemData = useMemo(() => nomear(resumoRotasPorCondominio(rota.semData), condominioNome), [rota, condominioNome]);
+  const gruposSemData = useMemo(
+    () => ordenarPorRegiao(nomear(resumoRotasPorCondominio(rota.semData), condominioNome), condominioPorId),
+    [rota, condominioNome, condominioPorId]
+  );
 
   // "X de Y feitas": só quando a rota é de UM técnico (a dele, ou o filtro do
   // escritório). Y = visitas agendadas pro dia, X = as finalizadas.
@@ -163,8 +176,8 @@ function RotasContent() {
       .filter((o) => preventivaAberta(o) && !!o.data_programada && o.data_programada > hoje && o.data_programada.slice(0, 7) === hoje.slice(0, 7))
       .sort((a, b) => a.data_programada!.localeCompare(b.data_programada!) || a.id.localeCompare(b.id))
       .slice(0, 3);
-    return nomear(resumoRotasPorCondominio(proximas), condominioNome);
-  }, [terminouTudo, doTecnico, hoje, condominioNome]);
+    return ordenarPorRegiao(nomear(resumoRotasPorCondominio(proximas), condominioNome), condominioPorId);
+  }, [terminouTudo, doTecnico, hoje, condominioNome, condominioPorId]);
 
   const totalDoDia = rota.doDia.length + rota.atrasadas.length;
   const totalUrgentes = gruposDoDia.reduce((acc, g) => acc + g.urgentes, 0);
@@ -222,6 +235,11 @@ function RotasContent() {
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white">{g.nome}</p>
+          {cond?.regiao && (
+            <p className="text-[11px] font-semibold text-amx-blue-light">
+              {cond.regiao}{cond.cep ? ` · CEP ${cond.cep}` : ''}
+            </p>
+          )}
           {local?.endereco && <p className="text-xs text-amx-muted select-text">{local.endereco}</p>}
           {(local?.mapa || local?.ligar) && (
             <div className="flex flex-wrap gap-2 mt-2">
@@ -367,6 +385,21 @@ function RotasContent() {
               <option value={SEM_TECNICO}>Não atribuídas</option>
             </Select>
           )}
+          {verTodos && (
+            <Select
+              id="rota-regiao"
+              aria-label="Filtrar por região"
+              value={filtroRegiao}
+              onChange={(e) => setFiltroRegiao(e.target.value)}
+              className="w-auto py-1.5 text-xs"
+            >
+              <option value="">Todas as regiões</option>
+              {REGIOES.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+              <option value={SEM_REGIAO}>Sem região</option>
+            </Select>
+          )}
           {podePlanejarPreventivas(user.role) && (
             <div className="flex flex-wrap gap-2 sm:ml-auto">
               <Button size="sm" variant="secondary" onClick={() => setShowReorganizar(true)}>
@@ -448,6 +481,16 @@ function RotasContent() {
 
 function nomear(grupos: RotaCondominio[], condominioNome: (id: string) => string): GrupoNomeado[] {
   return grupos.map((g) => ({ ...g, nome: condominioNome(g.condominio_id) }));
+}
+
+// Região e CEP; sem região no fim. Chamado urgente (corretiva, 3h para chegar)
+// vem antes, e dentro de cada bloco vale a ordem por região.
+function ordenarPorRegiao(grupos: GrupoNomeado[], condominios: Map<string, CondominioRota>): GrupoNomeado[] {
+  const ponto = (g: GrupoNomeado) => {
+    const c = condominios.get(g.condominio_id);
+    return { nome: g.nome, regiao: c?.regiao, cep: c?.cep };
+  };
+  return [...grupos].sort((a, b) => Number(b.urgentes > 0) - Number(a.urgentes > 0) || compararGeografico(ponto(a), ponto(b)));
 }
 
 export default function RotasPage() {

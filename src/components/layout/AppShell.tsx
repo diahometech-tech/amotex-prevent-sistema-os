@@ -42,6 +42,7 @@ const GRUPOS: { titulo: string; itens: NavItem[] }[] = [
     itens: [
       { href: '/', label: 'Ordens de Serviço', icon: 'os', modulo: 'os' },
       { href: '/rotas', label: 'Rotas', icon: 'rotas', modulo: 'rotas' },
+      { href: '/plantao', label: 'Escala de plantão', icon: 'relogio', modulo: 'plantao' },
       { href: '/dashboard', label: 'Dashboard', icon: 'dashboard', modulo: 'dashboard' },
     ],
   },

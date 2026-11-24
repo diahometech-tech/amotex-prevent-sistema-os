@@ -6,7 +6,7 @@ type Pool = InstanceType<typeof import('pg').Pool>;
 import type {
   DbBackend, Condominio, Reservatorio, Contato, Equipamento, User, EventoAlerta,
   Alerta, Playbook, Escalonamento, OS, ChecklistItem, Foto, AuditLog, SessionLog,
-  Cobranca, AjusteValor, Reajuste,
+  Cobranca, AjusteValor, Reajuste, PlantaoEscala,
 } from './db';
 import { defaultUsers, CONDOMINIO_CAMPOS_CADASTRO } from './db';
 
@@ -266,6 +266,8 @@ async function runSchemaMigration(): Promise<void> {
     ALTER TABLE condominio ADD COLUMN IF NOT EXISTS desativado_em DATE;
     ALTER TABLE condominio ADD COLUMN IF NOT EXISTS observacoes TEXT;
     CREATE INDEX IF NOT EXISTS idx_condominio_cnpj ON condominio(cnpj);
+    -- Região do condomínio (22/11): agrupa planejamento e rota do dia. Opcional.
+    ALTER TABLE condominio ADD COLUMN IF NOT EXISTS regiao TEXT;
 
     CREATE TABLE IF NOT EXISTS cobranca (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -316,6 +318,18 @@ async function runSchemaMigration(): Promise<void> {
       chave TEXT PRIMARY KEY,
       valor TEXT NOT NULL
     );
+
+    -- Escala de plantão (22/11): uma linha = alguém de plantão no intervalo.
+    CREATE TABLE IF NOT EXISTS plantao_escala (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      usuario_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+      inicio TIMESTAMPTZ NOT NULL,
+      fim TIMESTAMPTZ NOT NULL,
+      criado_por TEXT NOT NULL,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CHECK (fim > inicio)
+    );
+    CREATE INDEX IF NOT EXISTS idx_plantao_escala_periodo ON plantao_escala(inicio, fim);
   `);
 
   const { rows } = await p.query('SELECT COUNT(*)::int AS n FROM usuario');
@@ -333,6 +347,14 @@ async function runSchemaMigration(): Promise<void> {
 async function q(text: string, params?: unknown[]) {
   await ensureSchema();
   return getPool().query(text, params);
+}
+
+function plantaoDaLinha(r: Record<string, unknown>): PlantaoEscala {
+  const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v));
+  return {
+    id: String(r.id), usuario_id: String(r.usuario_id), inicio: iso(r.inicio), fim: iso(r.fim),
+    criado_por: String(r.criado_por), criado_em: iso(r.criado_em),
+  };
 }
 
 export const pgBackend: DbBackend = {
@@ -550,6 +572,34 @@ export const pgBackend: DbBackend = {
   },
   async deleteUser(id) {
     const res = await q('DELETE FROM usuario WHERE id = $1', [id]);
+    return (res.rowCount || 0) > 0;
+  },
+
+  // ----- Escala de plantão -----
+  // TIMESTAMPTZ chega como Date: devolve sempre ISO (string), como o backend JSON.
+  async getPlantaoEscala() {
+    const { rows } = await q('SELECT * FROM plantao_escala ORDER BY inicio, id');
+    return rows.map(plantaoDaLinha);
+  },
+  async getPlantaoEscalaById(id) {
+    const { rows } = await q('SELECT * FROM plantao_escala WHERE id = $1', [id]);
+    return rows[0] ? plantaoDaLinha(rows[0]) : null;
+  },
+  async insertPlantaoEscala(p) {
+    await q(
+      'INSERT INTO plantao_escala (id, usuario_id, inicio, fim, criado_por, criado_em) VALUES ($1,$2,$3,$4,$5,$6)',
+      [p.id, p.usuario_id, p.inicio, p.fim, p.criado_por, p.criado_em]
+    );
+  },
+  async updatePlantaoEscala(id, updates) {
+    const { sets, vals } = buildSet(['usuario_id', 'inicio', 'fim'], updates);
+    if (sets.length === 0) return this.getPlantaoEscalaById(id);
+    vals.push(id);
+    const { rows } = await q(`UPDATE plantao_escala SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING *`, vals);
+    return rows[0] ? plantaoDaLinha(rows[0]) : null;
+  },
+  async deletePlantaoEscala(id) {
+    const res = await q('DELETE FROM plantao_escala WHERE id = $1', [id]);
     return (res.rowCount || 0) > 0;
   },
 

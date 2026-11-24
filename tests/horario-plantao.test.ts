@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { User } from '../src/lib/db';
 import { emHorarioComercial, periodoAtendimento } from '../src/lib/horario-comercial';
-import { atendeCorretiva, escolherDestinatarios, plantonistas } from '../src/lib/plantao';
+import { atendeCorretiva, escolherDestinatarios, plantonistasEm } from '../src/lib/plantao';
+
+const plantonistas = (users: User[]) => plantonistasEm(new Date('2026-11-23T12:00:00Z'), [], users).usuarios;
 
 // Horários em Brasília (UTC-3, sem horário de verão desde 2019).
 describe('horário comercial', () => {

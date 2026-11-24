@@ -19,10 +19,24 @@
           "titulo": "Dashboard e plantão",
           "passos": [
             "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
-            "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
+            "Em Plantão agora você vê quem está de plantão e de onde vem: \"pela escala, até dom 08:00\" ou \"marcado à mão\". A escala (menu Escala de plantão) manda; sem ninguém na escala naquele horário, vale a marcação à mão: clique no nome do técnico para marcá-lo (fica verde) e de novo para desmarcar.",
+            "Trocar plantonista agora: escolha o técnico na lista do card e clique em Trocar. Ele assume na hora, até o fim do plantão atual, e quem estava de plantão sai. A escala de depois continua como estava.",
+            "Só entra de plantão quem tem Telegram cadastrado. Sem ele, o sistema recusa com o recado \"Cadastre o Telegram de fulano em Usuários antes de colocá-lo de plantão.\"",
             "Horário comercial e plantão: de segunda a sexta, das 8h às 18h, e no sábado, das 8h às 16h, é horário comercial. Fora disso, e no domingo o dia todo, é plantão. Em horário comercial, o aviso de corretiva sem técnico vai para todos os técnicos de corretiva, para os gestores e para a secretária; quem estiver mais perto assume a OS. No plantão, vai só para o plantonista marcado (mais gestores e secretária). Sem ninguém marcado de plantão, vai para todos os técnicos de corretiva e o sistema avisa isso na tela de quem abriu a OS.",
             "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Cadastre o ID do Telegram dela em Usuários.",
-            "Os quadros mostram corretivas fora do prazo, chegada em até 3h, OS abertas, pendências críticas, alertas e a rota do dia."
+            "Os quadros mostram corretivas fora do prazo, chegada em até 3h, OS abertas, pendências críticas, alertas e a rota do dia.",
+            "Capacidade da equipe: no Dashboard, o gráfico mostra quantas visitas de preventiva cada técnico faz por dia útil (média real das últimas 4 e 8 semanas), as visitas que o mês exige, a capacidade do mês, quantos condomínios cabem com a equipe de hoje e quantos técnicos a meta da carteira pede. Com menos de 2 semanas de histórico aparece o aviso \"Poucos dados ainda\" e a conta usa a meta por técnico/dia."
+          ]
+        },
+        {
+          "titulo": "Escala de plantão",
+          "passos": [
+            "Abra Escala de plantão no menu. No alto, Plantão agora mostra quem está de plantão; abaixo, os períodos das próximas semanas.",
+            "Adicionar período: escolha o técnico, o início e o fim e clique em Adicionar período. Pode haver mais de uma pessoa no mesmo horário.",
+            "Gerar rodízio: toque nos técnicos na ordem em que vão se revezar, escolha o dia e a hora da troca (por exemplo, segunda às 08:00), a duração (7 dias) e quantas semanas. Clique em Ver prévia, confira e clique em Criar. Rodar de novo não duplica: o que já existe para a mesma pessoa é pulado.",
+            "Editar ou excluir: Editar muda técnico, início e fim de um período que ainda não começou. Excluir só vale para período futuro. Quem já está de plantão: use Mudar o fim (para encerrar agora, ponha o horário de agora).",
+            "A escala manda: em qualquer horário coberto por um período, o aviso de corretiva vai para quem está nele (mais gestores e secretária). Sem período cobrindo, vale a marcação à mão do card Plantão agora. Em horário comercial o aviso continua indo para todos os técnicos.",
+            "Todos os horários são de São Paulo. Só entra na escala técnico de corretiva, ativo e com Telegram cadastrado."
           ]
         },
         {
@@ -55,13 +69,16 @@
         {
           "titulo": "Rotas e planejamento de preventivas",
           "passos": [
-            "Em Rotas você vê as visitas do dia, agrupadas por condomínio. Use as setas para mudar o dia e Hoje para voltar.",
+            "Em Rotas você vê as visitas do dia, agrupadas por condomínio e ordenadas por região e CEP (a região aparece em cada parada; condomínio sem região vem por último; corretiva urgente sobe para o topo). Use as setas para mudar o dia e Hoje para voltar.",
             "Filtre por técnico para ver a rota de cada um.",
+            "Filtre por região para ver só a zona que interessa (Centro, Zona Norte, Zona Sul, Zona Leste, Zona Oeste, Grande SP, Outra ou Sem região).",
             "Para montar o mês, clique em Planejar preventivas do mês, escolha o mês e clique em Ver prévia.",
             "Confira a distribuição por dia e por técnico. Só então clique em Criar OS preventivas.",
             "Rodar de novo no mesmo mês não duplica: quem já tem preventiva no mês fica de fora.",
+            "O planejamento agrupa por região: quem já fez preventiva antes volta no mesmo dia do mês; os novos vão para o dia e o técnico que já têm visita da mesma região, sem misturar regiões no mesmo dia quando dá. Na prévia aparece a região de cada visita. A reorganização das sobras também mantém a fila do dia agrupada por região.",
             "Técnico só de Corretiva não entra no planejamento de preventivas.",
             "Meta por técnico/dia: em Rotas, o campo Meta por técnico/dia (padrão 5) define quantas preventivas cada técnico faz por dia, de segunda a sexta. Altere o número e clique em Salvar meta; vale para os próximos planejamentos e reorganizações.",
+            "Planejar preventivas aos sábados: ao lado da meta, o interruptor liga o sábado como dia de preventiva (padrão desligado; domingo nunca entra). Vale para o planejamento do mês, para a reorganização das sobras e para o próximo dia útil. A mudança salva na hora.",
             "Sobras vão sozinhas para o dia seguinte: o que o técnico não fez fica na frente da fila do próximo dia útil e o resto da fila desliza, sem passar da meta por dia. Corretivas não mudam de data.",
             "Reorganizar agora: em Rotas, clique em Reorganizar agora, confira a prévia do que muda de dia e clique em Aplicar. Rodar duas vezes no mesmo dia não muda nada. Durante o expediente, o que já é de hoje continua em hoje; as visitas abertas de hoje só passam para o próximo dia útil na reorganização das 5h. A fila nunca passa para o mês seguinte: o que não cabe na meta fica no último dia útil do mês, acima dela, e aparece marcado na prévia.",
             "Todo dia às 5h a reorganização roda sozinha, chamada pelo n8n em POST /api/integracoes/reorganizar-rotas com o cabeçalho X-Amotex-Secret (o mesmo segredo do webhook). O workflow do n8n ainda precisa ser criado: agende uma chamada diária às 5h, sem corpo. Cada visita remarcada fica registrada no histórico da OS como Reagendada automática.",
@@ -74,7 +91,8 @@
           "passos": [
             "Em Condomínios, clique em + Novo Condomínio. Digite o CNPJ e toque em Buscar: nome e endereço vêm da Receita.",
             "Preencha o contrato: valor mensal, dia de vencimento, início do contrato, índice de reajuste e preventivas por mês.",
-            "Para cadastrar vários de uma vez, use Importar planilha.",
+            "No endereço, digite o CEP: o sistema sugere a Região (Centro, Zona Norte, Zona Sul, Zona Leste, Zona Oeste, Grande SP ou Outra). Você pode trocar. A região organiza a rota e o planejamento das preventivas.",
+            "Para cadastrar vários de uma vez, use Importar planilha. A planilha aceita as colunas CEP e Região; sem a região, o condomínio novo recebe a sugerida pelo CEP.",
             "Na página do condomínio: Editar, Ver painel, ajustes temporários de valor e as abas Reservatórios, Contatos e Equipamentos.",
             "Em Acesso do síndico ao painel, clique em + Criar acesso. O sistema gera a senha e monta a mensagem pronta: clique em Copiar mensagem e envie ao síndico.",
             "Cliente que saiu: Editar e desmarque Contrato ativo (mantém o histórico). Apagar condomínio é só para cadastro de teste ou feito por engano e pede para digitar o nome.",
@@ -139,6 +157,10 @@
         {
           "pergunta": "Um condomínio cancelou o contrato.",
           "resposta": "Abra o condomínio, clique em Editar e desmarque Contrato ativo. Não use Apagar condomínio."
+        },
+        {
+          "pergunta": "Não consigo colocar um técnico de plantão.",
+          "resposta": "Se aparecer \"Cadastre o Telegram de fulano em Usuários antes de colocá-lo de plantão\", abra Usuários, edite o técnico e preencha o ID do Telegram. Sem ele a pessoa não receberia o aviso. Quem já estava de plantão sem Telegram continua aparecendo com o selo SEM TELEGRAM."
         }
       ]
     },
@@ -195,7 +217,10 @@
           "titulo": "Plantão",
           "passos": [
             "Abra Dashboard no menu (à esquerda no computador; no celular, pelo botão Menu no topo).",
-            "Em Plantão agora, clique no nome do técnico para marcá-lo de plantão (fica verde). Clique de novo para desmarcar.",
+            "Em Plantão agora (Dashboard) você vê quem está de plantão e de onde vem: \"pela escala, até dom 08:00\" ou \"marcado à mão\". A escala manda; sem ninguém na escala naquele horário, vale a marcação à mão: clique no nome do técnico para marcá-lo (fica verde) e de novo para desmarcar.",
+            "Trocar plantonista agora: escolha o técnico na lista do card e clique em Trocar. Ele assume na hora, até o fim do plantão atual.",
+            "Escala de plantão (menu): Adicionar período (técnico, início e fim), Gerar rodízio (técnicos na ordem, dia e hora da troca, duração e semanas; confira a prévia e clique em Criar) e Editar ou Excluir período que ainda não começou. Para encerrar um plantão em andamento, use Mudar o fim.",
+            "Só entra de plantão quem tem Telegram cadastrado. Se aparecer \"Cadastre o Telegram de fulano em Usuários antes de colocá-lo de plantão\", avise o gestor para cadastrar.",
             "Horário comercial e plantão: de segunda a sexta, das 8h às 18h, e no sábado, das 8h às 16h, é horário comercial. Fora disso, e no domingo o dia todo, é plantão. Em horário comercial, o aviso de corretiva sem técnico vai para todos os técnicos de corretiva, para os gestores e para você. No plantão, vai só para o plantonista marcado, para os gestores e para você. Sem ninguém marcado de plantão, vai para todos os técnicos de corretiva e o sistema avisa na tela.",
             "O selo SEM TELEGRAM indica que a pessoa não recebe o aviso no celular. Avise o gestor para cadastrar o ID dela.",
             "Reagendar a visita é com você e com o gestor: o técnico não muda a data e liga para o escritório. Se aparecer o recado de aviso não enviado ou plantonista sem Telegram, ligue para a pessoa."
@@ -204,13 +229,16 @@
         {
           "titulo": "Rotas do dia e preventivas do mês",
           "passos": [
-            "Em Rotas você vê as visitas do dia, agrupadas por condomínio. Use as setas para mudar o dia e Hoje para voltar.",
+            "Em Rotas você vê as visitas do dia, agrupadas por condomínio e ordenadas por região e CEP (a região aparece em cada parada; condomínio sem região vem por último; corretiva urgente sobe para o topo). Use as setas para mudar o dia e Hoje para voltar.",
             "Escolha um técnico no filtro para ver a rota dele.",
+            "Escolha uma região no filtro para ver só a zona que interessa.",
             "Para montar o mês, clique em Planejar preventivas do mês, escolha o mês e clique em Ver prévia.",
             "Confira a distribuição por dia e por técnico. Só então clique em Criar OS preventivas.",
             "Rodar de novo no mesmo mês não duplica: quem já tem preventiva no mês fica de fora.",
+            "O planejamento agrupa por região: os condomínios novos vão para o dia e o técnico que já têm visita da mesma região, sem misturar regiões no mesmo dia quando dá.",
             "Você não marca visita como feita. Isso é do técnico, quando chega ao condomínio.",
             "Meta por técnico/dia: em Rotas, o campo Meta por técnico/dia (padrão 5) define quantas preventivas cada técnico faz por dia, de segunda a sexta. Altere o número e clique em Salvar meta; vale para os próximos planejamentos e reorganizações.",
+            "Planejar preventivas aos sábados: ao lado da meta, o interruptor liga o sábado como dia de preventiva (padrão desligado; domingo nunca entra). Vale para o planejamento do mês, para a reorganização das sobras e para o próximo dia útil. A mudança salva na hora.",
             "Sobras vão sozinhas para o dia seguinte: o que o técnico não fez fica na frente da fila do próximo dia útil e o resto da fila desliza, sem passar da meta por dia. Corretivas não mudam de data.",
             "Reorganizar agora: em Rotas, clique em Reorganizar agora, confira a prévia do que muda de dia e clique em Aplicar. Rodar duas vezes no mesmo dia não muda nada. Durante o expediente, o que já é de hoje continua em hoje; as visitas abertas de hoje só passam para o próximo dia útil na reorganização das 5h. A fila nunca passa para o mês seguinte: o que não cabe na meta fica no último dia útil do mês, acima dela, e aparece marcado na prévia.",
             "Painel do mês: no alto de Rotas, a tabela mostra por técnico e no total as preventivas do mês: feitas, faltam e o ritmo necessário por dia útil restante para fechar o mês.",
@@ -264,6 +292,10 @@
         {
           "pergunta": "Não acho um botão que o gestor usa.",
           "resposta": "O botão é só do gestor ou do técnico, por isso não aparece para você. Peça ao gestor para fazer, ou para ajustar o seu perfil se for algo da sua rotina."
+        },
+        {
+          "pergunta": "Não consigo colocar um técnico de plantão.",
+          "resposta": "Se aparecer \"Cadastre o Telegram de fulano em Usuários antes de colocá-lo de plantão\", avise o gestor: só ele cadastra o ID do Telegram em Usuários. Sem ele a pessoa não receberia o aviso."
         }
       ]
     },
@@ -285,6 +317,7 @@
           "passos": [
             "Ordens de Serviço mostra só as suas OS e as corretivas que ainda estão sem técnico.",
             "Rotas mostra só a sua rota.",
+            "Escala de plantão mostra quem está de plantão agora e a sua própria escala. Só consulta: quem monta a escala é o gestor ou a secretária.",
             "Condomínios mostra só os condomínios das OS que você vê.",
             "O menu tem ainda a Ajuda. O resto é com o gestor e a secretária."
           ]
@@ -293,6 +326,7 @@
           "titulo": "Minha rota do dia",
           "passos": [
             "Abra Rotas no menu. A tela mostra só as suas visitas, sob o título Minha rota.",
+            "As paradas vêm ordenadas por região e CEP, com a região escrita em cada condomínio, para você fazer o que fica perto em sequência. Corretiva urgente sobe para o topo.",
             "Use as setas para ver os próximos dias.",
             "Ao chegar no condomínio, clique em Cheguei no local (na rota ou dentro da OS). Fica registrado \"Chegou às\" com a hora. Sem sinal, a chegada fica guardada no aparelho com a hora do toque e sobe sozinha quando a internet voltar.",
             "No alto da rota aparece quantas visitas você já fez no dia, por exemplo 3 de 5 feitas hoje.",
@@ -325,6 +359,14 @@
             "Abra a OS em Ordens de Serviço e clique em Assumir esta OS. Assim os outros técnicos sabem que você vai.",
             "Ao chegar, clique em Cheguei no local. Isso registra a hora de chegada: o prazo é de 3h a partir da abertura.",
             "Para chegar, use Google Maps ou Waze e Ligar no bloco Local da OS."
+          ]
+        },
+        {
+          "titulo": "Escala de plantão",
+          "passos": [
+            "Abra Escala de plantão no menu. Em Plantão agora aparece quem está de plantão e até quando (\"pela escala, até dom 08:00\" ou \"marcado à mão\").",
+            "Em Minha escala você vê os seus próximos plantões, com início e fim. Você não edita: para trocar um plantão, fale com o gestor ou com a secretária.",
+            "Para ser colocado de plantão é preciso ter o Telegram cadastrado. Se não tiver, peça ao gestor."
           ]
         },
         {

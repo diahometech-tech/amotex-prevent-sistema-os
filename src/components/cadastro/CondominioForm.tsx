@@ -6,6 +6,7 @@ import { Field, Input, Select, Textarea, Toggle } from '@/components/ui/Form';
 import type { Condominio, IndiceReajuste } from '@/lib/db';
 import { cnpjValido, formatarCnpj, limparCnpj, type DadosCnpj } from '@/lib/financeiro/cnpj';
 import { INDICE_LABEL } from '@/lib/financeiro/reajuste';
+import { REGIOES, regiaoPorCep } from '@/lib/regioes';
 
 // O formulário trabalha em texto (como o usuário digita); quem valida e
 // converte (centavos, CNPJ só dígitos, e-mails) é o servidor, com
@@ -34,6 +35,7 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
     cidade: initial?.cidade ?? '',
     uf: initial?.uf ?? '',
     cep: initial?.cep ?? '',
+    regiao: initial?.regiao ?? '',
     administradora: initial?.administradora ?? '',
     responsavel_nome: initial?.responsavel_nome ?? '',
     responsavel_telefone: initial?.responsavel_telefone ?? '',
@@ -53,6 +55,16 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
   const [aviso, setAviso] = useState<{ texto: string; ok: boolean } | null>(null);
 
   const set = (k: keyof typeof form, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Ao digitar o CEP (8 dígitos), sugere a região da capital. Só preenche se a
+  // região ainda está vazia ou é a sugestão do CEP anterior: nunca desfaz uma
+  // escolha feita à mão.
+  const [regiaoSugerida, setRegiaoSugerida] = useState(initial?.regiao && regiaoPorCep(initial.cep) === initial.regiao ? initial.regiao : '');
+  const mudarCep = (cep: string) => {
+    const sugestao = regiaoPorCep(cep) ?? '';
+    setForm((f) => ({ ...f, cep, regiao: f.regiao === '' || f.regiao === regiaoSugerida ? sugestao : f.regiao }));
+    setRegiaoSugerida(sugestao);
+  };
 
   // Busca os dados públicos do CNPJ e preenche só o que está vazio — nunca
   // apaga o que o usuário já digitou.
@@ -84,6 +96,7 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
         cidade: f.cidade || d.cidade || '',
         uf: f.uf || d.uf || '',
         cep: f.cep || d.cep || '',
+        regiao: f.regiao || (f.cep ? '' : (regiaoPorCep(d.cep) ?? '')),
         responsavel_telefone: f.responsavel_telefone || d.telefone || '',
         emails_cobranca: f.emails_cobranca || d.email || '',
       }));
@@ -131,9 +144,17 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
         <Field label="Endereço">{input('endereco', { placeholder: 'Rua, número - complemento' })}</Field>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="col-span-2"><Field label="Bairro">{input('bairro')}</Field></div>
-          <Field label="CEP">{input('cep', { inputMode: 'numeric' })}</Field>
+          <Field label="CEP">{input('cep', { inputMode: 'numeric', onChange: (e) => mudarCep(e.target.value) })}</Field>
           <Field label="UF">{input('uf', { maxLength: 2 })}</Field>
         </div>
+        <Field label="Região" hint="Sugerida pelo CEP; pode trocar. Agrupa as visitas que ficam perto.">
+          <Select id="cond-regiao" value={form.regiao} onChange={(e) => set('regiao', e.target.value)} disabled={busy}>
+            <option value="">Sem região</option>
+            {REGIOES.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </Select>
+        </Field>
         <Field label="Cidade">{input('cidade')}</Field>
         <Field label="Administradora">{input('administradora')}</Field>
       </Secao>

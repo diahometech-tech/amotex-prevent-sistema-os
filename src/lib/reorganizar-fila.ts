@@ -12,6 +12,12 @@
 // - Preventiva já feita/iniciada no dia ocupa vaga da meta daquele dia.
 // - Data em dia não útil (ex.: sábado marcado à mão) não é mexida, a não ser
 //   que seja sobra (data anterior ao início da fila).
+// - Região (22/11): dentro de cada dia, a fila é agrupada por região e CEP
+//   (opcao `geo`), não por ordem de cadastro — as sobras continuam na frente
+//   das visitas do dia, e o que escorrega pro dia seguinte é o fim da fila, ou
+//   seja, o último bloco de região. Sem `geo`, a ordem é data e id.
+// - Dias úteis: segunda a sexta; com "Planejar preventivas aos sábados" o
+//   chamador passa `diasUteis` com o sábado e o "próximo dia útil" muda junto.
 // - Idempotente: depois de aplicada, rodar de novo no mesmo dia não muda nada.
 // - Nunca atravessa o mês: a preventiva de novembro não vira a de dezembro
 //   (o planejamento e o painel contam por mês da data). O que não cabe até o
@@ -19,6 +25,7 @@
 //   cujo mês já acabou fica onde está (atrasada) em vez de pular de mês.
 import type { OS } from './db';
 import { DIAS_UTEIS_PREVENTIVA, diaUtilApartirDe, ehDiaUtil, proximoDiaUtil, somarDias } from './os-agenda';
+import { compararGeografico, type PontoGeografico } from './regioes';
 
 export interface MovimentoFila {
   os_id: string;
@@ -35,9 +42,11 @@ export interface OpcoesFila {
    * A rotina das 5h não usa: ali hoje ainda é o começo da fila.
    */
   manterHoje?: boolean;
+  /** Região/CEP/nome de cada condomínio (por id): agrupa a fila do dia por região. */
+  geo?: Map<string, PontoGeografico>;
 }
 
-type OsFila = Pick<OS, 'id' | 'tipo' | 'status' | 'data_programada' | 'tecnico_id' | 'entrada_em'>;
+type OsFila = Pick<OS, 'id' | 'tipo' | 'status' | 'data_programada' | 'tecnico_id' | 'entrada_em'> & { condominio_id?: string };
 
 /** Preventiva ainda por fazer: aberta, sem chegada registrada. */
 export function preventivaAberta(os: OsFila): boolean {
@@ -81,6 +90,10 @@ export function reorganizarFila(
   const porDataEId = (a: OsFila, b: OsFila) => a.data_programada!.localeCompare(b.data_programada!) || a.id.localeCompare(b.id);
   const sobras = abertas.filter((o) => o.data_programada! < inicio).sort(porDataEId);
   const futuras = abertas.filter((o) => o.data_programada! >= inicio && !(manterHoje && o.data_programada === hoje)).sort(porDataEId);
+  // Ordem dentro de um grupo (sobras / visitas de um dia): região e CEP; empate pela ordem estável acima.
+  const ponto = (o: OsFila): PontoGeografico => (o.condominio_id && opcoes.geo?.get(o.condominio_id)) || { nome: '' };
+  const porRegiao = (lista: OsFila[]) =>
+    opcoes.geo ? [...lista].sort((a, b) => compararGeografico(ponto(a), ponto(b)) || porDataEId(a, b)) : lista;
   if (sobras.length === 0 && futuras.length === 0) return [];
 
   const ultimaData = [...sobras, ...futuras].reduce((max, o) => (o.data_programada! > max ? o.data_programada! : max), inicio);
@@ -91,8 +104,8 @@ export function reorganizarFila(
     if (vaiParaFrente.length === 0 && d > ultimaData) break;
     if (!ehDiaUtil(d, diasUteis)) continue; // fim de semana não recebe sobra nem desliza
 
-    const doDia = futuras.filter((o) => o.data_programada === d);
-    const fila = [...vaiParaFrente, ...doDia]; // sobras primeiro
+    const doDia = porRegiao(futuras.filter((o) => o.data_programada === d));
+    const fila = [...porRegiao(vaiParaFrente), ...doDia]; // sobras primeiro
     const vagas = Math.max(0, meta - (ocupadas.get(d) ?? 0));
     // Último dia útil do mês: o que sobrou fica aqui, acima da meta.
     const ultimoDoMes = proximoDiaUtil(d, diasUteis).slice(0, 7) !== d.slice(0, 7);

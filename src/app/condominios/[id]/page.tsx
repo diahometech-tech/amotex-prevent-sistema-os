@@ -462,6 +462,7 @@ function CondominioDetailContent() {
               {condominio.administradora}
             </p>
           )}
+          {condominio.regiao && <p className="text-xs text-amx-muted mt-0.5">Região: {condominio.regiao}</p>}
         </div>
         <div className="flex items-center gap-2">
           <Badge
