@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { fmtHora } from '@/lib/os-sla';
 import { LIMITE_RASTREIO_MS } from '@/lib/rastreio';
+import { pedirLocalizacao, type ResultadoPedido } from '@/lib/localizacao-cliente';
 
 export const INTERVALO_ENVIO_MS = 15_000;
 
@@ -22,8 +23,23 @@ interface WakeLockSentinelLike {
   release: () => Promise<void>;
 }
 
-export function CompartilharLocalizacao({ osId, aCaminhoEm, ativo }: { osId: string; aCaminhoEm: string; ativo: boolean }) {
+export function CompartilharLocalizacao({
+  osId,
+  aCaminhoEm,
+  ativo,
+  pedidoInicial = null,
+}: {
+  osId: string;
+  aCaminhoEm: string;
+  ativo: boolean;
+  /** Resultado do pedido de permissão feito no toque de "Estou a caminho". */
+  pedidoInicial?: ResultadoPedido | null;
+}) {
   const [estado, setEstado] = useState<Estado>('iniciando');
+  // Reinicia o envio depois de "Tentar de novo" ou de a permissão ser liberada.
+  const [tentativa, setTentativa] = useState(0);
+  const [falhaPedido, setFalhaPedido] = useState<ResultadoPedido | null>(pedidoInicial);
+  const [tentando, setTentando] = useState(false);
   const [ultimoEnvio, setUltimoEnvio] = useState<number | null>(null);
   const ultimaPosicao = useRef<{ lat: number; lng: number; precisao_m?: number } | null>(null);
   const ultimoEnvioRef = useRef(0);
@@ -79,6 +95,7 @@ export function CompartilharLocalizacao({ osId, aCaminhoEm, ativo }: { osId: str
         const { latitude, longitude, accuracy } = p.coords;
         ultimaPosicao.current = { lat: latitude, lng: longitude, ...(Number.isFinite(accuracy) ? { precisao_m: Math.round(accuracy) } : {}) };
         setEstado('enviando');
+        setFalhaPedido(null);
         void enviar();
       };
       const aoFalhar = (e: GeolocationPositionError) => {
@@ -122,22 +139,73 @@ export function CompartilharLocalizacao({ osId, aCaminhoEm, ativo }: { osId: str
       document.removeEventListener('visibilitychange', aoMudarVisibilidade);
       wakeLock?.release().catch(() => {});
     };
-  }, [ativo, osId, aCaminhoEm]);
+  }, [ativo, osId, aCaminhoEm, tentativa]);
+
+  // Se a pessoa liberar a localização nos ajustes do celular, retoma sozinho.
+  useEffect(() => {
+    if (!ativo || typeof navigator === 'undefined' || !navigator.permissions?.query) return;
+    let status: PermissionStatus | null = null;
+    let vivo = true;
+    const aoMudar = () => {
+      if (status?.state === 'granted') {
+        setFalhaPedido(null);
+        setTentativa((t) => t + 1);
+      }
+    };
+    navigator.permissions
+      .query({ name: 'geolocation' })
+      .then((st) => {
+        if (!vivo) return;
+        status = st;
+        st.addEventListener('change', aoMudar);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+      status?.removeEventListener('change', aoMudar);
+    };
+  }, [ativo]);
+
+  async function tentarDeNovo() {
+    setTentando(true);
+    // Direto do toque: é o que faz o navegador mostrar a janela de permissão.
+    const r = await pedirLocalizacao();
+    setTentando(false);
+    setFalhaPedido(r === 'ok' ? null : r);
+    if (r === 'ok') setTentativa((t) => t + 1);
+  }
 
   if (!ativo || estado === 'parado') return null;
+
+  const exibido: Estado =
+    estado === 'enviando' ? estado : falhaPedido === 'negada' ? 'sem_permissao' : falhaPedido ? 'sem_gps' : estado;
+  const problema = exibido === 'sem_permissao' || exibido === 'sem_gps';
 
   return (
     <Card className="p-3 flex flex-col gap-2" data-testid="compartilhando-localizacao">
       <div className="flex items-start gap-2">
         <Icon name="mapa" size={16} className="text-amx-blue-light mt-0.5 shrink-0" />
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-white">Compartilhando sua localização com o condomínio</p>
-          {estado === 'sem_permissao' || estado === 'sem_gps' ? (
-            <p className="text-xs text-amx-muted">
-              {estado === 'sem_permissao'
-                ? 'Não foi possível usar sua localização neste aparelho. O condomínio não verá o mapa, mas o chamado segue normal.'
-                : 'Ainda sem sinal de GPS. O chamado segue normal.'}
-            </p>
+          <p className="text-[13px] font-semibold text-white">
+            {exibido === 'sem_permissao' ? 'Localização bloqueada neste celular' : 'Compartilhando sua localização com o condomínio'}
+          </p>
+          {exibido === 'sem_gps' ? (
+            <p className="text-xs text-amx-muted">Ligue a localização (GPS) do celular. O chamado segue normal.</p>
+          ) : exibido === 'sem_permissao' ? (
+            <>
+              <p className="text-xs text-amx-muted">O condomínio não verá o mapa, mas o chamado segue normal. Para liberar:</p>
+              <ul className="mt-1 list-disc pl-5 text-xs text-white/90 flex flex-col gap-1">
+                <li>
+                  <span className="font-semibold">Android (Chrome):</span> toque no cadeado ao lado do endereço do site, depois em Permissões, Localização e Permitir.
+                </li>
+                <li>
+                  <span className="font-semibold">App instalado no Android:</span> Configurações, Apps, Chrome (ou Amotex), Permissões, Localização e Permitir.
+                </li>
+                <li>
+                  <span className="font-semibold">iPhone:</span> Ajustes, Privacidade, Serviços de Localização, Safari (Sites) e &quot;Ao Usar o App&quot;.
+                </li>
+              </ul>
+            </>
           ) : (
             <p className="text-xs text-amx-muted">
               {ultimoEnvio ? `Último envio às ${fmtHora(ultimoEnvio)}.` : 'Pegando sua localização...'}
@@ -145,6 +213,16 @@ export function CompartilharLocalizacao({ osId, aCaminhoEm, ativo }: { osId: str
           )}
         </div>
       </div>
+      {problema && (
+        <button
+          type="button"
+          onClick={tentarDeNovo}
+          disabled={tentando}
+          className="self-start px-4 py-2 min-h-[44px] rounded-lg bg-amx-red hover:bg-amx-red-hover text-white text-[13px] font-semibold disabled:opacity-60"
+        >
+          {tentando ? 'Tentando...' : 'Tentar de novo'}
+        </button>
+      )}
       <p className="text-xs text-amx-amber">Deixe esta tela aberta no trajeto. Se abrir outro app, o condomínio para de ver você no mapa.</p>
       <p className="text-[11px] text-amx-muted">Sua localização só é compartilhada no caminho até o condomínio.</p>
     </Card>

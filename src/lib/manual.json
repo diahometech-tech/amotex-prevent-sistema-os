@@ -13,7 +13,7 @@
             "Para trocar a senha, abra o menu (no computador, a barra à esquerda com os nomes; no celular, o botão Menu no topo) e toque em Trocar senha, no fim do menu. Se o menu estiver só com ícones, clique na seta no fim dele para mostrar os nomes.",
             "Para sair, toque em Sair, logo abaixo de Trocar senha.",
             "Depois de alguns minutos sem uso o sistema sai sozinho por segurança. É só entrar de novo.",
-            "Quando o sistema tiver novidade, ela aparece num cartão no topo da tela inicial. Leia e toque em Entendi para ele sumir. As novidades antigas ficam guardadas no começo da Ajuda, na seção Novidades."
+            "Quando o sistema tiver novidade, ela aparece numa janela (pop-up) ao abrir a tela inicial. Leia e toque em Entendi para ela sumir. As novidades antigas ficam guardadas no começo da Ajuda, na seção Novidades."
           ]
         },
         {
@@ -211,7 +211,7 @@
             "Acesse os.amotexprevent.com.br e entre com o usuário e a senha que o gestor passou.",
             "No primeiro acesso, troque a senha: abra o menu (no computador, a barra à esquerda com os nomes; no celular, o botão Menu no topo) e toque em Trocar senha, no fim do menu.",
             "Para sair, toque em Sair, logo abaixo de Trocar senha. Depois de alguns minutos sem uso o sistema sai sozinho. É só entrar de novo.",
-            "Quando o sistema tiver novidade, ela aparece num cartão no topo da tela inicial. Leia e toque em Entendi para ele sumir. As novidades antigas ficam guardadas no começo da Ajuda, na seção Novidades."
+            "Quando o sistema tiver novidade, ela aparece numa janela (pop-up) ao abrir a tela inicial. Leia e toque em Entendi para ela sumir. As novidades antigas ficam guardadas no começo da Ajuda, na seção Novidades."
           ]
         },
         {
@@ -382,7 +382,7 @@
             "Acesse os.amotexprevent.com.br no celular e entre com o usuário e a senha que o gestor passou.",
             "No primeiro acesso, troque a senha: toque no botão Menu, no topo da tela, e depois em Trocar senha, no fim do menu. Para sair, toque em Sair, logo abaixo.",
             "Sem sinal (casa de bombas, subsolo), o sistema não sai sozinho: ele espera a internet voltar.",
-            "Quando o sistema tiver novidade, ela aparece num cartão no topo da tela inicial. Leia e toque em Entendi para ele sumir. As novidades antigas ficam guardadas no começo da Ajuda, na seção Novidades."
+            "Quando o sistema tiver novidade, ela aparece numa janela (pop-up) ao abrir a tela inicial. Leia e toque em Entendi para ela sumir. As novidades antigas ficam guardadas no começo da Ajuda, na seção Novidades."
           ]
         },
         {
@@ -432,7 +432,7 @@
         {
           "titulo": "Compartilhar a localização no trajeto",
           "passos": [
-            "Depois de tocar em Estou a caminho, a OS mostra o bloco Compartilhando sua localização com o condomínio, com a hora do último envio. O celular pergunta se pode usar a localização: toque em Permitir.",
+            "Depois de tocar em Estou a caminho, a OS mostra o bloco Compartilhando sua localização com o condomínio, com a hora do último envio. No primeiro Estou a caminho, o celular pergunta se pode usar a localização: toque em Permitir. Se você bloqueou sem querer, a tela mostra Localização bloqueada neste celular, com o passo a passo para liberar e o botão Tentar de novo.",
             "Deixe esta tela aberta no trajeto. Se abrir outro app ou bloquear a tela, o condomínio para de ver você no mapa. O sistema tenta manter a tela acesa sozinho.",
             "Não há botão de pausar. O envio para sozinho quando você toca em Cheguei no local, se a OS for cancelada ou depois de 2 horas.",
             "Se você fechar a OS e abrir de novo dentro dessas 2 horas, o envio recomeça sozinho.",
@@ -564,7 +564,7 @@
           "passos": [
             "Acesse os.amotexprevent.com.br/login com o usuário e a senha que a Amotex enviou.",
             "No primeiro acesso, troque a senha: no computador, use Trocar senha no fim do menu à esquerda; no celular, toque no botão Menu, no topo, e depois em Trocar senha. Para sair, use Sair, logo abaixo.",
-            "Quando o sistema tiver novidade, ela aparece num cartão no topo da tela inicial. Leia e toque em Entendi para ele sumir. As novidades antigas ficam guardadas no começo da Ajuda, na seção Novidades."
+            "Quando o sistema tiver novidade, ela aparece numa janela (pop-up) ao abrir a tela inicial. Leia e toque em Entendi para ela sumir. As novidades antigas ficam guardadas no começo da Ajuda, na seção Novidades."
           ]
         },
         {
