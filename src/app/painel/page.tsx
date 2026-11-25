@@ -91,7 +91,7 @@ function PainelContent() {
   // Admin/técnico com múltiplos condomínios — mostra lista
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-8 pt-6 pb-4 border-b border-amx-line">
+      <div className="px-4 sm:px-8 pt-6 pb-4 border-b border-amx-line">
         <h1 className="text-white mb-1">Painel do Síndico</h1>
         <p className="text-xs text-amx-muted">Selecione um condomínio para ver o painel.</p>
       </div>
@@ -105,7 +105,7 @@ function PainelContent() {
           <EmptyState title="Nenhum condomínio cadastrado" />
         </div>
       ) : (
-        <div className="flex-1 overflow-auto px-8 py-6">
+        <div className="flex-1 overflow-auto px-4 sm:px-8 py-6">
           <div className="grid gap-3 max-w-2xl">
             {condominios.map((condominio) => (
               <Link key={condominio.id} href={`/painel/${condominio.id}`}>

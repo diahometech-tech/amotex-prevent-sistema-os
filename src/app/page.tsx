@@ -189,7 +189,7 @@ function OsListContent() {
     <div className="flex-1 flex flex-col min-h-0">
       <NovidadesCard />
       {/* TOPBAR */}
-      <div className="px-8 pt-6 pb-4 border-b border-amx-line">
+      <div className="px-4 sm:px-8 pt-6 pb-4 border-b border-amx-line">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-[22px] font-semibold text-white normal-case tracking-normal">Ordens de Serviço</h1>
@@ -323,7 +323,7 @@ function OsListContent() {
             <div />
           </div>
 
-          <div className="flex-1 overflow-auto px-8 pb-6 flex flex-col gap-2">
+          <div className="flex-1 overflow-auto px-4 sm:px-8 pb-6 flex flex-col gap-2">
             {ordenadas.map((os) => (
               <OsRow
                 key={os.id}

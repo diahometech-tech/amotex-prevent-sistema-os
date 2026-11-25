@@ -1,7 +1,7 @@
 import React from 'react';
 
 const FIELD_CLASSES =
-  'text-sm bg-amx-panel-2 border border-amx-line rounded-lg p-2.5 text-white placeholder:text-amx-muted outline-none focus:border-amx-red disabled:opacity-50';
+  'max-w-full min-w-0 text-sm bg-amx-panel-2 border border-amx-line rounded-lg p-2.5 text-white placeholder:text-amx-muted outline-none focus:border-amx-red disabled:opacity-50';
 
 export function Field({
   label,

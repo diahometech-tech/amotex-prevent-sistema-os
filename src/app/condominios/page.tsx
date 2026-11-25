@@ -97,8 +97,8 @@ function CondominiosContent() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-8 py-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 py-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-6">
         <h1 className="text-white">Condomínios</h1>
         {podeEditarCondominio(user.role) && (
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -160,7 +160,7 @@ function CondominiosContent() {
               className="block"
             >
               <Card className="cursor-pointer hover:border-amx-muted transition-colors">
-                <div className="flex items-start justify-between">
+                <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
                   <div className="flex-1">
                     <h3 className="font-semibold text-white mb-1">
                       {condominio.nome}

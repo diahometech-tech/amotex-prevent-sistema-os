@@ -46,7 +46,7 @@ export function FotoUpload({ momento, fotos, onUpload, disabled, busy, pendentes
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-2.5">
         <p className="font-heading text-[10px] font-semibold text-amx-muted uppercase tracking-wider">{titulo}</p>
         <div className="flex items-center gap-1.5">
           {pendentes.length > 0 && <Badge tone="warning"><span className="inline-flex items-center gap-1"><Icon name="nuvemEnvio" size={12} />{pendentes.length} aguardando envio</span></Badge>}

@@ -98,7 +98,7 @@ export function ContratoCondominio({
 
   return (
     <Card className="p-5 mb-6 flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 gap-2 flex-wrap">
         <p className="font-heading text-[11px] text-amx-muted uppercase tracking-wider">Contrato e cobrança</p>
         <div className="flex items-center gap-2">
           {c.ativo === false && <Badge tone="neutral">Contrato encerrado</Badge>}
@@ -117,7 +117,7 @@ export function ContratoCondominio({
 
       {!somenteLeitura && (
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <p className="text-xs font-semibold text-white">Ajustes temporários de valor</p>
           {!novo && (
             <Button size="sm" variant="secondary" onClick={() => setNovo({ descricao: '', valor: '', inicio: hoje.slice(0, 7), fim: hoje.slice(0, 7) })}>
