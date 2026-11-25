@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
+import { NovidadesCard } from '@/components/layout/NovidadesCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -33,6 +34,7 @@ interface CondominioDetalheResponse {
 export default function PainelDetailPage() {
   return (
     <AppShell>
+      <NovidadesCard />
       <PainelDetailContent />
     </AppShell>
   );

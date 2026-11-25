@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
+import { NovidadesCard } from '@/components/layout/NovidadesCard';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import type { Condominio } from '@/lib/db';
@@ -16,6 +17,7 @@ interface CondominiosResponse {
 export default function PainelPage() {
   return (
     <AppShell>
+      <NovidadesCard />
       <PainelContent />
     </AppShell>
   );
