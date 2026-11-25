@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useIdleLogout } from '@/lib/useIdleLogout';
 import type { UserRole } from '@/lib/db';
@@ -214,16 +215,20 @@ function MenuConteudo({
 }
 
 function Marca({ comNome }: { comNome: boolean }) {
+  // Selo 670x180: expandido ~36 px de altura (134 px de largura) com a legenda
+  // embaixo; recolhido (menu de 76 px) cabe em ~56 px de largura.
   return (
-    <div className="flex items-center gap-3 min-w-0">
-      <div
-        className="w-10 h-10 shrink-0 rounded-lg bg-amx-red flex items-center justify-center font-heading font-bold text-[15px]"
-        aria-hidden
-      >
-        AP
-      </div>
+    <div className={`flex min-w-0 ${comNome ? 'flex-col items-start gap-1' : 'items-center justify-center'}`}>
+      <Image
+        src="/brand/logo-amotex-selo.png"
+        alt="Amotex"
+        width={670}
+        height={180}
+        priority
+        className={comNome ? 'h-9 w-auto shrink-0' : 'w-14 h-auto shrink-0'}
+      />
       {comNome && (
-        <span className="font-heading font-semibold text-[15px] truncate">Amotex Prevent</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-amx-muted truncate">Prevent · Sistema de OS</span>
       )}
     </div>
   );
@@ -392,12 +397,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen shrink-0 flex flex-col lg:flex-row bg-amx-bg">
         {/* Celular: barra no topo com o nome da tela e o botão Menu */}
         <header className="lg:hidden sticky top-0 z-30 h-14 shrink-0 print:hidden bg-amx-panel-2 border-b border-amx-line flex items-center gap-3 px-3">
-          <div
-            className="w-9 h-9 shrink-0 rounded-lg bg-amx-red flex items-center justify-center font-heading font-bold text-[14px]"
-            aria-hidden
-          >
-            AP
-          </div>
+          <Image
+            src="/brand/logo-amotex-selo.png"
+            alt="Amotex"
+            width={670}
+            height={180}
+            priority
+            className="h-7 w-auto shrink-0"
+          />
           <div className="flex-1 min-w-0 font-heading font-semibold text-[15px] truncate">
             {telaAtual}
           </div>
