@@ -19,7 +19,7 @@ import { pendenciasFinalizacao } from '@/lib/os-finalizacao';
 import { formatarDataCurta } from '@/lib/os-agenda';
 import { textoChegada, slaChegada, fmtHora } from '@/lib/os-sla';
 import { linkMapaCoordenadas, textoPrecisao } from '@/lib/localizacao';
-import { obterLocalizacao, corpoComLocalizacao } from '@/lib/localizacao-cliente';
+import { obterLocalizacao, corpoComLocalizacao, pedirLocalizacao, type ResultadoPedido } from '@/lib/localizacao-cliente';
 import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
 import { useTick } from '@/lib/useTick';
 import { enfileirar, ouvirFila } from '@/lib/fila-envio';
@@ -99,6 +99,8 @@ export function OSModal({
   const [busyAction, setBusyAction] = useState(false);
   const [registrandoChegada, setRegistrandoChegada] = useState(false);
   const [avisandoACaminho, setAvisandoACaminho] = useState(false);
+  const [pedidoLocalizacao, setPedidoLocalizacao] = useState<ResultadoPedido | null>(null);
+  const [avisoSemMapa, setAvisoSemMapa] = useState(false);
   const [corrigindoNome, setCorrigindoNome] = useState(false);
 
   // Fila de envio offline (src/lib/fila-envio.ts): foto e assinatura entram
@@ -373,9 +375,16 @@ export function OSModal({
   // a hora do toque e sobe sozinho.
   const avisarACaminho = async () => {
     if (!os) return;
+    const ehDono = user?.role === 'tecnico' && os.tecnico_id === user.id;
+    // Primeiro a permissão, ainda dentro do toque (antes de qualquer outro
+    // await): fora do gesto o navegador do celular pode nem mostrar a janela.
+    // Negada ou sem GPS não bloqueia o "a caminho".
+    const pedido = ehDono ? pedirLocalizacao() : null;
     setAvisandoACaminho(true);
     setActionError('');
+    setAvisoSemMapa(false);
     const horaDoToque = new Date().toISOString();
+    if (pedido) setPedidoLocalizacao(await pedido);
     try {
       const res = await fetch(`/api/os/${osId}`, {
         method: 'PATCH',
@@ -384,6 +393,7 @@ export function OSModal({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.os) {
+        if (!ehDono) setAvisoSemMapa(true);
         setOs(data.os);
         onChanged(data.os);
       } else {
@@ -790,7 +800,12 @@ export function OSModal({
             {/* Rastreio da rota (24/11): o técnico da OS compartilha a posição entre
                 "a caminho" e "cheguei"; o escritório acompanha no mapa. */}
             {!isClosed && os.a_caminho_em && !os.entrada_em && !chegadaPendente && user?.role === 'tecnico' && os.tecnico_id === user.id && (
-              <CompartilharLocalizacao osId={osId} aCaminhoEm={os.a_caminho_em} ativo />
+              <CompartilharLocalizacao osId={osId} aCaminhoEm={os.a_caminho_em} ativo pedidoInicial={pedidoLocalizacao} />
+            )}
+            {avisoSemMapa && !isClosed && os.a_caminho_em && !os.entrada_em && !(user?.role === 'tecnico' && os.tecnico_id === user.id) && (
+              <p className="text-xs text-amx-muted">
+                Aviso registrado. O mapa ao vivo só aparece quando o próprio técnico marca &quot;Estou a caminho&quot; no celular dele.
+              </p>
             )}
             {!isClosed && os.a_caminho_em && !os.entrada_em && isEscritorio(user?.role) && (
               <AcompanharTecnico osId={osId} paraEscritorio />

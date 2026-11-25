@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { Icon } from '@/components/ui/Icon';
 
 export interface NovidadeApi {
   id: string;
@@ -11,13 +12,15 @@ export interface NovidadeApi {
   lida: boolean;
 }
 
-// Aviso de novidades no topo da tela inicial: mostra a mais recente que a
-// pessoa ainda não leu. "Entendi" grava no servidor e esconde o cartão. Sem
-// novidade nova (ou se a busca falhar) não renderiza nada.
-export function NovidadesCard({ semMargem = false }: { semMargem?: boolean }) {
+// Aviso de novidades em pop-up (janela centralizada) nas telas iniciais:
+// mostra a mais antiga que a pessoa ainda não leu; "Entendi" e o X gravam
+// como lida no servidor e passam para a próxima. Sem novidade nova (ou se a
+// busca falhar) não renderiza nada.
+export function NovidadesCard() {
   const [naoLidas, setNaoLidas] = useState<NovidadeApi[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+  const botaoRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -33,6 +36,29 @@ export function NovidadesCard({ semMargem = false }: { semMargem?: boolean }) {
   }, []);
 
   const atual = naoLidas[0];
+  const atualId = atual?.id;
+
+  // Foco no botão ao abrir cada novidade.
+  useEffect(() => {
+    if (atualId) botaoRef.current?.focus();
+  }, [atualId]);
+
+  // Esc fecha como o X (marca como lida).
+  const fecharRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    fecharRef.current = () => {
+      if (!salvando) void entendi();
+    };
+  });
+  useEffect(() => {
+    if (!atualId) return;
+    const aoTecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') fecharRef.current();
+    };
+    window.addEventListener('keydown', aoTecla);
+    return () => window.removeEventListener('keydown', aoTecla);
+  }, [atualId]);
+
   if (!atual) return null;
 
   async function entendi() {
@@ -53,30 +79,46 @@ export function NovidadesCard({ semMargem = false }: { semMargem?: boolean }) {
   const [a, m, d] = atual.data.split('-');
 
   return (
-    <div className={semMargem ? 'mb-5' : 'px-4 sm:px-8 pt-4'}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4" onClick={() => fecharRef.current()}>
       <section
-        aria-label="Novidades"
-        className="rounded-lg border border-amx-red/40 border-l-4 border-l-amx-red bg-amx-red/5 px-4 py-3 min-w-0"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="novidade-titulo"
+        className="relative flex w-full max-w-md max-h-[90vh] min-w-0 flex-col rounded-[var(--radius-amx)] border border-amx-line border-l-4 border-l-amx-red bg-amx-bg shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-amx-red-hover">
-          Novidade · {d}/{m}/{a}
-        </p>
-        <h2 className="text-[15px] font-semibold text-white normal-case tracking-normal mt-0.5 break-words">
-          {atual.titulo}
-        </h2>
-        <ul className="mt-2 flex flex-col gap-1.5 list-disc pl-5 text-[13.5px] leading-relaxed text-white/90">
-          {atual.itens.map((item, i) => (
-            <li key={i} className="break-words">
-              {item}
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3 flex items-center gap-4 flex-wrap">
+        <div className="flex items-start justify-between gap-3 px-4 pt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-amx-red-hover pt-1">
+            Novidade · {d}/{m}/{a}
+          </p>
           <button
+            type="button"
+            onClick={() => fecharRef.current()}
+            aria-label="Fechar"
+            className="text-amx-muted hover:text-white min-w-[44px] min-h-[44px] inline-flex items-center justify-center -mt-2 -mr-2"
+          >
+            <Icon name="fechar" size={18} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+          <h2 id="novidade-titulo" className="text-[16px] font-semibold text-white normal-case tracking-normal break-words">
+            {atual.titulo}
+          </h2>
+          <ul className="mt-2 flex flex-col gap-1.5 list-disc pl-5 text-[13.5px] leading-relaxed text-white/90">
+            {atual.itens.map((item, i) => (
+              <li key={i} className="break-words">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-amx-line px-4 py-3">
+          <button
+            ref={botaoRef}
             type="button"
             onClick={entendi}
             disabled={salvando}
-            className="px-4 py-1.5 rounded-lg bg-amx-red hover:bg-amx-red-hover text-white text-[13px] font-semibold disabled:opacity-60"
+            className="min-h-[44px] px-5 rounded-lg bg-amx-red hover:bg-amx-red-hover text-white text-[14px] font-semibold disabled:opacity-60"
           >
             Entendi
           </button>

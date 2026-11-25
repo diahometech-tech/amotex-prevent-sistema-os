@@ -187,7 +187,7 @@ function DashboardContent() {
       </div>
 
       <div className="flex-1 overflow-auto px-4 sm:px-8 py-6">
-        <NovidadesCard semMargem />
+        <NovidadesCard />
         {error && (
           <p className="text-xs font-semibold text-amx-red-hover bg-amx-red/10 rounded-lg px-3 py-2 mb-4">{error}</p>
         )}
