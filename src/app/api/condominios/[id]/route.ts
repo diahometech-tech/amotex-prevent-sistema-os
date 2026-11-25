@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
 import { getSessionFromRequest, canAccessCondominio, condominioParaPapel, filtrarOSVisiveis, osParaPapel } from '@/lib/auth';
-import { podeEditarCondominio, podeVerReservatorios } from '@/lib/roles';
+import { CAMPOS_ENDERECO_CONDOMINIO, podeEditarCondominio, podeEditarEnderecoCondominio, podeVerReservatorios } from '@/lib/roles';
 import { validarCadastro } from '@/lib/financeiro/cadastro';
 import { hojeISO } from '@/lib/os-agenda';
 import { coordenadaValida } from '@/lib/rastreio';
@@ -31,17 +31,22 @@ export async function GET(request: NextRequest, context: RouteContext) {
   return NextResponse.json({ condominio: condominioParaPapel(session.role, condominio), reservatorios, contatos, equipamentos, oss });
 }
 
-// PATCH /api/condominios/[id] — só admin.
+// PATCH /api/condominios/[id] — gestor edita tudo; secretária só endereço e
+// localização no mapa (os demais campos do corpo são descartados).
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const session = getSessionFromRequest(request);
-  if (!session || !podeEditarCondominio(session.role)) {
-    return NextResponse.json({ error: 'Apenas administradores podem editar condomínios.' }, { status: 403 });
+  const gestor = !!session && podeEditarCondominio(session.role);
+  if (!session || (!gestor && !podeEditarEnderecoCondominio(session.role))) {
+    return NextResponse.json({ error: 'Sem permissão para editar condomínios.' }, { status: 403 });
   }
   try {
     const atual = await Database.getCondominioById(id);
     if (!atual) return NextResponse.json({ error: 'Condomínio não encontrado.' }, { status: 404 });
-    const body = await request.json();
+    const bruto = await request.json();
+    const body: Record<string, unknown> = gestor
+      ? bruto
+      : Object.fromEntries(CAMPOS_ENDERECO_CONDOMINIO.filter((k) => bruto?.[k] !== undefined).map((k) => [k, bruto[k]]));
     const { dados, erro } = validarCadastro(body);
     if (erro) return NextResponse.json({ error: erro }, { status: 400 });
     if (dados.cnpj && dados.cnpj !== atual.cnpj) {

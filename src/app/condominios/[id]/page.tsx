@@ -19,6 +19,7 @@ import { EquipamentoForm, type EquipamentoFormData } from '@/components/cadastro
 import { CATEGORIAS_EQUIPAMENTO, nomeCategoria } from '@/lib/catalogo-equipamentos';
 import {
   podeEditarCondominio,
+  podeEditarEnderecoCondominio,
   podeEditarContato,
   podeEditarEquipamento,
   podeVerContrato,
@@ -472,7 +473,7 @@ function CondominioDetailContent() {
               ? 'Monitorado'
               : 'Sem monitoramento'}
           </Badge>
-          {podeEditarCondominio(user.role) && (
+          {podeEditarEnderecoCondominio(user.role) && (
             <Button
               variant="secondary"
               size="sm"
@@ -482,7 +483,7 @@ function CondominioDetailContent() {
                 setSubmitError(null);
               }}
             >
-              Editar
+              {podeEditarCondominio(user.role) ? 'Editar' : 'Editar endereço'}
             </Button>
           )}
           {podeVerModulo(user.role, 'painel') && (
@@ -637,7 +638,7 @@ function CondominioDetailContent() {
         maxWidth="max-w-2xl"
       >
         <ModalHeader
-          title="Editar Condomínio"
+          title={podeEditarCondominio(user.role) ? 'Editar Condomínio' : 'Editar endereço e localização'}
           onClose={() => {
             setEditingType(null);
             setSubmitError(null);
@@ -651,6 +652,7 @@ function CondominioDetailContent() {
           )}
           <CondominioForm
             initial={condominio}
+            somenteEndereco={!podeEditarCondominio(user.role)}
             onSubmit={handleEditCondominio}
             onCancel={() => {
               setEditingType(null);

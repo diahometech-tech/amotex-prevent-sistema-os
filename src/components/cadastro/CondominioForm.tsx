@@ -10,6 +10,7 @@ import { REGIOES, regiaoPorCep } from '@/lib/regioes';
 import { lerCoordenadaColada } from '@/lib/rastreio';
 import { obterLocalizacao } from '@/lib/localizacao-cliente';
 import { linkMapaCoordenadas } from '@/lib/localizacao';
+import { CAMPOS_ENDERECO_CONDOMINIO } from '@/lib/roles';
 
 // O formulário trabalha em texto (como o usuário digita); quem valida e
 // converte (centavos, CNPJ só dígitos, e-mails) é o servidor, com
@@ -21,13 +22,15 @@ interface CondominioFormProps {
   onSubmit: (data: CondominioFormData) => void | Promise<void>;
   onCancel: () => void;
   busy?: boolean;
+  /** Secretária: só a seção Endereço (com a localização no mapa). */
+  somenteEndereco?: boolean;
 }
 
 function centavosParaTexto(c?: number): string {
   return c ? (c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
 }
 
-export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: CondominioFormProps) {
+export function CondominioForm({ initial, onSubmit, onCancel, busy = false, somenteEndereco = false }: CondominioFormProps) {
   const editando = !!initial?.id;
   const [form, setForm] = useState({
     cnpj: initial?.cnpj ? formatarCnpj(initial.cnpj) : '',
@@ -161,6 +164,10 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
     }
     if (form.reajuste_indice !== 'fixo') dados.reajuste_percentual_fixo = '';
     if (!editando) delete dados.ativo;
+    if (somenteEndereco) {
+      const permitidos = new Set<string>(CAMPOS_ENDERECO_CONDOMINIO);
+      for (const k of Object.keys(dados)) if (!permitidos.has(k)) delete dados[k];
+    }
     await onSubmit(dados);
   };
 
@@ -170,6 +177,7 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {!somenteEndereco && (
       <Secao titulo="Identificação">
         <Field label="CNPJ" hint="Digite e toque Buscar: nome e endereço vêm da Receita">
           <div className="flex gap-2">
@@ -185,6 +193,7 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
         </Field>
         <Field label="Razão social">{input('razao_social')}</Field>
       </Secao>
+      )}
 
       <Secao titulo="Endereço">
         <Field label="Endereço">{input('endereco', { placeholder: 'Rua, número - complemento' })}</Field>
@@ -202,7 +211,7 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
           </Select>
         </Field>
         <Field label="Cidade">{input('cidade')}</Field>
-        <Field label="Administradora">{input('administradora')}</Field>
+        {!somenteEndereco && <Field label="Administradora">{input('administradora')}</Field>}
         {editando && (
           <Field label="Localização no mapa" hint="Usada para a estimativa de chegada do técnico. No Google Maps, toque e segure no local e copie as coordenadas.">
             <div className="flex flex-col gap-2">
@@ -239,6 +248,7 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
         )}
       </Secao>
 
+      {!somenteEndereco && (<>
       <Secao titulo="Responsável e cobrança">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Responsável" hint="Síndico ou contato na administradora">{input('responsavel_nome')}</Field>
@@ -297,6 +307,7 @@ export function CondominioForm({ initial, onSubmit, onCancel, busy = false }: Co
           disabled={busy}
         />
       )}
+      </>)}
 
       <div className="flex gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>
