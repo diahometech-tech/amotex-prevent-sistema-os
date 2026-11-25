@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
 import { InstalarAppCard } from '@/components/layout/InstalarAppCard';
+import { NovidadesLista } from '@/components/layout/NovidadesLista';
 import { MANUAL_ATUALIZADO, manuaisVisiveis, type ManualPapel } from '@/lib/manual';
 
 function formatarData(iso: string): string {
@@ -80,6 +81,7 @@ function AjudaContent() {
       </div>
 
       <div className="flex-1 overflow-auto px-4 sm:px-8 py-6">
+        <NovidadesLista />
         <InstalarAppCard />
         {manuais.length > 1 && (
           <div className="flex gap-2 mb-6 flex-wrap print:hidden" role="tablist">

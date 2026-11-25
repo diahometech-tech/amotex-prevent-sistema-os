@@ -389,6 +389,13 @@ async function runSchemaMigration(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_os_posicao_os ON os_posicao(os_id, registrado_em DESC);
     CREATE INDEX IF NOT EXISTS idx_os_posicao_registrado ON os_posicao(registrado_em);
+    -- Novidades do sistema (25/11): quem já leu cada aviso. O conteúdo fica no código.
+    CREATE TABLE IF NOT EXISTS novidade_lida (
+      user_id UUID NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+      novidade_id TEXT NOT NULL,
+      lida_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, novidade_id)
+    );
     ALTER TABLE condominio ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
     ALTER TABLE condominio ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
     ALTER TABLE condominio ADD COLUMN IF NOT EXISTS localizacao_origem TEXT;
@@ -920,6 +927,16 @@ export const pgBackend: DbBackend = {
   async deletePushInscricaoByEndpoint(endpoint) {
     const res = await q('DELETE FROM push_inscricao WHERE endpoint = $1', [endpoint]);
     return (res.rowCount || 0) > 0;
+  },
+  async getNovidadesLidas(userId) {
+    const { rows } = await q('SELECT novidade_id FROM novidade_lida WHERE user_id = $1', [userId]);
+    return rows.map((r) => r.novidade_id as string);
+  },
+  async marcarNovidadeLida(userId, novidadeId) {
+    await q(
+      'INSERT INTO novidade_lida (user_id, novidade_id) VALUES ($1,$2) ON CONFLICT (user_id, novidade_id) DO NOTHING',
+      [userId, novidadeId]
+    );
   },
   async tocarPushInscricao(id) {
     await q('UPDATE push_inscricao SET ultimo_uso_em = now() WHERE id = $1', [id]);

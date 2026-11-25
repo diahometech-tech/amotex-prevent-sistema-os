@@ -159,6 +159,14 @@ export interface PushInscricao {
   ultimo_uso_em?: string;
 }
 
+// Novidade já lida por um usuário (aviso "Novidades" do sistema). O conteúdo
+// das novidades fica em src/lib/novidades.ts; aqui só se guarda quem leu.
+export interface NovidadeLida {
+  user_id: string;
+  novidade_id: string;
+  lida_em: string;
+}
+
 // Ponto monitorado dentro de um condomínio. nome_sensorlog é a chave de
 // resolução do alerta: a mensagem que chega da SensorLog referencia o
 // reservatório ("Caixa torre 03"), não o condomínio diretamente.
@@ -501,6 +509,10 @@ export interface DbBackend {
   deletePushInscricaoByEndpoint(endpoint: string): Promise<boolean>;
   tocarPushInscricao(id: string): Promise<void>;
 
+  // Novidades lidas
+  getNovidadesLidas(userId: string): Promise<string[]>;
+  marcarNovidadeLida(userId: string, novidadeId: string): Promise<void>;
+
   // Posição do técnico a caminho (rastreio)
   insertOsPosicao(p: OsPosicao): Promise<void>;
   /** Posição mais recente de cada OS pedida (no máximo uma por OS). */
@@ -568,6 +580,7 @@ function emptyDB() {
     configuracoes: [] as Configuracao[],
     plantao_escala: [] as PlantaoEscala[],
     push_inscricoes: [] as PushInscricao[],
+    novidades_lidas: [] as NovidadeLida[],
     os_posicoes: [] as OsPosicao[],
   };
 }
@@ -1020,6 +1033,20 @@ const jsonBackend: DbBackend = {
     if (removida) writeLocalDB(db);
     return removida;
   },
+  // ----- Novidades lidas -----
+  async getNovidadesLidas(userId) {
+    return readLocalDB().novidades_lidas.filter((n) => n.user_id === userId).map((n) => n.novidade_id);
+  },
+  async marcarNovidadeLida(userId, novidadeId) {
+    const db = readLocalDB();
+    if (db.novidades_lidas.some((n) => n.user_id === userId && n.novidade_id === novidadeId)) return;
+    db.novidades_lidas = [
+      ...db.novidades_lidas,
+      { user_id: userId, novidade_id: novidadeId, lida_em: new Date().toISOString() },
+    ];
+    writeLocalDB(db);
+  },
+
   async tocarPushInscricao(id) {
     const db = readLocalDB();
     const p = db.push_inscricoes.find((x) => x.id === id);
@@ -1491,6 +1518,8 @@ export class Database {
   static getUsuarioIdsComPush() { return backend().getUsuarioIdsComPush(); }
   static deletePushInscricaoByEndpoint(endpoint: string) { return backend().deletePushInscricaoByEndpoint(endpoint); }
   static tocarPushInscricao(id: string) { return backend().tocarPushInscricao(id); }
+  static getNovidadesLidas(userId: string) { return backend().getNovidadesLidas(userId); }
+  static marcarNovidadeLida(userId: string, novidadeId: string) { return backend().marcarNovidadeLida(userId, novidadeId); }
 
   // ----- Foto -----
   static getFotosByOS(osId: string) { return backend().getFotosByOS(osId); }

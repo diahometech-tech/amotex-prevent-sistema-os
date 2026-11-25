@@ -17,6 +17,7 @@ import { useTick } from '@/lib/useTick';
 import { enderecoCompleto, enderecoCurto } from '@/lib/endereco';
 import type { Condominio, OS, OsStatus, OsTipo } from '@/lib/db';
 import { Icon } from '@/components/ui/Icon';
+import { NovidadesCard } from '@/components/layout/NovidadesCard';
 
 // Os 3 níveis do campo manual os.prioridade (distinto de OsPrioridade, a
 // escala visual de 4 níveis calculada em src/lib/os-priority.ts).
@@ -190,6 +191,7 @@ function OsListContent() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      <NovidadesCard />
       {/* TOPBAR */}
       <div className="px-8 pt-6 pb-4 border-b border-amx-line">
         <div className="flex items-center justify-between gap-4 flex-wrap">
