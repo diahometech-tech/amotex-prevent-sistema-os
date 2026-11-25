@@ -23,8 +23,17 @@ export function Paginacao<T>({
     // O alvo pode ser o próprio contêiner rolável da lista ou um ponto da página.
     const alvo = alvoRolagem?.current;
     if (alvo) {
-      alvo.scrollTo?.({ top: 0, behavior: 'smooth' });
-      alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // No celular o cabeçalho fica fixo no topo: sem esta folga, o primeiro
+      // item da página nova ficaria escondido atrás dele.
+      const cabecalho = document.querySelector('header');
+      const fixo = cabecalho && cabecalho.getClientRects().length > 0 && getComputedStyle(cabecalho).position === 'sticky';
+      if (fixo) {
+        const topo = alvo.getBoundingClientRect().top + window.scrollY - cabecalho.getBoundingClientRect().height - 8;
+        window.scrollTo({ top: Math.max(0, topo), behavior: 'smooth' });
+      } else {
+        alvo.scrollTo?.({ top: 0, behavior: 'smooth' });
+        alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   }
 
