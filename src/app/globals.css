@@ -255,3 +255,12 @@ html.light .thin-scroll::-webkit-scrollbar-thumb { background: #94a3b8; }
     font-size: 16px;
   }
 }
+
+/* Padrão celular (25/11): nome longo de condomínio, e-mail ou endereço quebra
+   a linha em vez de empurrar a tela para o lado. */
+h1,
+h2,
+h3,
+p {
+  overflow-wrap: anywhere;
+}

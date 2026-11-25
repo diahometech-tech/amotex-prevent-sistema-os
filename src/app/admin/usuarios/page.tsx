@@ -259,12 +259,12 @@ function UsuariosContent() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-8 pt-6 pb-4 border-b border-amx-line">
+      <div className="px-4 sm:px-8 pt-6 pb-4 border-b border-amx-line">
         <h1 className="text-white">Gestão de Usuários</h1>
         <p className="text-xs text-amx-muted mt-1">Crie e gerencie acessos de técnicos, síndicos e administradores.</p>
       </div>
 
-      <div className="flex-1 overflow-auto px-8 py-6 flex flex-col gap-6 max-w-4xl">
+      <div className="flex-1 overflow-auto px-4 sm:px-8 py-6 flex flex-col gap-6 max-w-4xl">
         {msg && <p className="text-xs font-semibold text-amx-blue-light bg-amx-blue/10 rounded-lg px-3 py-2">{msg}</p>}
 
         <Card className="p-5">
