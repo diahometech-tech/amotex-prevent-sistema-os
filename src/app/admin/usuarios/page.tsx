@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -11,6 +11,8 @@ import { Field, Input, Select } from '@/components/ui/Form';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { PlantaoCard } from '@/components/equipe/PlantaoCard';
+import { Paginacao } from '@/components/ui/Paginacao';
+import { usePaginacao } from '@/lib/usePaginacao';
 import type { Condominio, Especialidade, UserRole } from '@/lib/db';
 
 // Shape de src/app/api/users/route.ts `safe()` — User sem senha_hash.
@@ -47,6 +49,8 @@ const PAPEL_TONE: Record<UserRole, 'red' | 'info' | 'navy' | 'neutral'> = {
 function UsuariosContent() {
   const user = useAmxUser();
   const [users, setUsers] = useState<UserRow[]>([]);
+  const listaRef = useRef<HTMLDivElement>(null);
+  const paginacao = usePaginacao(users, { chave: 'usuarios' });
   const [condominios, setCondominios] = useState<Condominio[]>([]);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
@@ -363,8 +367,8 @@ function UsuariosContent() {
         {users.length === 0 ? (
           <EmptyState title="Nenhum usuário cadastrado" />
         ) : (
-          <div className="flex flex-col gap-2">
-            {users.map((u) => (
+          <div ref={listaRef} className="flex flex-col gap-2">
+            {paginacao.itensDaPagina.map((u) => (
               <Card key={u.id} className="p-4 flex items-center gap-3 flex-wrap">
                 <div className="min-w-[11rem] flex-1">
                   <p className="text-sm font-semibold text-white">{u.nome}</p>
@@ -421,6 +425,7 @@ function UsuariosContent() {
                 </div>
               </Card>
             ))}
+            <Paginacao p={paginacao} rotuloItens="usuários" alvoRolagem={listaRef} />
           </div>
         )}
       </div>

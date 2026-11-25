@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +11,8 @@ import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { CondominioForm, type CondominioFormData } from '@/components/cadastro/CondominioForm';
 import { ImportarCondominios } from '@/components/cadastro/ImportarCondominios';
 import { podeEditarCondominio } from '@/lib/roles';
+import { Paginacao } from '@/components/ui/Paginacao';
+import { usePaginacao } from '@/lib/usePaginacao';
 import type { Condominio } from '@/lib/db';
 
 interface CondominiosResponse {
@@ -37,6 +39,8 @@ function CondominiosContent() {
   const [showImport, setShowImport] = useState(false);
   // Incrementa pra recarregar a lista depois de uma importação em lote.
   const [recarregar, setRecarregar] = useState(0);
+  const listaRef = useRef<HTMLDivElement>(null);
+  const paginacao = usePaginacao(condominios, { chave: 'condominios' });
 
   useEffect(() => {
     const loadCondominios = async () => {
@@ -152,8 +156,8 @@ function CondominiosContent() {
           }
         />
       ) : (
-        <div className="space-y-3">
-          {condominios.map((condominio) => (
+        <div ref={listaRef} className="space-y-3">
+          {paginacao.itensDaPagina.map((condominio) => (
             <Link
               key={condominio.id}
               href={`/condominios/${condominio.id}`}
@@ -189,6 +193,7 @@ function CondominiosContent() {
               </Card>
             </Link>
           ))}
+          <Paginacao p={paginacao} rotuloItens="condomínios" alvoRolagem={listaRef} />
         </div>
       )}
 

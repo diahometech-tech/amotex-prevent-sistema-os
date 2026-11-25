@@ -3,10 +3,12 @@
 // "Histórico do condomínio" (só leitura): as OS anteriores do local, pro
 // técnico ver o que já foi feito antes de começar. Cada linha abre a OS em
 // modo leitura (o OSModal já trava edição em OS que não é do usuário).
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-priority';
+import { Paginacao } from '@/components/ui/Paginacao';
+import { usePaginacao } from '@/lib/usePaginacao';
 import type { OS } from '@/lib/db';
 
 // "2026-11-20" -> "20/11/26" (com o ano: o histórico passa de um ano).
@@ -36,6 +38,9 @@ export function HistoricoCondominio({
 }) {
   const [itens, setItens] = useState<ItemHistorico[] | null>(null);
   const [erro, setErro] = useState('');
+  const listaRef = useRef<HTMLUListElement>(null);
+  const lista = (itens ?? []).filter((i) => i.id !== osAtualId);
+  const paginacao = usePaginacao(lista, { chave: 'historico-condominio', redefinirQuando: condominioId });
 
   useEffect(() => {
     let cancelled = false;
@@ -61,13 +66,13 @@ export function HistoricoCondominio({
       </div>
     );
   }
-  const lista = itens.filter((i) => i.id !== osAtualId);
   if (lista.length === 0) {
     return <EmptyState title="Sem OS anteriores" description="Este condomínio ainda não tem OS finalizada ou cancelada." />;
   }
   return (
-    <ul className="flex flex-col gap-2">
-      {lista.map((i) => {
+    <>
+    <ul ref={listaRef} className="flex flex-col gap-2">
+      {paginacao.itensDaPagina.map((i) => {
         const texto = i.descricao_problema || i.observacao;
         return (
           <li key={i.id}>
@@ -88,5 +93,7 @@ export function HistoricoCondominio({
         );
       })}
     </ul>
+    <Paginacao p={paginacao} rotuloItens="OS" alvoRolagem={listaRef} />
+    </>
   );
 }

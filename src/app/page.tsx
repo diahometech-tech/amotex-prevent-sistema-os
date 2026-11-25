@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,8 @@ import { formatarDataCurta, hojeISO } from '@/lib/os-agenda';
 import { slaChegada } from '@/lib/os-sla';
 import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
 import { useTick } from '@/lib/useTick';
+import { usePaginacao } from '@/lib/usePaginacao';
+import { Paginacao } from '@/components/ui/Paginacao';
 import { enderecoCompleto, enderecoCurto } from '@/lib/endereco';
 import type { Condominio, OS, OsStatus, OsTipo } from '@/lib/db';
 import { Icon } from '@/components/ui/Icon';
@@ -150,6 +152,11 @@ function OsListContent() {
   }, [oss, statusFiltro, tipoFiltro, condominioFiltro, responsavelFiltro, ehTecnico, user?.id, busca, condominioNome, enderecos, tecnicoNome]);
 
   const ordenadas = useMemo(() => [...filtradas].sort(compararPorPrioridade), [filtradas]);
+  const listaRef = useRef<HTMLDivElement>(null);
+  const paginacao = usePaginacao(ordenadas, {
+    chave: 'os',
+    redefinirQuando: [statusFiltro, tipoFiltro, condominioFiltro, responsavelFiltro, busca].join('|'),
+  });
   const totalAbertas = useMemo(() => oss.filter((o) => o.status !== 'finalizada' && o.status !== 'cancelada').length, [oss]);
   const totalPrioridadeAlta = useMemo(
     () =>
@@ -323,8 +330,8 @@ function OsListContent() {
             <div />
           </div>
 
-          <div className="flex-1 overflow-auto px-4 sm:px-8 pb-6 flex flex-col gap-2">
-            {ordenadas.map((os) => (
+          <div ref={listaRef} className="flex-1 overflow-auto px-4 sm:px-8 pb-6 flex flex-col gap-2">
+            {paginacao.itensDaPagina.map((os) => (
               <OsRow
                 key={os.id}
                 os={os}
@@ -334,6 +341,7 @@ function OsListContent() {
                 onClick={() => setSelectedOsId(os.id)}
               />
             ))}
+            <Paginacao p={paginacao} rotuloItens="OS" alvoRolagem={listaRef} />
           </div>
         </>
       )}

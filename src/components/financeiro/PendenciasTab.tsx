@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Paginacao } from '@/components/ui/Paginacao';
+import { usePaginacao } from '@/lib/usePaginacao';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import type { Condominio } from '@/lib/db';
 import { CAMPOS_NECESSARIOS, type PendenciaCondominio } from '@/lib/financeiro/pendencias';
@@ -54,6 +56,8 @@ export function PendenciasTab() {
   const [pendencias, setPendencias] = useState<PendenciaCondominio[] | null>(null);
   const [mensagem, setMensagem] = useState('');
   const [condominios, setCondominios] = useState<Condominio[]>([]);
+  const listaRef = useRef<HTMLDivElement>(null);
+  const paginacao = usePaginacao(pendencias ?? [], { chave: 'pendencias' });
 
   useEffect(() => {
     let cancel = false;
@@ -98,8 +102,8 @@ export function PendenciasTab() {
         </details>
       </Card>
 
-      <div className="flex flex-col gap-2">
-        {pendencias.map((p) => (
+      <div ref={listaRef} className="flex flex-col gap-2">
+        {paginacao.itensDaPagina.map((p) => (
           <Link key={p.condominio_id} href={`/condominios/${p.condominio_id}`} className="flex items-center gap-x-4 gap-y-1 flex-wrap bg-amx-panel border border-amx-line rounded-[10px] px-4 py-3 hover:border-amx-muted transition-colors">
             <div className="min-w-0 flex-1 basis-56">
               <p className="text-sm font-semibold text-white truncate">{p.nome}</p>
@@ -112,6 +116,7 @@ export function PendenciasTab() {
             </div>
           </Link>
         ))}
+        <Paginacao p={paginacao} rotuloItens="condomínios" alvoRolagem={listaRef} />
       </div>
     </div>
   );
