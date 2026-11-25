@@ -67,7 +67,13 @@ function UsuariosContent() {
   });
 
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
-  const [editForm, setEditForm] = useState({ especialidade: '' as Especialidade | '', telegram_chat_id: '' });
+  const [editForm, setEditForm] = useState({
+    papel: 'tecnico' as UserRole,
+    condominio_id: '',
+    especialidade: '' as Especialidade | '',
+    telegram_chat_id: '',
+  });
+  const [confirmandoPerfil, setConfirmandoPerfil] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -185,30 +191,62 @@ function UsuariosContent() {
     }
   };
 
+  const abrirEdicao = (u: UserRow) => {
+    setEditTarget(u);
+    setEditForm({
+      papel: u.papel,
+      condominio_id: u.condominio_id ?? '',
+      especialidade: u.especialidade ?? '',
+      telegram_chat_id: u.telegram_chat_id ?? '',
+    });
+    setEditError('');
+  };
+
+  const trocouPerfil = !!editTarget && editForm.papel !== editTarget.papel;
+
+  // "Salvar": se o perfil mudou, confirma antes (muda o que a pessoa vê e faz).
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTarget) return;
-    setEditing(true);
     setEditError('');
+    if (editForm.papel === 'sindico' && !editForm.condominio_id) {
+      setEditError('Selecione o condomínio do síndico.');
+      return;
+    }
+    if (trocouPerfil) {
+      setConfirmandoPerfil(true);
+      return;
+    }
+    const erro = await salvarEdicao();
+    if (erro) setEditError(erro);
+  };
+
+  const salvarEdicao = async (): Promise<string | void> => {
+    if (!editTarget) return;
+    setEditing(true);
     try {
+      const papel = editForm.papel;
       const res = await fetch(`/api/users/${editTarget.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(editTarget.papel === 'tecnico' ? { especialidade: editForm.especialidade } : {}),
-          telegram_chat_id: editForm.telegram_chat_id,
+          papel,
+          ...(papel === 'sindico' ? { condominio_id: editForm.condominio_id } : {}),
+          ...(papel === 'tecnico' ? { especialidade: editForm.especialidade } : {}),
+          ...(papel !== 'sindico' ? { telegram_chat_id: editForm.telegram_chat_id } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setMsg(`"${editTarget.login}" atualizado.`);
-        setEditTarget(null);
-        load();
-      } else {
-        setEditError(data.error || 'Falha ao salvar.');
-      }
+      if (!res.ok) return data.error || 'Falha ao salvar.';
+      const base = data.perfil
+        ? `"${editTarget.login}" agora é ${data.perfil}. Vale na próxima tela que a pessoa abrir.`
+        : `"${editTarget.login}" atualizado.`;
+      setMsg(data.aviso ? `${base} ${data.aviso}` : base);
+      setConfirmandoPerfil(false);
+      setEditTarget(null);
+      load();
     } catch {
-      setEditError('Erro de conexão.');
+      return 'Erro de conexão.';
     } finally {
       setEditing(false);
     }
@@ -390,20 +428,9 @@ function UsuariosContent() {
                 )}
                 <Badge tone={u.ativo ? 'success' : 'neutral'}>{u.ativo ? 'Ativo' : 'Inativo'}</Badge>
                 <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-                  {u.papel !== 'sindico' && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        setEditTarget(u);
-                        setEditForm({ especialidade: u.especialidade ?? '', telegram_chat_id: u.telegram_chat_id ?? '' });
-                        setEditError('');
-                      }}
-                    >
-                      Editar
-                    </Button>
-                  )}
+                  <Button type="button" size="sm" variant="secondary" onClick={() => abrirEdicao(u)}>
+                    Editar
+                  </Button>
                   <Button
                     type="button"
                     size="sm"
@@ -433,7 +460,41 @@ function UsuariosContent() {
       <Modal open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="max-w-sm">
         <ModalHeader title={`Editar — ${editTarget?.nome ?? ''}`} onClose={() => setEditTarget(null)} />
         <form onSubmit={handleEdit} className="p-5 flex flex-col gap-4">
-          {editTarget?.papel === 'tecnico' && (
+          <Field
+            label="Perfil"
+            hint={editTarget?.id === user?.id ? 'Você não pode trocar o próprio perfil.' : 'Define o que a pessoa vê e faz no sistema.'}
+          >
+            <Select
+              id="editar-perfil"
+              value={editForm.papel}
+              disabled={editTarget?.id === user?.id}
+              onChange={(e) => setEditForm({ ...editForm, papel: e.target.value as UserRole })}
+            >
+              {Object.entries(ROLE_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {editForm.papel === 'sindico' && (
+            <Field label="Condomínio" required hint="Síndico só enxerga o próprio condomínio">
+              <Select
+                id="editar-condominio"
+                value={editForm.condominio_id}
+                onChange={(e) => setEditForm({ ...editForm, condominio_id: e.target.value })}
+                required
+              >
+                <option value="">Selecione...</option>
+                {condominios.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          {editForm.papel === 'tecnico' && (
             <Field label="Especialidade">
               <Select
                 id="editar-especialidade"
@@ -448,15 +509,17 @@ function UsuariosContent() {
               </Select>
             </Field>
           )}
-          <Field label="ID do Telegram" hint={TELEGRAM_HINT}>
-            <Input
-              id="editar-telegram"
-              inputMode="numeric"
-              value={editForm.telegram_chat_id}
-              onChange={(e) => setEditForm({ ...editForm, telegram_chat_id: e.target.value })}
-              placeholder="ex.: 123456789"
-            />
-          </Field>
+          {editForm.papel !== 'sindico' && (
+            <Field label="ID do Telegram" hint={TELEGRAM_HINT}>
+              <Input
+                id="editar-telegram"
+                inputMode="numeric"
+                value={editForm.telegram_chat_id}
+                onChange={(e) => setEditForm({ ...editForm, telegram_chat_id: e.target.value })}
+                placeholder="ex.: 123456789"
+              />
+            </Field>
+          )}
           {editError && <p className="text-xs font-semibold text-amx-red-hover">{editError}</p>}
           <div className="flex items-center justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setEditTarget(null)}>
@@ -468,6 +531,29 @@ function UsuariosContent() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmandoPerfil && !!editTarget}
+        titulo="Trocar o perfil?"
+        confirmarLabel="Trocar perfil"
+        cancelarLabel="Voltar"
+        onConfirm={salvarEdicao}
+        onClose={() => setConfirmandoPerfil(false)}
+      >
+        {editTarget && (
+          <>
+            <p>
+              <b className="text-white">{editTarget.nome}</b> passa de {ROLE_LABELS[editTarget.papel]} para{' '}
+              <b className="text-white">{ROLE_LABELS[editForm.papel]}</b>. O que a pessoa vê e pode fazer muda na próxima
+              tela que ela abrir.
+            </p>
+            {editTarget.papel === 'tecnico' && (
+              <p>Ela sai do plantão e perde a especialidade. As OS em aberto continuam no nome dela até você passar para outro técnico.</p>
+            )}
+            {editTarget.papel === 'sindico' && <p>Ela deixa de ser ligada ao condomínio.</p>}
+          </>
+        )}
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={!!excluindo}

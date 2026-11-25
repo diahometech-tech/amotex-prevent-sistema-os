@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, type User } from '@/lib/db';
 import { getSessionFromRequest, canManageUsers, hashPassword } from '@/lib/auth';
-import { isSecretaria } from '@/lib/roles';
-import { normalizarEspecialidade, normalizarTelegramChatId } from '@/lib/usuario-campos';
+import { isSecretaria, osEncerrada } from '@/lib/roles';
+import { avaliarTrocaPapel, normalizarEspecialidade, normalizarTelegramChatId } from '@/lib/usuario-campos';
+import { ROLE_LABELS } from '@/lib/permissions';
 import { erroParaPlantao } from '@/lib/plantao';
 import { usuariosComPush } from '@/lib/push';
 
@@ -11,9 +12,9 @@ function safe(u: User) {
   return rest;
 }
 
-// PATCH /api/users/[id] — reseta senha, ativa/desativa, especialidade do
-// técnico, plantão e chat do Telegram. Admin; a secretária só mexe no plantão
-// (e só de técnico).
+// PATCH /api/users/[id] — reseta senha, ativa/desativa, perfil (papel),
+// especialidade do técnico, plantão e chat do Telegram. Admin; a secretária só
+// mexe no plantão (e só de técnico).
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = getSessionFromRequest(request);
   const soPlantao = !!session && isSecretaria(session.role);
@@ -60,12 +61,48 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (chat === undefined) return NextResponse.json({ error: 'ID do Telegram inválido (só números).' }, { status: 400 });
       updates.telegram_chat_id = chat;
     }
+    // Troca de perfil: por último, para a limpeza dos campos que não valem no
+    // perfil novo (especialidade, plantão, condomínio) ganhar do resto do pedido.
+    let trocaPapel: { de: User['papel']; para: User['papel'] } | null = null;
+    let osEmAberto = 0;
+    if (body.papel !== undefined) {
+      const alvo = await Database.getUserById(id);
+      if (!alvo) return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
+      const condominioId = typeof body.condominio_id === 'string' ? body.condominio_id : undefined;
+      const condominioExiste = condominioId ? !!(await Database.getCondominioById(condominioId)) : false;
+      const r = avaliarTrocaPapel({ alvo, novoPapel: body.papel, condominioId, sessaoId: session.id, condominioExiste });
+      if ('erro' in r) return NextResponse.json({ error: r.erro }, { status: 400 });
+      Object.assign(updates, r.campos);
+      if (r.campos.papel !== alvo.papel) {
+        trocaPapel = { de: alvo.papel, para: r.campos.papel };
+        if (alvo.papel === 'tecnico') {
+          osEmAberto = (await Database.getOSs()).filter((o) => o.tecnico_id === id && !osEncerrada(o)).length;
+        }
+      }
+    }
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Nada para atualizar.' }, { status: 400 });
     }
     const user = await Database.updateUser(id, updates);
     if (!user) return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
-    return NextResponse.json({ success: true, user: safe(user) });
+    let aviso: string | undefined;
+    if (trocaPapel) {
+      await Database.createAuditLog({
+        entidade: 'usuario', entidade_id: id, acao: 'PERFIL_ALTERADO', ator: session.name,
+        detalhe: { de: trocaPapel.de, para: trocaPapel.para },
+      });
+      if (osEmAberto > 0) {
+        aviso = osEmAberto === 1
+          ? '1 OS em aberto continua no nome desta pessoa: passe para outro técnico.'
+          : `${osEmAberto} OS em aberto continuam no nome desta pessoa: passe para outro técnico.`;
+      }
+    }
+    return NextResponse.json({
+      success: true,
+      user: safe(user),
+      ...(trocaPapel ? { perfil: ROLE_LABELS[trocaPapel.para] } : {}),
+      ...(aviso ? { aviso } : {}),
+    });
   } catch (e) {
     console.error('Erro ao atualizar usuário:', e);
     return NextResponse.json({ error: 'Erro interno.' }, { status: 500 });

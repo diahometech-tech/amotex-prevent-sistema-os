@@ -125,6 +125,7 @@
             "Para a secretária, escolha o papel Secretária. Informe o ID do Telegram dela para receber os avisos de corretiva junto com os gestores.",
             "Clique em + Criar acesso e passe o login e a senha para a pessoa.",
             "Na lista: Editar, Resetar senha, Desativar e Excluir. Quem saiu da equipe deve ser Desativado: o nome continua nas OS que atendeu.",
+            "Para trocar o perfil de alguém (por exemplo, de Técnico para Secretária), toque em Editar, escolha o novo Perfil e confirme. A troca vale na próxima tela que a pessoa abrir, sem sair do sistema. Quem deixa de ser técnico sai do plantão e perde a especialidade; as OS em aberto dele continuam no nome dele até você passar para outro técnico. Para virar síndico, escolha o condomínio. Você não troca o próprio perfil.",
             "Ao gerar uma nova senha (Resetar senha, ou Gerar nova senha em Acesso do síndico), o sistema pergunta antes: a senha atual da pessoa para de funcionar na hora. Só depois de confirmar a nova senha vale."
           ]
         },
