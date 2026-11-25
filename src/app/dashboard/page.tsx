@@ -14,6 +14,7 @@ import { computeOsPrioridade, compararPorPrioridade, resumoRotasPorCondominio } 
 import { hojeISO, montarRotaDoDia } from '@/lib/os-agenda';
 import { resumoSla } from '@/lib/os-sla';
 import { isAdmin, podeGerirPlantao } from '@/lib/roles';
+import { deParaResolvido, rotuloAlerta } from '@/lib/alerta-rotulo';
 import type { Alerta, Condominio, EventoAlerta, OS } from '@/lib/db';
 
 // Shape devolvido por GET /api/alertas: reservatorio/condominio já
@@ -144,7 +145,7 @@ function DashboardContent() {
   // Prazo de 3h pra chegada na corretiva — ancorado no instante da carga,
   // mesmo motivo de `alertas24h` acima.
   const sla = useMemo(() => (carregadoEm === null ? null : resumoSla(oss, carregadoEm)), [oss, carregadoEm]);
-  const alertasSemDePara = useMemo(() => alertas.filter((a) => !a.reservatorio).length, [alertas]);
+  const alertasSemDePara = useMemo(() => alertas.filter((a) => !deParaResolvido(a)).length, [alertas]);
   const condominiosMonitorados = useMemo(
     () => condominios.filter((c) => c.monitoramento_ativo).length,
     [condominios]
@@ -291,10 +292,10 @@ function DashboardContent() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <Badge tone={EVENTO_TONE[a.evento]}>{EVENTO_LABELS[a.evento]}</Badge>
-                        {!a.reservatorio && <Badge tone="neutral">De-para não resolvido</Badge>}
+                        {!deParaResolvido(a) && <Badge tone="neutral">De-para não resolvido</Badge>}
                       </div>
                       <p className="text-xs text-white mt-1 truncate">
-                        {a.condominio ? `${a.condominio.nome} · ${a.reservatorio!.nome_interno}` : 'Reservatório não identificado'}
+                        {rotuloAlerta(a)}
                       </p>
                       <p className="text-[11px] text-amx-muted">{formatRecebidoEm(a.recebido_em)}</p>
                     </div>

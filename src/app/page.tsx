@@ -9,7 +9,7 @@ import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { Field, Input, Select, Textarea } from '@/components/ui/Form';
 import { OSModal } from '@/components/os/OSModal';
 import { isEscritorio, podeAbrirOS } from '@/lib/roles';
-import { computeOsPrioridade, OS_STATUS_LABELS, type OsPrioridade } from '@/lib/os-priority';
+import { compararPorPrioridade, computeOsPrioridade, OS_STATUS_LABELS, type OsPrioridade } from '@/lib/os-priority';
 import { formatarDataCurta, hojeISO } from '@/lib/os-agenda';
 import { slaChegada } from '@/lib/os-sla';
 import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
@@ -31,21 +31,10 @@ interface TecnicoLite {
   nome: string;
 }
 
-const PRIORIDADE_ORDER: Record<OsPrioridade, number> = { urgente: 0, alta: 1, normal: 2, baixa: 3 };
 // Grade de 7 colunas só a partir de md: no celular (onde o técnico usa) ela
 // espremia a coluna do condomínio a zero — a linha vira flex com quebra.
 const ROW_GRID = 'md:grid-cols-[28px_2.2fr_1.1fr_1fr_1.1fr_100px_20px]';
 const AVATAR_TONES = ['bg-amx-blue', 'bg-amx-red', 'bg-amx-green', 'bg-amx-amber'];
-
-function ordenarPorPrioridade(oss: OS[]): OS[] {
-  return [...oss].sort((a, b) => {
-    const pa = computeOsPrioridade(a);
-    const pb = computeOsPrioridade(b);
-    const diff = PRIORIDADE_ORDER[pa.nivel] - PRIORIDADE_ORDER[pb.nivel];
-    if (diff !== 0) return diff;
-    return pb.elapsedHours - pa.elapsedHours; // dentro do mesmo nível, a mais antiga primeiro
-  });
-}
 
 function initials(nome: string): string {
   const parts = nome.trim().split(/\s+/);
@@ -159,7 +148,7 @@ function OsListContent() {
     });
   }, [oss, statusFiltro, tipoFiltro, condominioFiltro, responsavelFiltro, ehTecnico, user?.id, busca, condominioNome, enderecos, tecnicoNome]);
 
-  const ordenadas = useMemo(() => ordenarPorPrioridade(filtradas), [filtradas]);
+  const ordenadas = useMemo(() => [...filtradas].sort(compararPorPrioridade), [filtradas]);
   const totalAbertas = useMemo(() => oss.filter((o) => o.status !== 'finalizada' && o.status !== 'cancelada').length, [oss]);
   const totalPrioridadeAlta = useMemo(
     () =>

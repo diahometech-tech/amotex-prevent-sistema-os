@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
 import { InstalarAppCard } from '@/components/layout/InstalarAppCard';
@@ -64,6 +65,14 @@ function AjudaContent() {
     <div className="flex-1 flex flex-col min-h-0">
       <div className="px-4 sm:px-8 pt-6 pb-4 border-b border-amx-line flex items-start justify-between gap-4 flex-wrap print:border-0">
         <div>
+          {/* Só na impressão: a barra lateral some e a página sairia sem marca. */}
+          <Image
+            src="/brand/logo-amotex-completa.png"
+            alt="Amotex"
+            width={1000}
+            height={554}
+            className="hidden print:block w-[120px] h-auto mb-2"
+          />
           <h1 className="text-[22px] font-semibold text-white normal-case tracking-normal">Manual de uso</h1>
           <p className="text-[13px] text-amx-muted mt-1">
             {manuais.length > 1 ? 'Como cada perfil usa o sistema' : `Perfil ${atual.titulo}`} · atualizado em{' '}

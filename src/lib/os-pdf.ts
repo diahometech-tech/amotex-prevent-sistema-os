@@ -21,10 +21,11 @@ import { nomeEquipamentoDoItem } from './os-finalizacao';
 // problema, em vez de derrubar a geração do PDF inteiro.
 const EMBEDDABLE_EXT = new Set(['.jpg', '.jpeg', '.png']);
 
-// Wordmark recortado do material de marca do cliente (só o "AMOTEX", sem o
-// mascote robô — não cabe bem num cabeçalho de documento formal). Fica em
-// public/ (asset estático, não upload de usuário).
-const LOGO_PATH = path.join(process.cwd(), 'public', 'brand', 'logo-amotex-wordmark.png');
+// Logo completa (selo + robô, 1000x554) do material de marca do cliente. Fica
+// em public/ (asset estático, não upload de usuário).
+const LOGO_PATH = path.join(process.cwd(), 'public', 'brand', 'logo-amotex-completa.png');
+const LOGO_LARGURA = 120;
+const LOGO_ALTURA = LOGO_LARGURA * (554 / 1000);
 
 export interface OsPdfData {
   os: OS;
@@ -100,18 +101,32 @@ export async function generateOsPdf(data: OsPdfData): Promise<Buffer> {
   doc.on('data', (c: Buffer) => chunks.push(c));
   const done = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 
-  // Cabeçalho — logo se o arquivo existir, texto como fallback (nunca
-  // derruba a geração do PDF por falta/erro de imagem).
+  // Cabeçalho — logo à esquerda; título e número da OS à direita dela. Texto
+  // como fallback (nunca derruba a geração do PDF por falta/erro de imagem).
+  const topo = 45;
+  const esquerda = doc.page.margins.left;
+  const larguraUtil = doc.page.width - esquerda - doc.page.margins.right;
+  let logoOk = false;
   try {
     if (!logoBuffer) throw new Error('logo indisponível');
-    doc.image(logoBuffer, 50, 45, { width: 130 });
-    doc.y = 100;
+    doc.image(logoBuffer, esquerda, topo, { width: LOGO_LARGURA });
+    logoOk = true;
   } catch {
-    doc.fontSize(18).fillColor('#0B1E3A').text('Amotex Prevent');
+    logoOk = false;
   }
-  doc.fontSize(12).fillColor('#666').text('Ordem de Serviço');
-  doc.moveDown(0.5);
-  doc.fontSize(9).fillColor('#999').text(`OS ${os.id}`);
+  if (logoOk) {
+    const xTexto = esquerda + LOGO_LARGURA + 20;
+    const wTexto = larguraUtil - LOGO_LARGURA - 20;
+    doc.fontSize(18).fillColor('#0B1E3A').font('Helvetica-Bold').text('Ordem de Serviço', xTexto, topo + 12, { width: wTexto });
+    doc.font('Helvetica').fontSize(9).fillColor('#999').text(`OS ${os.id}`, xTexto, doc.y + 4, { width: wTexto });
+    doc.x = esquerda;
+    doc.y = topo + LOGO_ALTURA + 14;
+  } else {
+    doc.fontSize(18).fillColor('#0B1E3A').text('Amotex Prevent');
+    doc.fontSize(12).fillColor('#666').text('Ordem de Serviço');
+    doc.moveDown(0.5);
+    doc.fontSize(9).fillColor('#999').text(`OS ${os.id}`);
+  }
   doc.moveDown();
 
   // Dados do condomínio e da OS
