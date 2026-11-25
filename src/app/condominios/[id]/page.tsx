@@ -451,7 +451,7 @@ function CondominioDetailContent() {
   return (
     <div className="w-full max-w-4xl mx-auto px-4 sm:px-8 py-6">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <div className="flex-1 min-w-0">
           <h1 className="text-white mb-2 break-words">
             {condominio.nome}
