@@ -13,14 +13,13 @@ import { HistoricoPanel } from '@/components/os/HistoricoPanel';
 import type { PessoaHistorico } from '@/lib/os-historico';
 import { HistoricoCondominio } from '@/components/os/HistoricoCondominio';
 import { useAmxUser } from '@/components/layout/AppShell';
-import { isEscritorio, podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeEditarContatoEmCampo, podeEditarEquipamento, podeMarcarACaminho, podeOperarCampo, podeVerLocalizacao, podeVerModulo } from '@/lib/roles';
+import { avaliarAssumirOS, isEscritorio, podeAbrirOS, podeAgendarOS, podeApagarOS, podeCancelarOS, podeEditarContatoEmCampo, podeEditarEquipamento, podeMarcarACaminho, podeOperarCampo, podeVerLocalizacao, podeVerModulo } from '@/lib/roles';
 import { computeOsPrioridade, OS_STATUS_LABELS, OS_TIPO_LABELS } from '@/lib/os-priority';
 import { pendenciasFinalizacao } from '@/lib/os-finalizacao';
 import { formatarDataCurta } from '@/lib/os-agenda';
 import { textoChegada, slaChegada, fmtHora } from '@/lib/os-sla';
 import { linkMapaCoordenadas, textoPrecisao } from '@/lib/localizacao';
 import { obterLocalizacao, corpoComLocalizacao } from '@/lib/localizacao-cliente';
-import { tecnicoAtendeCondominio } from '@/lib/contato-acesso';
 import { textoAviso, type ResultadoAviso } from '@/lib/aviso';
 import { useTick } from '@/lib/useTick';
 import { enfileirar, ouvirFila } from '@/lib/fila-envio';
@@ -53,7 +52,9 @@ export function OSModal({
   onDeleted?: (osId: string) => void;
 }) {
   const user = useAmxUser();
-  const [dialogo, setDialogo] = useState<'cancelar' | 'apagar' | null>(null);
+  const [dialogo, setDialogo] = useState<'cancelar' | 'apagar' | 'assumir' | null>(null);
+  // Nome do técnico responsável (a lista de técnicos só vem pro escritório).
+  const [donoNome, setDonoNome] = useState<string | null>(null);
   const [fotoParaRemover, setFotoParaRemover] = useState<Foto | null>(null);
   // Equipamento cadastrado por engano nesta OS (ainda sem foto) que o técnico
   // quer desfazer; o servidor reconfere o histórico antes de apagar.
@@ -162,6 +163,7 @@ export function OSModal({
         if (res.ok) {
           const data = await res.json();
           setOs(data.os);
+          setDonoNome(data.tecnico_nome ?? null);
           setChecklist(data.checklist || []);
           setFotos(data.fotos || []);
           setHistorico(data.logs || []);
@@ -311,6 +313,7 @@ export function OSModal({
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.os) {
         setOs(data.os);
+        if (campo === 'tecnico_id' && ehTecnico) setDonoNome(user?.name ?? null);
         onChanged(data.os);
         setAvisoMsg(data.aviso ? textoAviso(data.aviso) : null);
       } else {
@@ -627,10 +630,7 @@ export function OSModal({
               <ContatosDoCondominio
                 condominioId={os.condominio_id}
                 contatos={contatos}
-                podeEditar={
-                  isEscritorio(user?.role) ||
-                  (os.tecnico_id === user?.id && tecnicoAtendeCondominio(user?.id ?? '', [os]))
-                }
+                podeEditar
                 onChange={setContatos}
               />
             )}
@@ -653,11 +653,33 @@ export function OSModal({
 
             <SlaBox os={os} />
 
-            {podeAgenda && !isClosed && !os.tecnico_id && os.tipo === 'corretiva' && user?.role === 'tecnico' && (
-              <Button size="sm" onClick={() => salvarAgendamento('tecnico_id', user.id)} className="w-fit">
-                Assumir esta OS
-              </Button>
+            {ehTecnico && os.tecnico_id && os.tecnico_id !== user?.id && (
+              <p className="rounded-lg border border-amx-line bg-amx-panel-2 px-3.5 py-2.5 text-[13px] text-white">
+                OS de {donoNome ?? 'outro técnico'}. Você pode ver tudo, mas só quem assume a OS mexe nela.
+              </p>
             )}
+
+            {ehTecnico && user && !isClosed && (() => {
+              const r = avaliarAssumirOS(user.id, os);
+              if (r === 'direto') {
+                return (
+                  <Button size="sm" onClick={() => salvarAgendamento('tecnico_id', user.id)} className="w-fit">
+                    Assumir esta OS
+                  </Button>
+                );
+              }
+              if (r === 'tomar') {
+                return (
+                  <Button size="sm" onClick={() => setDialogo('assumir')} className="w-fit">
+                    Assumir esta OS
+                  </Button>
+                );
+              }
+              if (r === 'iniciada') {
+                return <p className="text-xs text-amx-muted">Esta OS já foi iniciada por {donoNome ?? 'outro técnico'}.</p>;
+              }
+              return null;
+            })()}
 
             {avisoMsg && isEscritorio(user?.role) && (
               <p
@@ -1019,6 +1041,21 @@ export function OSModal({
           >
             <p>A OS sai da lista de abertas e do Dashboard, mas continua no histórico com o motivo.</p>
             <p>Use para OS aberta por engano, em duplicidade ou que o condomínio desmarcou.</p>
+          </ConfirmDialog>
+          <ConfirmDialog
+            open={dialogo === 'assumir'}
+            titulo="Assumir esta OS?"
+            confirmarLabel="Assumir mesmo assim"
+            onConfirm={async () => {
+              if (!user) return;
+              await salvarAgendamento('tecnico_id', user.id);
+              setDialogo(null);
+            }}
+            onClose={() => setDialogo(null)}
+          >
+            <p>
+              Esta OS está com {donoNome ?? 'outro técnico'}. Assumir mesmo assim? {donoNome ?? 'O técnico'} será avisado.
+            </p>
           </ConfirmDialog>
           <ConfirmDialog
             open={dialogo === 'apagar'}

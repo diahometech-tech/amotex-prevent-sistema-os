@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { getSessionFromRequest, canAccessCondominio, podeVerOS } from '@/lib/auth';
+import { getSessionFromRequest, canAccessCondominio, podeOperarOS } from '@/lib/auth';
 import { podeEditarEquipamento, podeOperarCampo, osEncerrada } from '@/lib/roles';
 import { itemDeEquipamento } from '@/lib/os-checklist-inicial';
 import { lerInspecaoObrigatoria } from '@/lib/inspecao-equipamento';
@@ -50,12 +50,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: 'OS não encontrada neste condomínio.' }, { status: 404 });
       }
       if (osEncerrada(os)) return NextResponse.json({ error: 'OS encerrada.' }, { status: 409 });
-      if (!podeOperarCampo(session.role) || !(await podeVerOS(session, os))) {
+      // Técnico só cadastra pela OS que é dele (sem OS, o cadastro é livre em qualquer condomínio).
+      if (!podeOperarCampo(session.role)) {
         return NextResponse.json({ error: 'Sem acesso a esta OS.' }, { status: 403 });
       }
-      // Técnico só mexe na OS que já é dele (corretiva sem dono: antes assume).
-      if (session.role === 'tecnico' && os.tecnico_id !== session.id) {
-        return NextResponse.json({ error: 'Assuma a OS antes de cadastrar equipamentos.' }, { status: 403 });
+      if (!podeOperarOS(session, os)) {
+        return NextResponse.json({ error: 'Assuma a OS antes de cadastrar equipamentos por ela.' }, { status: 403 });
       }
     }
     const { dados, erro } = validarEquipamento(body ?? {});

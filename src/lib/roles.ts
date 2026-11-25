@@ -17,14 +17,14 @@
 //
 //   Módulo          admin  secretaria                 tecnico                  sindico
 //   Dashboard       sim    sim (sem financeiro)       não                      não
-//   OS              todas  todas: abrir, atribuir,    só as dele + corretivas  não (vê no Painel)
-//                          reagendar, cancelar        sem técnico
+//   OS              todas  todas: abrir, atribuir,    vê todas; mexe só nas   não (vê no Painel)
+//                          reagendar, cancelar        dele; assume as livres
 //   Plantão         sim    sim (monta a escala)       só vê quem está de       não
 //                                                     plantão e a própria escala
 //   Rotas           sim    sim + planejar             só a própria             não
 //   Mapa ao vivo    sim    sim                        não                      não
-//   Condomínios     sim    ver; editar contatos;      só os das suas OS        não
-//                          contrato só leitura
+//   Condomínios     sim    ver; editar contatos;      todos (equipamentos e    não
+//                          contrato só leitura        contatos, sem contrato)
 //   Painel síndico  todos  todos                      não                      só o dele
 //   Financeiro      tudo   só Cobranças (gerar,       não                      não
 //                          enviada, pagamento)
@@ -212,9 +212,9 @@ export function podeEditarContato(role?: UserRole): boolean {
   return isEscritorio(role);
 }
 // Contato em campo: o técnico adiciona e edita (sem excluir, sem mexer no
-// nível de escalonamento) nos condomínios das OS atribuídas a ele — o servidor
-// confere o vínculo (src/lib/contato-acesso.ts). A tela mostra os botões só
-// para quem passa por aqui.
+// nível de escalonamento) em qualquer condomínio (25/11: a primeira fase é
+// cadastrar quem acompanha a visita). A tela mostra os botões só para quem
+// passa por aqui.
 export function podeEditarContatoEmCampo(role?: UserRole): boolean {
   return isEscritorio(role) || role === 'tecnico';
 }
@@ -253,10 +253,35 @@ export function osEncerrada(os: Pick<OS, 'status'>): boolean {
   return os.status === 'finalizada' || os.status === 'cancelada';
 }
 
-// O técnico vê as OS dele e as corretivas ainda sem técnico (para assumir).
-// Escritório vê todas. Síndico: por condomínio (ver podeVerOS em auth.ts,
-// que precisa do condominio_id do usuário no banco).
-export function tecnicoVeOS(tecnicoId: string, os: Pick<OS, 'tecnico_id' | 'tipo' | 'status'>): boolean {
-  if (os.tecnico_id === tecnicoId) return true;
-  return !os.tecnico_id && os.tipo === 'corretiva' && !osEncerrada(os);
+// Leitura (25/11): o técnico vê TODAS as OS — de qualquer técnico, condomínio
+// e tipo, ativas e encerradas — para saber o que existe e assumir a que for
+// fazer. Ver não é mexer: o trabalho na OS (checklist, fotos, chegada,
+// assinaturas, finalizar) é só de quem é o técnico dela, ver `tecnicoOperaOS`.
+// Escritório vê todas. Síndico: por condomínio (ver podeVerOS em auth.ts, que
+// precisa do condominio_id do usuário no banco). Por isso não há predicado
+// de "técnico vê": é sempre sim.
+
+// Escrita do técnico: só na OS que é dele.
+export function tecnicoOperaOS(tecnicoId: string, os: Pick<OS, 'tecnico_id'>): boolean {
+  return !!tecnicoId && os.tecnico_id === tecnicoId;
+}
+
+// Regra de "Assumir esta OS" (25/11). Função pura; o servidor aplica e a tela
+// só espelha.
+//  - 'direto'      : OS ativa sem técnico.
+//  - 'tomar'       : OS de OUTRO técnico que ainda não começou (aberta, sem
+//                    "a caminho" e sem chegada) — pede confirmação e avisa o
+//                    técnico anterior.
+//  - 'ja_e_dele'   : a OS já é do próprio técnico (nada a fazer).
+//  - 'encerrada' / 'iniciada': recusa (409).
+export type ResultadoAssumir = 'direto' | 'tomar' | 'ja_e_dele' | 'encerrada' | 'iniciada';
+export function avaliarAssumirOS(
+  tecnicoId: string,
+  os: Pick<OS, 'tecnico_id' | 'status' | 'a_caminho_em' | 'entrada_em'>
+): ResultadoAssumir {
+  if (osEncerrada(os)) return 'encerrada';
+  if (os.tecnico_id === tecnicoId) return 'ja_e_dele';
+  if (!os.tecnico_id) return 'direto';
+  if (os.status !== 'aberta' || os.a_caminho_em || os.entrada_em) return 'iniciada';
+  return 'tomar';
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database } from '@/lib/db';
-import { getSessionFromRequest, podeVerOS } from '@/lib/auth';
+import { getSessionFromRequest, podeOperarOS } from '@/lib/auth';
 import { podeOperarCampo } from '@/lib/roles';
 
 type RouteContext = { params: Promise<{ id: string; fotoId: string }> };
@@ -16,8 +16,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   }
   const os = await Database.getOSById(id);
   if (!os) return NextResponse.json({ error: 'OS não encontrada.' }, { status: 404 });
-  if (!(await podeVerOS(session, os))) {
-    return NextResponse.json({ error: 'Sem acesso a esta OS.' }, { status: 403 });
+  // Escrita: o técnico só mexe na OS que é dele (ver a OS de outro é só leitura).
+  if (!podeOperarOS(session, os)) {
+    return NextResponse.json({ error: 'Esta OS não está com você. Assuma a OS antes de mexer nela.' }, { status: 403 });
   }
   if (os.status === 'finalizada' || os.status === 'cancelada') {
     return NextResponse.json({ error: 'A OS já foi encerrada; as fotos não podem mais ser removidas.' }, { status: 409 });

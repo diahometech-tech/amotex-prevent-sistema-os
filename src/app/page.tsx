@@ -23,6 +23,8 @@ import { Icon } from '@/components/ui/Icon';
 type OsPrioridadeManual = NonNullable<OS['prioridade']>;
 
 type StatusFiltro = 'ativas' | OsStatus | 'todas';
+// Só para o técnico (25/11): ele vê todas as OS e filtra as dele ou as livres.
+type ResponsavelFiltro = 'todas' | 'minhas' | 'sem_tecnico';
 
 interface TecnicoLite {
   id: string;
@@ -61,6 +63,7 @@ function avatarTone(id: string): string {
 function OsListContent() {
   const user = useAmxUser();
   useTick(); // prazo de chegada das corretivas anda sozinho na lista
+  const ehTecnico = user?.role === 'tecnico';
   const [oss, setOss] = useState<OS[]>([]);
   const [condominios, setCondominios] = useState<Condominio[]>([]);
   const [tecnicos, setTecnicos] = useState<TecnicoLite[]>([]);
@@ -71,6 +74,7 @@ function OsListContent() {
   const [statusFiltro, setStatusFiltro] = useState<StatusFiltro>('ativas');
   const [tipoFiltro, setTipoFiltro] = useState<OsTipo | 'todos'>('todos');
   const [condominioFiltro, setCondominioFiltro] = useState<string>('todos');
+  const [responsavelFiltro, setResponsavelFiltro] = useState<ResponsavelFiltro>('todas');
 
   const [showCreate, setShowCreate] = useState(false);
   // ?os=<id> abre a OS direto — é o link que vai no aviso do Telegram.
@@ -145,13 +149,15 @@ function OsListContent() {
       if (statusFiltro !== 'ativas' && statusFiltro !== 'todas' && os.status !== statusFiltro) return false;
       if (tipoFiltro !== 'todos' && os.tipo !== tipoFiltro) return false;
       if (condominioFiltro !== 'todos' && os.condominio_id !== condominioFiltro) return false;
+      if (ehTecnico && responsavelFiltro === 'minhas' && os.tecnico_id !== user?.id) return false;
+      if (ehTecnico && responsavelFiltro === 'sem_tecnico' && os.tecnico_id) return false;
       if (termo) {
         const alvo = `${condominioNome(os.condominio_id)} ${enderecos.get(os.condominio_id)?.completo || ''} ${tecnicoNome(os.tecnico_id) || ''} ${os.observacao || ''}`.toLowerCase();
         if (!alvo.includes(termo)) return false;
       }
       return true;
     });
-  }, [oss, statusFiltro, tipoFiltro, condominioFiltro, busca, condominioNome, enderecos, tecnicoNome]);
+  }, [oss, statusFiltro, tipoFiltro, condominioFiltro, responsavelFiltro, ehTecnico, user?.id, busca, condominioNome, enderecos, tecnicoNome]);
 
   const ordenadas = useMemo(() => ordenarPorPrioridade(filtradas), [filtradas]);
   const totalAbertas = useMemo(() => oss.filter((o) => o.status !== 'finalizada' && o.status !== 'cancelada').length, [oss]);
@@ -168,11 +174,12 @@ function OsListContent() {
   // "Finalizadas"...): é recalculado da própria lista, então muda sozinho ao
   // criar, assumir, mudar o status ou finalizar uma OS, sem recarregar a página.
   const doFiltroDeSituacao = oss.filter((o) =>
-    statusFiltro === 'todas'
+    (!ehTecnico || responsavelFiltro === 'todas' || (responsavelFiltro === 'minhas' ? o.tecnico_id === user?.id : !o.tecnico_id)) &&
+    (statusFiltro === 'todas'
       ? true
       : statusFiltro === 'ativas'
         ? o.status !== 'finalizada' && o.status !== 'cancelada'
-        : o.status === statusFiltro
+        : o.status === statusFiltro)
   );
   const FILTROS_TIPO: { value: OsTipo | 'todos'; label: string; count: number }[] = [
     { value: 'todos', label: 'Todas', count: doFiltroDeSituacao.length },
@@ -217,6 +224,30 @@ function OsListContent() {
             )}
           </div>
         </div>
+
+        {ehTecnico && (
+          <div className="flex flex-wrap gap-2 mt-4" role="group" aria-label="Responsável">
+            {(
+              [
+                ['todas', 'Todas'],
+                ['minhas', 'Minhas'],
+                ['sem_tecnico', 'Sem técnico'],
+              ] as [ResponsavelFiltro, string][]
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={responsavelFiltro === value}
+                onClick={() => setResponsavelFiltro(value)}
+                className={`font-heading text-[11px] font-semibold tracking-wider uppercase px-3.5 py-1.5 rounded-full transition-colors ${
+                  responsavelFiltro === value ? 'bg-amx-blue text-white' : 'border border-amx-line text-amx-muted hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 mt-4">
           {FILTROS_TIPO.map((f) => (
@@ -453,7 +484,7 @@ function OsRow({
             <span className="text-xs text-white truncate">{tecnicoNome || 'Técnico'}</span>
           </>
         ) : (
-          <span className="text-xs text-amx-muted">Não atribuído</span>
+          <span className="text-xs text-amx-muted">Sem técnico</span>
         )}
       </div>
 
