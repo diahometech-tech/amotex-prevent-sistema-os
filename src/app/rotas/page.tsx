@@ -359,7 +359,7 @@ function RotasContent() {
             type="date"
             value={dia}
             onChange={(e) => e.target.value && setDia(e.target.value)}
-            className="w-auto py-1.5 text-xs"
+            className="w-auto max-w-full min-w-0 py-1.5 text-xs"
           />
           <Button variant="secondary" size="sm" onClick={() => setDia(somarDias(dia, 1))} aria-label="Próximo dia">
             ›
@@ -374,7 +374,7 @@ function RotasContent() {
               id="rota-tecnico"
               value={filtroTecnico}
               onChange={(e) => setFiltroTecnico(e.target.value)}
-              className="w-auto py-1.5 text-xs"
+              className="w-auto max-w-full min-w-0 py-1.5 text-xs"
             >
               <option value="">Todos os técnicos</option>
               {tecnicos.map((t) => (
@@ -391,7 +391,7 @@ function RotasContent() {
               aria-label="Filtrar por região"
               value={filtroRegiao}
               onChange={(e) => setFiltroRegiao(e.target.value)}
-              className="w-auto py-1.5 text-xs"
+              className="w-auto max-w-full min-w-0 py-1.5 text-xs"
             >
               <option value="">Todas as regiões</option>
               {REGIOES.map((r) => (

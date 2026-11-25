@@ -254,7 +254,7 @@ function OsListContent() {
             </button>
           ))}
           {condominios.length > 1 && (
-            <Select value={condominioFiltro} onChange={(e) => setCondominioFiltro(e.target.value)} className="w-auto py-1.5 text-xs">
+            <Select value={condominioFiltro} onChange={(e) => setCondominioFiltro(e.target.value)} className="w-full min-w-0 sm:w-auto sm:max-w-xs py-1.5 text-xs">
               <option value="todos">Todos os condomínios</option>
               {condominios.map((c) => (
                 <option key={c.id} value={c.id}>

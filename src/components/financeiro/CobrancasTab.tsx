@@ -181,7 +181,7 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" variant="secondary" onClick={() => setCompetencia(somarMeses(competencia, -1))} aria-label="Mês anterior">‹</Button>
-        <Input id="fin-competencia" type="month" value={competencia} onChange={(e) => e.target.value && setCompetencia(e.target.value)} className="w-auto py-1.5 text-xs" />
+        <Input id="fin-competencia" type="month" value={competencia} onChange={(e) => e.target.value && setCompetencia(e.target.value)} className="w-auto max-w-full min-w-0 py-1.5 text-xs" />
         <Button size="sm" variant="secondary" onClick={() => setCompetencia(somarMeses(competencia, 1))} aria-label="Próximo mês">›</Button>
         <h2 className="text-white text-base normal-case tracking-normal font-semibold ml-1">{rotuloCompetencia(competencia, true)}</h2>
         {dados && dados.aGerar > 0 && (
