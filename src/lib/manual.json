@@ -374,7 +374,7 @@
     {
       "papel": "tecnico",
       "titulo": "Técnico",
-      "resumo": "O técnico atende as OS em campo pelo celular: vê a rota do dia, assume as corretivas, registra a chegada, faz o checklist, tira as fotos, coleta as assinaturas e finaliza.",
+      "resumo": "O técnico atende as OS em campo pelo celular: vê todas as OS, assume a que vai fazer, vê a rota do dia, registra a chegada, faz o checklist, tira as fotos, coleta as assinaturas e finaliza.",
       "secoes": [
         {
           "titulo": "Entrar e trocar a senha",
@@ -388,11 +388,22 @@
         {
           "titulo": "O que você vê no sistema",
           "passos": [
-            "Ordens de Serviço mostra só as suas OS e as corretivas que ainda estão sem técnico.",
+            "Ordens de Serviço mostra todas as OS, de qualquer técnico e de qualquer condomínio, abertas e encerradas. No topo, os botões Todas, Minhas e Sem técnico filtram a lista. Cada OS mostra o nome do técnico responsável ou Sem técnico.",
+            "Na OS de outro técnico você só vê: aparece a faixa \"OS de ...\" e os botões de campo (chegada, checklist, fotos, assinaturas) ficam escondidos. Só mexe na OS quem a assumiu.",
             "Rotas mostra só a sua rota.",
             "Escala de plantão mostra quem está de plantão agora e a sua própria escala. Só consulta: quem monta a escala é o gestor ou a secretária.",
-            "Condomínios mostra só os condomínios das OS que você vê.",
+            "Condomínios mostra todos os condomínios. Em qualquer um você pode cadastrar equipamentos e contatos.",
             "O menu tem ainda a Ajuda. O resto é com o gestor e a secretária."
+          ]
+        },
+        {
+          "titulo": "Assumir uma OS",
+          "passos": [
+            "Abra a OS e toque em Assumir esta OS. A OS passa a ser sua: é só nela que você registra chegada, checklist, fotos, assinaturas e finaliza.",
+            "OS sem técnico: o botão assume na hora, seja preventiva ou corretiva.",
+            "OS que está com outro técnico e ainda não começou (sem Estou a caminho e sem chegada): o sistema pergunta \"Esta OS está com .... Assumir mesmo assim?\". Se confirmar, o outro técnico recebe um aviso no celular dizendo que você assumiu, e o histórico da OS registra a troca.",
+            "OS de outro técnico que já está a caminho, em andamento ou encerrada: não dá para assumir. O sistema avisa que a OS já foi iniciada por ele. Se precisar, fale com o gestor ou a secretária.",
+            "Passar a OS para outro técnico continua sendo com o escritório."
           ]
         },
         {
@@ -434,7 +445,7 @@
           "passos": [
             "Dentro da OS, o bloco Contatos do condomínio mostra o zelador, o gerente, a portaria e o síndico, cada um com o botão Ligar.",
             "Descobriu um contato novo ou o número mudou? Toque em Adicionar contato (ou em Editar), informe o nome, quem é e o telefone, e salve.",
-            "Você pode cadastrar e corrigir contatos dos condomínios das suas OS (abertas, ou finalizadas nos últimos 30 dias). Excluir contato e mudar a ordem de chamada é com o escritório."
+            "Você pode cadastrar e corrigir contatos de qualquer condomínio, também pela página do condomínio em Condomínios. Excluir contato e mudar a ordem de chamada é com o escritório."
           ]
         },
         {
@@ -519,7 +530,7 @@
         },
         {
           "pergunta": "Cheguei e outro técnico já tinha assumido.",
-          "resposta": "A OS some da sua lista e o link do aviso mostra que ela já foi assumida. Combine com o gestor se precisar de ajuda no local."
+          "resposta": "A OS continua na sua lista, agora com o nome do outro técnico. Se ele ainda não começou, você pode assumir (ele é avisado); se já está a caminho ou no local, combine com o gestor."
         },
         {
           "pergunta": "Preciso mudar o dia da visita.",

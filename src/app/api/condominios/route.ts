@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Database, type Contato } from '@/lib/db';
 import { telefonesDoLocal } from '@/lib/endereco';
-import { condominioParaPapel, filtrarOSVisiveis, getSessionFromRequest, isScopedToOwnCondominio } from '@/lib/auth';
+import { condominioParaPapel, getSessionFromRequest, isScopedToOwnCondominio } from '@/lib/auth';
 import { isEscritorio, podeEditarCondominio } from '@/lib/roles';
 import { validarCadastro } from '@/lib/financeiro/cadastro';
 
 // GET /api/condominios — lista condomínios. Escritório vê todos; síndico só o
-// próprio; técnico só os das OS que ele vê (calculado em lote: uma leitura de
-// OS, não uma consulta por condomínio). Campos de contrato só pro escritório.
+// próprio; técnico todos (25/11). Campos de contrato só pro escritório.
 export async function GET(request: NextRequest) {
   const session = getSessionFromRequest(request);
   if (!session) return NextResponse.json({ error: 'Sessão expirada.' }, { status: 401 });
@@ -19,9 +18,8 @@ export async function GET(request: NextRequest) {
     visiveis = all.filter((c) => c.id === user?.condominio_id);
   } else if (!isEscritorio(session.role)) {
     if (session.role !== 'tecnico') return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 });
-    const oss = await filtrarOSVisiveis(session, await Database.getOSs());
-    const ids = new Set(oss.map((o) => o.condominio_id));
-    visiveis = all.filter((c) => ids.has(c.id));
+    // Técnico vê todos os condomínios (25/11): cadastra equipamentos e
+    // contatos onde for à visita.
   }
   // Telefone pra ligar ao chegar (rota do dia): uma leitura de contatos pra
   // todos os condomínios, agrupada em memória — não uma consulta por item.

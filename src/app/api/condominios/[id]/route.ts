@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (!condominio) return NextResponse.json({ error: 'Condomínio não encontrado.' }, { status: 404 });
 
   // Reservatórios (sensor) só pro escritório; OS filtradas por papel (o
-  // técnico vê só as dele + corretivas sem técnico); contrato só pro escritório.
+  // técnico vê todas, em leitura); contrato só pro escritório.
   const [reservatorios, contatos, equipamentos, todasOss] = await Promise.all([
     podeVerReservatorios(session.role) ? Database.getReservatoriosByCondominio(id) : Promise.resolve([]),
     Database.getContatosByCondominio(id),
