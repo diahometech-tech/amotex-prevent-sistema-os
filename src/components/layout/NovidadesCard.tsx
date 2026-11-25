@@ -15,9 +15,8 @@ export interface NovidadeApi {
 // Aviso de novidades em pop-up (janela centralizada) nas telas iniciais:
 // mostra a mais antiga que a pessoa ainda não leu; "Entendi" e o X gravam
 // como lida no servidor e passam para a próxima. Sem novidade nova (ou se a
-// busca falhar) não renderiza nada. `semMargem` é mantido só por compatibilidade
-// com as páginas que montam o componente.
-export function NovidadesCard(_props: { semMargem?: boolean } = {}) {
+// busca falhar) não renderiza nada.
+export function NovidadesCard() {
   const [naoLidas, setNaoLidas] = useState<NovidadeApi[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');

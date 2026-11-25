@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- assinaturas de mock iguais às do navegador */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { estadoPermissaoLocalizacao, pedirLocalizacao } from '../src/lib/localizacao-cliente';
 
