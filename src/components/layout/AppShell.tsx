@@ -397,12 +397,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen shrink-0 flex flex-col lg:flex-row bg-amx-bg">
         {/* Celular: barra no topo com o nome da tela e o botão Menu */}
         <header className="lg:hidden sticky top-0 z-30 h-14 shrink-0 print:hidden bg-amx-panel-2 border-b border-amx-line flex items-center gap-3 px-3">
-          <div
-            className="w-9 h-9 shrink-0 rounded-lg bg-amx-red flex items-center justify-center font-heading font-bold text-[14px]"
-            aria-hidden
-          >
-            AP
-          </div>
+          <Image
+            src="/brand/logo-amotex-selo.png"
+            alt="Amotex"
+            width={670}
+            height={180}
+            priority
+            className="h-7 w-auto shrink-0"
+          />
           <div className="flex-1 min-w-0 font-heading font-semibold text-[15px] truncate">
             {telaAtual}
           </div>
