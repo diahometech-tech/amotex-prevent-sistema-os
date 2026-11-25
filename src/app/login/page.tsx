@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { telaInicial } from '@/lib/roles';
 
 export default function LoginPage() {
@@ -55,14 +56,17 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm bg-amx-panel border border-amx-line rounded-2xl p-7 flex flex-col gap-5 shadow-2xl"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 bg-amx-red rounded-xl flex items-center justify-center font-heading font-bold text-lg shrink-0" aria-hidden>
-            AP
-          </div>
-          <div>
-            <h1 className="font-heading font-bold text-lg leading-tight text-white normal-case tracking-normal">Amotex Prevent</h1>
-            <p className="text-[10px] text-amx-muted font-bold uppercase tracking-wider">Sistema de OS</p>
-          </div>
+        <div className="flex flex-col items-center gap-2">
+          <Image
+            src="/brand/logo-amotex-completa.png"
+            alt="Amotex"
+            width={1000}
+            height={554}
+            priority
+            className="w-[220px] h-auto"
+          />
+          <h1 className="sr-only">Amotex Prevent</h1>
+          <p className="text-[10px] text-amx-muted font-bold uppercase tracking-wider">Sistema de OS</p>
         </div>
 
         {idleNotice && (
