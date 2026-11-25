@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { novidadesPara, type Novidade } from '../src/lib/novidades';
+import { NOVIDADES, novidadesPara, type Novidade } from '../src/lib/novidades';
 
 const lista: Novidade[] = [
   { id: 'a', data: '2026-11-20', titulo: 'A', itens: ['x'], perfis: ['admin', 'tecnico'] },
@@ -20,9 +20,11 @@ describe('novidadesPara', () => {
     novidadesPara('admin', lista);
     expect(lista.map((n) => n.id)).toEqual(['a', 'b', 'c']);
   });
-  it('a novidade provisória do app vale para todos os perfis', () => {
+  it('todo perfil tem ao menos uma novidade e os ids são únicos', () => {
     for (const p of ['admin', 'secretaria', 'tecnico', 'sindico'] as const) {
       expect(novidadesPara(p).length).toBeGreaterThan(0);
     }
+    const ids = NOVIDADES.map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
