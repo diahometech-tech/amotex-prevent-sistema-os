@@ -154,6 +154,12 @@
           ]
         },
         {
+          "titulo": "Listas grandes: quantos itens ver por página",
+          "passos": [
+            "Listas grandes (OS, condomínios, cobranças, usuários, equipamentos) mostram 20 itens por página. Use Anterior e Próxima no fim da lista e, em Por página, escolha 10, 20, 50 ou 100. O sistema lembra a sua escolha neste aparelho."
+          ]
+        },
+        {
           "titulo": "Instalar o app e ligar os avisos no celular",
           "passos": [
             "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
@@ -333,6 +339,12 @@
           ]
         },
         {
+          "titulo": "Listas grandes: quantos itens ver por página",
+          "passos": [
+            "Listas grandes (OS, condomínios, cobranças, usuários, equipamentos) mostram 20 itens por página. Use Anterior e Próxima no fim da lista e, em Por página, escolha 10, 20, 50 ou 100. O sistema lembra a sua escolha neste aparelho."
+          ]
+        },
+        {
           "titulo": "Instalar o app e ligar os avisos no celular",
           "passos": [
             "No Android, abra o sistema no Chrome, toque no menu (três pontos) e escolha Instalar app. Se aparecer o botão Instalar o app no menu do sistema, é só tocar nele.",
@@ -501,6 +513,12 @@
             "O botão Finalizar OS só libera quando estiver tudo completo. Abaixo dele aparece a lista do que ainda falta.",
             "Com tudo feito, clique em Finalizar OS. O celular pede a sua localização de novo (permita; se negar, a OS finaliza do mesmo jeito).",
             "A OS finalizada gera o PDF (Baixar PDF da OS), que o síndico também vê no painel dele."
+          ]
+        },
+        {
+          "titulo": "Listas grandes: quantos itens ver por página",
+          "passos": [
+            "Listas grandes (OS, condomínios, cobranças, usuários, equipamentos) mostram 20 itens por página. Use Anterior e Próxima no fim da lista e, em Por página, escolha 10, 20, 50 ou 100. O sistema lembra a sua escolha neste aparelho."
           ]
         },
         {

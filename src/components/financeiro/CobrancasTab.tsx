@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAmxUser } from '@/components/layout/AppShell';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -8,6 +8,8 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { Field, Input, Select, Textarea } from '@/components/ui/Form';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
+import { Paginacao } from '@/components/ui/Paginacao';
+import { usePaginacao } from '@/lib/usePaginacao';
 import type { Cobranca } from '@/lib/db';
 import { formatarCnpj } from '@/lib/financeiro/cnpj';
 import { formatarReais } from '@/lib/financeiro/dinheiro';
@@ -117,6 +119,11 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
         return peso(a.st) - peso(b.st) || (a.cond?.nome ?? '').localeCompare(b.cond?.nome ?? '', 'pt-BR');
       });
   }, [dados, filtro, busca, condPorId]);
+
+  // A paginação só afeta o que aparece na tela: totais, "marcar todas" e o
+  // ajuste em lote continuam valendo para a lista filtrada inteira (`linhas`).
+  const listaRef = useRef<HTMLDivElement>(null);
+  const paginacao = usePaginacao(linhas, { chave: 'cobrancas', redefinirQuando: `${competencia}|${filtro}|${busca}` });
 
   // vencimentoVencidas: 'manter' ou data YYYY-MM-DD (só vale se alguma nasce vencida).
   const gerar = async (vencimentoVencidas?: string) => {
@@ -231,7 +238,7 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
             <div className="flex items-center gap-3 flex-wrap text-xs">
               <label className="flex items-center gap-2 text-amx-muted cursor-pointer">
                 <input type="checkbox" checked={todasMarcadas} onChange={alternarTodas} className="h-4 w-4 accent-amx-red" />
-                Marcar todas em aberto da lista ({ajustaveis.length})
+                Marcar todas em aberto da lista ({ajustaveis.length}{paginacao.totalPaginas > 1 ? ', em todas as páginas' : ''})
               </label>
               <Button size="sm" variant="secondary" disabled={!selecionadasVisiveis.length} onClick={() => setAjustandoLote(true)} className="sm:ml-auto">
                 {selecionadasVisiveis.length ? `Ajustar vencimento (${selecionadasVisiveis.length})` : 'Marque os condomínios para ajustar o vencimento'}
@@ -247,8 +254,8 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
           ) : linhas.length === 0 ? (
             <p className="text-xs text-amx-muted py-6 text-center">Nada neste filtro.</p>
           ) : (
-            <div className="flex flex-col gap-2">
-              {linhas.map(({ c, st, cond }) => (
+            <div ref={listaRef} className="flex flex-col gap-2">
+              {paginacao.itensDaPagina.map(({ c, st, cond }) => (
                 <div key={c.id} className="flex items-center gap-x-4 gap-y-2 flex-wrap bg-amx-panel border border-amx-line rounded-[10px] px-4 py-3">
                   {podeAjustarLote && (st === 'pendente' || st === 'enviada' || st === 'atrasada') && (
                     <input
@@ -298,6 +305,7 @@ export function CobrancasTab({ competenciaInicial }: { competenciaInicial: strin
                   </div>
                 </div>
               ))}
+              <Paginacao p={paginacao} rotuloItens="cobranças" alvoRolagem={listaRef} />
             </div>
           )}
         </>

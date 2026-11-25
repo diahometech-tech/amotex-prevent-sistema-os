@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { NovidadesCard } from '@/components/layout/NovidadesCard';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
+import { Paginacao } from '@/components/ui/Paginacao';
+import { usePaginacao } from '@/lib/usePaginacao';
 import type { Condominio } from '@/lib/db';
 
 interface CondominiosResponse {
@@ -29,6 +31,8 @@ function PainelContent() {
   const [condominios, setCondominios] = useState<Condominio[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
+  const paginacao = usePaginacao(condominios, { chave: 'painel' });
 
   useEffect(() => {
     const loadCondominios = async () => {
@@ -106,14 +110,15 @@ function PainelContent() {
         </div>
       ) : (
         <div className="flex-1 overflow-auto px-4 sm:px-8 py-6">
-          <div className="grid gap-3 max-w-2xl">
-            {condominios.map((condominio) => (
+          <div ref={listaRef} className="grid gap-3 max-w-2xl">
+            {paginacao.itensDaPagina.map((condominio) => (
               <Link key={condominio.id} href={`/painel/${condominio.id}`}>
                 <Card className="cursor-pointer hover:border-amx-muted transition-colors">
                   <h3 className="font-semibold text-white">{condominio.nome}</h3>
                 </Card>
               </Link>
             ))}
+            <Paginacao p={paginacao} rotuloItens="condomínios" alvoRolagem={listaRef} />
           </div>
         </div>
       )}

@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AppShell, useAmxUser } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
+import { Paginacao } from '@/components/ui/Paginacao';
+import { usePaginacao } from '@/lib/usePaginacao';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
@@ -959,6 +961,15 @@ function EquipamentosTab({
   const canEdit = podeEditarEquipamento(user.role);
   const canDelete = podeEditarCondominio(user.role) || podeEditarEquipamento(user.role);
 
+  // Ordem do catálogo da Amotex; "Outro"/sem categoria no fim. A lista é
+  // ordenada por categoria ANTES de paginar, então cada página mostra os
+  // grupos em sequência (o título da categoria repete se ela continuar).
+  const ordem = [...CATEGORIAS_EQUIPAMENTO.map((c) => c.id), 'outro', ''];
+  const chaveGrupo = (e: Equipamento) => (e.categoria && ordem.includes(e.categoria) ? e.categoria : '');
+  const ordenados = [...data].sort((a, b) => ordem.indexOf(chaveGrupo(a)) - ordem.indexOf(chaveGrupo(b)));
+  const listaRef = useRef<HTMLDivElement>(null);
+  const paginacao = usePaginacao(ordenados, { chave: 'equipamentos' });
+
   if (loading) {
     return (
       <div className="flex justify-center py-8">
@@ -977,17 +988,15 @@ function EquipamentosTab({
     );
   }
 
-  // Agrupa na ordem do catálogo da Amotex; "Outro"/sem categoria no fim.
-  const ordem = [...CATEGORIAS_EQUIPAMENTO.map((c) => c.id), 'outro', ''];
   const grupos = new Map<string, Equipamento[]>();
-  for (const e of data) {
-    const k = e.categoria && ordem.includes(e.categoria) ? e.categoria : '';
+  for (const e of paginacao.itensDaPagina) {
+    const k = chaveGrupo(e);
     grupos.set(k, [...(grupos.get(k) ?? []), e]);
   }
   const semFoto = data.filter((e) => !e.foto_url).length;
 
   return (
-    <div className="space-y-5">
+    <div ref={listaRef} className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 gap-3 flex-wrap">
         <p className="text-sm text-amx-muted">
           <b className="text-white">{data.length}</b> equipamento{data.length > 1 ? 's' : ''}
@@ -1045,6 +1054,7 @@ function EquipamentosTab({
             </div>
           </section>
         ))}
+      <Paginacao p={paginacao} rotuloItens="equipamentos" alvoRolagem={listaRef} />
     </div>
   );
 }

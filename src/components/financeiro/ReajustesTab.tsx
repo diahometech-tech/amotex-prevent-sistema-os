@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, Spinner } from '@/components/ui/EmptyState';
 import { Field, Input, Textarea } from '@/components/ui/Form';
 import { Modal, ModalHeader } from '@/components/ui/Modal';
+import { Paginacao } from '@/components/ui/Paginacao';
+import { usePaginacao } from '@/lib/usePaginacao';
 import type { IndiceReajuste, Reajuste } from '@/lib/db';
 import { formatarReais } from '@/lib/financeiro/dinheiro';
 import { rotuloCompetencia } from '@/lib/financeiro/cobranca';
@@ -68,6 +70,10 @@ export function ReajustesTab({ onIrPendencias }: { onIrPendencias: () => void })
   const [aviso, setAviso] = useState<Registrado | null>(null);
   const [decidindo, setDecidindo] = useState<{ r: Registrado; acao: 'aceito' | 'recusado' | 'adiado' } | null>(null);
 
+  const historicoRef = useRef<HTMLElement>(null);
+  const historico = (dados?.registrados ?? []).filter((r) => r.status !== 'pendente' && r.status !== 'enviado');
+  const paginacaoHistorico = usePaginacao(historico, { chave: 'reajustes' });
+
   const carregar = useCallback(async () => {
     try {
       const res = await fetch('/api/financeiro/reajustes', { cache: 'no-store' });
@@ -105,7 +111,6 @@ export function ReajustesTab({ onIrPendencias }: { onIrPendencias: () => void })
   }
 
   const acompanhamento = dados.registrados.filter((r) => r.status === 'pendente' || r.status === 'enviado');
-  const historico = dados.registrados.filter((r) => r.status !== 'pendente' && r.status !== 'enviado');
 
   return (
     <div className="flex flex-col gap-5">
@@ -178,9 +183,10 @@ export function ReajustesTab({ onIrPendencias }: { onIrPendencias: () => void })
       </section>
 
       {historico.length > 0 && (
-        <section className="flex flex-col gap-2">
+        <section ref={historicoRef} className="flex flex-col gap-2">
           <h2 className="text-white text-sm normal-case tracking-normal font-semibold">Histórico</h2>
-          {historico.map((r) => <LinhaRegistrado key={r.id} r={r} />)}
+          {paginacaoHistorico.itensDaPagina.map((r) => <LinhaRegistrado key={r.id} r={r} />)}
+          <Paginacao p={paginacaoHistorico} rotuloItens="reajustes" alvoRolagem={historicoRef} />
         </section>
       )}
 
