@@ -134,7 +134,7 @@ function CondominiosContent() {
             podeEditarCondominio(user.role)
               ? 'Comece a criar um novo condomínio para gerenciar as OS'
               : user.role === 'tecnico'
-                ? 'Você ainda não tem OS em nenhum condomínio.'
+                ? 'Nenhum condomínio cadastrado ainda.'
                 : 'Peça ao gestor para cadastrar os condomínios.'
           }
           action={

@@ -4,7 +4,7 @@ import {
   PAPEIS, abasFinanceiro, isEscritorio, moduloDaRota, podeAcaoCobranca, podeAbrirOS, podeApagarOS,
   podeCancelarOS, podeEditarCondominio, podeEditarContato, podeEditarEquipamento, podeGerirPlantao,
   podeOperarCampo, podePlanejarPreventivas, podeVerContrato, podeVerModulo, podeVerRotaDeTodos,
-  telaInicial, tecnicoVeOS, isPapelValido,
+  telaInicial, tecnicoOperaOS, avaliarAssumirOS, isPapelValido,
 } from '../src/lib/roles';
 import { ROLE_LABELS, canManageUsers } from '../src/lib/permissions';
 
@@ -22,7 +22,7 @@ vi.mock('../src/lib/db', () => ({
   },
 }));
 
-const { podeVerOS, podeLerOS, canAccessCondominio, filtrarOSVisiveis, condominioParaPapel, encodeSession, decodeSession } =
+const { podeVerOS, podeLerOS, podeOperarOS, canAccessCondominio, filtrarOSVisiveis, condominioParaPapel, encodeSession, decodeSession } =
   await import('../src/lib/auth');
 
 const sessao = (role: UserRole, id = 'u1') => ({ id, name: 'Fulano', role });
@@ -128,26 +128,53 @@ describe('cobranças: ações por papel', () => {
   });
 });
 
-describe('escopo de OS do técnico', () => {
-  it('vê as dele', () => expect(tecnicoVeOS('t1', os({ tecnico_id: 't1', tipo: 'preventiva' }))).toBe(true));
-  it('não vê a de outro técnico', () => expect(tecnicoVeOS('t1', os({ tecnico_id: 't2' }))).toBe(false));
-  it('vê corretiva aberta sem técnico (para assumir)', () => expect(tecnicoVeOS('t1', os())).toBe(true));
-  it('não vê preventiva sem técnico', () => expect(tecnicoVeOS('t1', os({ tipo: 'preventiva' }))).toBe(false));
-  it('não vê corretiva sem técnico já encerrada', () => {
-    expect(tecnicoVeOS('t1', os({ status: 'finalizada' }))).toBe(false);
-    expect(tecnicoVeOS('t1', os({ status: 'cancelada' }))).toBe(false);
+describe('escopo de OS do técnico (25/11: vê todas — ver podeVerOS —, mexe só na dele)', () => {
+  it('tecnicoOperaOS: só a dele', () => {
+    expect(tecnicoOperaOS('t1', os({ tecnico_id: 't1' }))).toBe(true);
+    expect(tecnicoOperaOS('t1', os({ tecnico_id: 't2' }))).toBe(false);
+    expect(tecnicoOperaOS('t1', os())).toBe(false);
+    expect(tecnicoOperaOS('', os())).toBe(false);
   });
 });
 
-describe('podeVerOS, podeLerOS e canAccessCondominio', () => {
+describe('avaliarAssumirOS (regra de assumir)', () => {
+  const base = { tecnico_id: undefined as string | undefined, status: 'aberta' as OS['status'], a_caminho_em: undefined, entrada_em: undefined };
+  it('sem técnico, qualquer tipo: direto', () => expect(avaliarAssumirOS('t1', base)).toBe('direto'));
+  it('já é dele: nada a fazer', () => expect(avaliarAssumirOS('t1', { ...base, tecnico_id: 't1' })).toBe('ja_e_dele'));
+  it('de outro técnico, aberta e não iniciada: tomar (com confirmação)', () => {
+    expect(avaliarAssumirOS('t1', { ...base, tecnico_id: 't2' })).toBe('tomar');
+  });
+  it('de outro técnico a caminho, com chegada ou em andamento: recusa', () => {
+    expect(avaliarAssumirOS('t1', { ...base, tecnico_id: 't2', a_caminho_em: '2026-11-25T10:00:00Z' })).toBe('iniciada');
+    expect(avaliarAssumirOS('t1', { ...base, tecnico_id: 't2', entrada_em: '2026-11-25T10:00:00Z' })).toBe('iniciada');
+    expect(avaliarAssumirOS('t1', { ...base, tecnico_id: 't2', status: 'em_andamento' })).toBe('iniciada');
+  });
+  it('encerrada: recusa, com ou sem técnico', () => {
+    expect(avaliarAssumirOS('t1', { ...base, status: 'finalizada' })).toBe('encerrada');
+    expect(avaliarAssumirOS('t1', { ...base, tecnico_id: 't2', status: 'cancelada' })).toBe('encerrada');
+  });
+});
+
+describe('podeVerOS, podeOperarOS e canAccessCondominio', () => {
   it('escritório vê qualquer OS', async () => {
     expect(await podeVerOS(sessao('admin'), os({ tecnico_id: 't9', tipo: 'preventiva' }))).toBe(true);
     expect(await podeVerOS(sessao('secretaria'), os({ tecnico_id: 't9', tipo: 'preventiva' }))).toBe(true);
   });
-  it('técnico segue tecnicoVeOS', async () => {
+  it('técnico vê qualquer OS, ativa ou encerrada', async () => {
     expect(await podeVerOS(sessao('tecnico', 't1'), os({ tecnico_id: 't1' }))).toBe(true);
-    expect(await podeVerOS(sessao('tecnico', 't1'), os({ tecnico_id: 't2' }))).toBe(false);
+    expect(await podeVerOS(sessao('tecnico', 't1'), os({ tecnico_id: 't2' }))).toBe(true);
     expect(await podeVerOS(sessao('tecnico', 't1'), os())).toBe(true);
+    const encerrada = os({ condominio_id: 'c3', tecnico_id: 'outro', status: 'finalizada', tipo: 'preventiva' });
+    expect(await podeVerOS(sessao('tecnico', 't1'), encerrada)).toBe(true);
+    expect(await podeLerOS(sessao('tecnico', 't1'), encerrada)).toBe(true);
+  });
+  it('podeOperarOS: técnico só na dele; gestor em qualquer; secretária e síndico nunca', () => {
+    expect(podeOperarOS(sessao('tecnico', 't1'), os({ tecnico_id: 't1' }))).toBe(true);
+    expect(podeOperarOS(sessao('tecnico', 't1'), os({ tecnico_id: 't2' }))).toBe(false);
+    expect(podeOperarOS(sessao('tecnico', 't1'), os())).toBe(false);
+    expect(podeOperarOS(sessao('admin'), os({ tecnico_id: 't2' }))).toBe(true);
+    expect(podeOperarOS(sessao('secretaria'), os({ tecnico_id: 't1' }))).toBe(false);
+    expect(podeOperarOS(sessao('sindico', 's1'), os({ tecnico_id: 's1' }))).toBe(false);
   });
   it('síndico só do próprio condomínio', async () => {
     expect(await podeVerOS(sessao('sindico', 's1'), os({ condominio_id: 'c1' }))).toBe(true);
@@ -157,16 +184,13 @@ describe('podeVerOS, podeLerOS e canAccessCondominio', () => {
     expect(await canAccessCondominio(sessao('sindico', 's3'), 'c1')).toBe(false);
     expect(await canAccessCondominio(sessao('sindico', 'nao-existe'), 'c1')).toBe(false);
   });
+  it('técnico acessa qualquer condomínio', async () => {
+    expect(await canAccessCondominio(sessao('tecnico', 't1'), 'c1')).toBe(true);
+    expect(await canAccessCondominio(sessao('tecnico', 't1'), 'c3')).toBe(true);
+  });
   it('papel desconhecido é recusado', async () => {
     expect(await podeVerOS(sessao('root' as UserRole), os())).toBe(false);
     expect(await canAccessCondominio(sessao('root' as UserRole), 'c1')).toBe(false);
-  });
-  it('técnico só LÊ OS encerrada de condomínio onde tem OS visível', async () => {
-    const encerrada = os({ condominio_id: 'c1', tecnico_id: 'outro', status: 'finalizada', tipo: 'preventiva' });
-    expect(await podeVerOS(sessao('tecnico', 't1'), encerrada)).toBe(false);
-    expect(await podeLerOS(sessao('tecnico', 't1'), encerrada)).toBe(true); // c1 tem OS do t1
-    expect(await podeLerOS(sessao('tecnico', 't1'), { ...encerrada, condominio_id: 'c3' })).toBe(false);
-    expect(await podeLerOS(sessao('tecnico', 't1'), { ...encerrada, status: 'em_andamento' })).toBe(false);
   });
   it('síndico não lê OS de outro condomínio', async () => {
     expect(await podeLerOS(sessao('sindico', 's1'), os({ condominio_id: 'c2', status: 'finalizada' }))).toBe(false);
@@ -178,7 +202,7 @@ describe('podeVerOS, podeLerOS e canAccessCondominio', () => {
       os({ condominio_id: 'c2' }), // corretiva sem técnico
     ];
     expect(await filtrarOSVisiveis(sessao('admin'), lista)).toHaveLength(3);
-    expect(await filtrarOSVisiveis(sessao('tecnico', 't1'), lista)).toHaveLength(2);
+    expect(await filtrarOSVisiveis(sessao('tecnico', 't1'), lista)).toHaveLength(3);
     expect(await filtrarOSVisiveis(sessao('sindico', 's2'), lista)).toHaveLength(2);
     expect(await filtrarOSVisiveis(sessao('sindico', 's3'), lista)).toHaveLength(0);
   });

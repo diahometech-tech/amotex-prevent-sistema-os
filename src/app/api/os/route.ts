@@ -90,6 +90,10 @@ export async function POST(request: NextRequest) {
     if (!condominio_id || (tipo !== 'preventiva' && tipo !== 'corretiva')) {
       return NextResponse.json({ error: 'Informe o condomínio e o tipo da OS.' }, { status: 400 });
     }
+    // Técnico só abre OS para si mesmo; passar para outro é do escritório.
+    if (isTecnico(session.role) && tecnico_id && tecnico_id !== session.id) {
+      return NextResponse.json({ error: 'Só o escritório atribui a OS a outro técnico.' }, { status: 403 });
+    }
     const condominio = await Database.getCondominioById(condominio_id);
     if (!condominio) return NextResponse.json({ error: 'Condomínio não encontrado.' }, { status: 404 });
 
@@ -133,8 +137,8 @@ export async function POST(request: NextRequest) {
       equipamento_id = body.equipamento_id;
     }
 
-    // Técnico só abre OS em condomínio que ele acessa (onde tem OS visível).
-    // Exceção: corretiva ligada a uma preventiva que ele vê.
+    // Técnico abre OS em qualquer condomínio (25/11). A ligação com uma
+    // preventiva de origem só exige que ele a veja (a de outro técnico é leitura).
     if (isTecnico(session.role) && !(await canAccessCondominio(session, condominio_id))) {
       const origem = typeof body.os_origem_id === 'string' && body.os_origem_id ? await Database.getOSById(body.os_origem_id) : null;
       if (!origem || !(await podeVerOS(session, origem))) {

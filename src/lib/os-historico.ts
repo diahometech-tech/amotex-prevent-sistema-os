@@ -122,6 +122,7 @@ export function descreverEvento(ev: EventoHistorico, pessoas: PessoaHistorico[] 
         if (ator && ator.id === para) return `${ev.ator} assumiu a OS`;
         return `${quem} atribuiu a OS a ${nomeDoId(para)}`;
       }
+      if (ator && ator.id === para) return `${ev.ator} assumiu a OS (estava com ${nomeDoId(de)})`;
       return `${quem} trocou o técnico de ${nomeDoId(de)} para ${nomeDoId(para)}`;
     }
     case 'CHEGADA_REGISTRADA': {

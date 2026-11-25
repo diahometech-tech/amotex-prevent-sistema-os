@@ -5,8 +5,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import type { NextRequest } from 'next/server';
 import type { Condominio, OS, UserRole } from './db';
-import { tecnicoAtendeCondominio } from './contato-acesso';
-import { isAdmin, isEscritorio, isScopedToOwnCondominio as isSindico, tecnicoVeOS, osEncerrada } from './roles';
+import { isAdmin, isEscritorio, isScopedToOwnCondominio as isSindico, tecnicoOperaOS, podeOperarCampo } from './roles';
 
 export const SESSION_COOKIE = 'amotex_session';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h (igual ao maxAge do cookie)
@@ -96,9 +95,10 @@ export function isScopedToOwnCondominio(role?: UserRole): boolean {
 // /api/condominios/[id]/* e /api/os que filtre por condomínio.
 //
 // Por papel: admin e secretária acessam qualquer um; síndico só o próprio;
-// técnico só os condomínios onde há alguma OS que ele vê (as dele ou uma
-// corretiva sem técnico) — ver tecnicoVeOS em src/lib/roles.ts. Qualquer
-// outro valor de papel (cookie antigo, papel desconhecido) é recusado.
+// técnico acessa qualquer condomínio (25/11: cadastra equipamentos e contatos
+// onde for à visita; o cadastro sai sem os campos de contrato, ver
+// condominioParaPapel). Qualquer outro valor de papel (cookie antigo, papel
+// desconhecido) é recusado.
 export async function canAccessCondominio(session: SessionUser, condominioId: string): Promise<boolean> {
   if (isEscritorio(session.role)) return true;
   const { Database } = await import('./db');
@@ -107,35 +107,41 @@ export async function canAccessCondominio(session: SessionUser, condominioId: st
     return !!condominioId && user?.condominio_id === condominioId;
   }
   if (session.role === 'tecnico') {
-    const oss = await Database.getOSsByCondominio(condominioId);
-    return oss.some((os) => tecnicoVeOS(session.id, os));
+    return !!condominioId;
   }
   return false;
 }
 
-// Confere se a sessão pode ver/abrir uma OS específica (GET /api/os/[id] e
-// rotas aninhadas, fotos em /uploads/os/...). Mesma regra da lista.
+// Confere se a sessão pode VER/abrir uma OS específica (GET /api/os/[id],
+// fotos em /uploads/os/...). Mesma regra da lista. O técnico vê todas (25/11).
+// ATENÇÃO: isto é leitura. Toda ESCRITA numa OS usa podeOperarOS.
 export async function podeVerOS(
   session: SessionUser,
   os: Pick<OS, 'condominio_id' | 'tecnico_id' | 'tipo' | 'status'>
 ): Promise<boolean> {
   if (isEscritorio(session.role)) return true;
-  if (session.role === 'tecnico') return tecnicoVeOS(session.id, os);
+  if (session.role === 'tecnico') return true;
   if (session.role === 'sindico') return canAccessCondominio(session, os.condominio_id);
   return false;
 }
 
-// Leitura de OS: o que podeVerOS permite + histórico do condomínio — o
-// técnico lê (só lê) as OS ENCERRADAS (finalizadas/canceladas) dos condomínios
-// onde tem OS visível. Usar só em rotas GET (OS, fotos/PDF em /uploads);
-// qualquer escrita continua em podeVerOS.
+// Escrita numa OS (checklist, fotos, chegada, a caminho, assinaturas,
+// finalizar, equipamento cadastrado pela OS, posição): o escritório que opera
+// campo (gestor) sim; o técnico só na OS que é dele; síndico e secretária não.
+// Cancelar, atribuir e reagendar têm regra própria (escritório) nas rotas.
+export function podeOperarOS(session: SessionUser, os: Pick<OS, 'tecnico_id'>): boolean {
+  if (!podeOperarCampo(session.role)) return false;
+  if (session.role === 'tecnico') return tecnicoOperaOS(session.id, os);
+  return true;
+}
+
+// Leitura de OS: hoje igual a podeVerOS (o técnico vê tudo, inclusive as
+// encerradas, só em leitura). Mantida separada para as rotas GET.
 export async function podeLerOS(
   session: SessionUser,
   os: Pick<OS, 'condominio_id' | 'tecnico_id' | 'tipo' | 'status'>
 ): Promise<boolean> {
-  if (await podeVerOS(session, os)) return true;
-  if (session.role === 'tecnico' && osEncerrada(os)) return canAccessCondominio(session, os.condominio_id);
-  return false;
+  return podeVerOS(session, os);
 }
 
 // Filtra uma lista de OS para o que a sessão pode ver (GET /api/os).
@@ -144,7 +150,7 @@ export async function filtrarOSVisiveis<T extends Pick<OS, 'condominio_id' | 'te
   oss: T[]
 ): Promise<T[]> {
   if (isEscritorio(session.role)) return oss;
-  if (session.role === 'tecnico') return oss.filter((os) => tecnicoVeOS(session.id, os));
+  if (session.role === 'tecnico') return oss;
   if (session.role === 'sindico') {
     const { Database } = await import('./db');
     const user = await Database.getUserById(session.id);
@@ -183,14 +189,12 @@ export function osParaPapel<T extends Partial<OS>>(role: UserRole, os: T): T {
   return copia as T;
 }
 
-// Contato do condomínio em campo: gestor e secretária sempre; técnico só se
-// tem OS atribuída a ele no condomínio (aberta, ou finalizada nos últimos 30
-// dias — ver src/lib/contato-acesso.ts). Qualquer outro papel, não.
+// Contato do condomínio em campo: gestor, secretária e técnico, em qualquer
+// condomínio (25/11). Qualquer outro papel, não.
 export async function podeEditarContatosDoCondominio(session: SessionUser, condominioId: string): Promise<boolean> {
   if (isEscritorio(session.role)) return true;
   if (session.role !== 'tecnico' || !condominioId) return false;
-  const { Database } = await import('./db');
-  return tecnicoAtendeCondominio(session.id, await Database.getOSsByCondominio(condominioId));
+  return true;
 }
 
 // ===== Senhas (bcrypt) =====

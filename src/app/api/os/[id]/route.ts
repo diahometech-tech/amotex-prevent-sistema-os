@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { avisarCondominio } from '@/lib/aviso-condominio';
 import { Database, FinalizacaoBloqueadaError, type OS } from '@/lib/db';
 import { hojeISO, normalizarDataProgramada } from '@/lib/os-agenda';
-import { getSessionFromRequest, getClientIp, podeVerOS, podeLerOS, condominioParaPapel, osParaPapel } from '@/lib/auth';
-import { isScopedToOwnCondominio, isTecnico, podeAgendarOS, podeApagarOS, podeCancelarOS, podeMarcarACaminho, podeOperarCampo } from '@/lib/roles';
+import { getSessionFromRequest, getClientIp, podeVerOS, podeLerOS, podeOperarOS, condominioParaPapel, osParaPapel } from '@/lib/auth';
+import { avaliarAssumirOS, isScopedToOwnCondominio, isTecnico, podeAgendarOS, podeApagarOS, podeCancelarOS, podeMarcarACaminho, podeOperarCampo } from '@/lib/roles';
+import { enviarPushUsuarios } from '@/lib/push';
 import { camposDeLocalizacao, lerLocalizacao } from '@/lib/localizacao';
 import { saveAssinaturaDataUrl, saveOsPdfBuffer } from '@/lib/uploads';
 import { generateOsPdf } from '@/lib/os-pdf';
@@ -35,9 +36,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
   const os = await Database.getOSById(id);
   if (!os) return NextResponse.json({ error: 'OS não encontrada.' }, { status: 404 });
-  // Leitura: o técnico também lê OS ENCERRADAS dos condomínios que atende
-  // (histórico do condomínio). Escrever (PATCH, checklist, fotos) segue
-  // exigindo podeVerOS.
+  // Leitura: o técnico lê qualquer OS (25/11). Escrever (PATCH, checklist,
+  // fotos) exige podeOperarOS (só a OS dele) ou, para assumir, a regra abaixo.
   if (!(await podeLerOS(session, os))) {
     return NextResponse.json({ error: 'Sem acesso a esta OS.' }, { status: 403 });
   }
@@ -50,7 +50,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     Database.getAuditLogsByEntidade('os', id),
     vinculosDaOS(os, session),
   ]);
-  const semHistorico = isScopedToOwnCondominio(session.role) || !(await podeVerOS(session, os));
+  const semHistorico = isScopedToOwnCondominio(session.role) || !(await podeVerOS(session, os)) ||
+    (isTecnico(session.role) && !podeOperarOS(session, os));
+  const dono = os.tecnico_id ? await Database.getUserById(os.tecnico_id) : null;
   // Contrato do condomínio só pro escritório; auditoria (logs) não vai pro
   // síndico — ele vê a OS pelo Painel, não o histórico interno.
   return NextResponse.json({
@@ -66,6 +68,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
     // pra tela escrever "Ana (secretária) trocou o técnico de Yuri para Mateus".
     pessoas: semHistorico ? [] : await pessoasDoHistorico(logs, os.tecnico_id),
     vinculos,
+    // Nome do técnico responsável: o técnico que lê a OS de outro precisa dele (faixa "OS de ...").
+    tecnico_nome: dono?.nome ?? null,
   });
 }
 
@@ -159,15 +163,33 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         { status: 403 }
       );
     }
-    // Técnico só trabalha em campo na OS que assumiu: corretiva sem técnico
-    // ainda é só "visível" pra ele — sem assumir, a OS ficaria sem responsável
-    // e sumiria do acesso dele ao finalizar.
-    if (camposDeCampo.length > 0 && session.role === 'tecnico' && original.tecnico_id !== session.id) {
+    // Técnico só trabalha na OS que é dele (podeOperarOS): ver a OS de outro é
+    // só leitura. Sem assumir, não registra chegada, assinatura nem finaliza.
+    if (camposDeCampo.length > 0 && !podeOperarOS(session, original)) {
       return NextResponse.json({ error: 'Assuma a OS antes de registrar a chegada ou mexer nela.' }, { status: 403 });
     }
     // Técnico só atribui a si mesmo (assumir); passar a OS adiante é do escritório.
     if (session.role === 'tecnico' && rest.tecnico_id !== undefined && rest.tecnico_id !== session.id) {
       return NextResponse.json({ error: 'Só o escritório pode trocar o técnico da OS.' }, { status: 403 });
+    }
+    // Na OS de outro técnico o único pedido do técnico é assumi-la.
+    if (session.role === 'tecnico' && !podeOperarOS(session, original)) {
+      const soAssumir = rest.tecnico_id === session.id && Object.keys(rest).every((k) => k === 'tecnico_id');
+      if (!soAssumir) {
+        return NextResponse.json({ error: 'Esta OS não está com você. Assuma a OS antes de alterá-la.' }, { status: 403 });
+      }
+    }
+    // Assumir (25/11): sem técnico = direto; de outro técnico só se ainda não
+    // começou; iniciada ou encerrada = 409.
+    let anteriorAssumida: { id: string; nome: string } | null = null;
+    if (session.role === 'tecnico' && rest.tecnico_id === session.id && original.tecnico_id !== session.id) {
+      const r = avaliarAssumirOS(session.id, original);
+      const anterior = original.tecnico_id ? await Database.getUserById(original.tecnico_id) : null;
+      if (r === 'encerrada') return NextResponse.json({ error: 'Esta OS já foi encerrada.' }, { status: 409 });
+      if (r === 'iniciada') {
+        return NextResponse.json({ error: `Esta OS já foi iniciada por ${anterior?.nome ?? 'outro técnico'}.` }, { status: 409 });
+      }
+      if (r === 'tomar') anteriorAssumida = { id: original.tecnico_id as string, nome: anterior?.nome ?? 'outro técnico' };
     }
     // Mudar o dia da visita é do escritório; o técnico só assume a OS (tecnico_id = ele).
     if (session.role === 'tecnico' && rest.data_programada !== undefined) {
@@ -367,6 +389,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         entidade: 'os', entidade_id: id, acao: 'TECNICO_ATRIBUIDO', ator: session.name,
         detalhe: { de: original.tecnico_id ?? null, para: updates.tecnico_id ?? null },
       });
+      // Assumiu a OS de outro técnico: ele é avisado no celular.
+      if (anteriorAssumida) {
+        const cond = await Database.getCondominioById(os.condominio_id);
+        await enviarPushUsuarios([anteriorAssumida.id], {
+          titulo: 'OS assumida por outro técnico',
+          corpo: `${session.name} assumiu a OS do ${cond?.nome ?? 'condomínio'} que estava com você.`,
+          url: `/?os=${id}`,
+          tag: `os-assumida-${id}`,
+        });
+      }
       // Corretiva ativa ganhou técnico. Se o próprio técnico assumiu, avisa o
       // grupo da abertura pra ninguém ir em dobro; se o escritório atribuiu ou
       // trocou, avisa só o técnico escolhido (+ gestores e secretária).
