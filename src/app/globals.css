@@ -67,6 +67,9 @@ body {
 }
 
 body {
+  /* Rede de segurança (25/11, iPhone): nada empurra a página para os lados.
+     "clip" não cria área de rolagem, então o cabeçalho fixo (sticky) continua. */
+  overflow-x: clip;
   background: var(--color-amx-bg);
   color: var(--color-amx-white);
   font-family: var(--font-body);
@@ -242,3 +245,13 @@ html.light .nexus-daypicker .rdp-nav button { color: #334155; }
 
 /* --- Scrollbar no tema claro --- */
 html.light .thin-scroll::-webkit-scrollbar-thumb { background: #94a3b8; }
+
+/* iPhone dá zoom sozinho ao tocar num campo com letra menor que 16 px e a tela
+   fica "desajustada" depois. No celular, campos de texto e listas com 16 px. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
